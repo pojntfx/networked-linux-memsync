@@ -1,0 +1,17 @@
+commit d57e8599aca8891cee44435dcccfe2409ee3e53b
+Author: Felicitas Pojtinger <felicitas@pojtinger.com>
+Date:   Fri May 5 00:43:37 2023 +0200
+
+    build: Add contents write permission
+
+commit 0980ada7fec659a75c97cdf887783440097172ba
+Author: Felicitas Pojtinger <felicitas@pojtinger.com>
+Date:   Fri May 5 00:38:01 2023 +0200
+
+    feat: Add Deliverance CI/CD and starting notes
+
+commit 056569eb944540cc096c94cb8619260da2de8122
+Author: Felicitas Pojtinger <felicitas@pojtinger.com>
+Date:   Fri May 5 00:16:01 2023 +0200
+
+    Initial commit

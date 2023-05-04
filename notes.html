@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en-US" xml:lang="en-US">
+<head>
+  <meta charset="utf-8" />
+  <meta name="generator" content="pandoc" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
+  <meta name="author" content="Felicitas Pojtinger (Stuttgart Media University)" />
+  <meta name="dcterms.date" content="2023-08-04" />
+  <meta name="keywords" content="linux memory
+management, userfaultfd, mmap, inotify, hash-based change
+detection, delta synchronization, msync, custom filesystem, nbd
+protocol, performance evaluation" />
+  <title>Efficient Synchronization of Linux Memory Regions over a Network: A Comparative Study and Implementation (Notes)</title>
+  <style>
+    html {
+      line-height: 1.5;
+      font-family: Georgia, serif;
+      font-size: 20px;
+      color: #1a1a1a;
+      background-color: #fdfdfd;
+    }
+    body {
+      margin: 0 auto;
+      max-width: 36em;
+      padding-left: 50px;
+      padding-right: 50px;
+      padding-top: 50px;
+      padding-bottom: 50px;
+      hyphens: auto;
+      overflow-wrap: break-word;
+      text-rendering: optimizeLegibility;
+      font-kerning: normal;
+    }
+    @media (max-width: 600px) {
+      body {
+        font-size: 0.9em;
+        padding: 1em;
+      }
+      h1 {
+        font-size: 1.8em;
+      }
+    }
+    @media print {
+      body {
+        background-color: transparent;
+        color: black;
+        font-size: 12pt;
+      }
+      p, h2, h3 {
+        orphans: 3;
+        widows: 3;
+      }
+      h2, h3, h4 {
+        page-break-after: avoid;
+      }
+    }
+    p {
+      margin: 1em 0;
+    }
+    a {
+      color: #1a1a1a;
+    }
+    a:visited {
+      color: #1a1a1a;
+    }
+    img {
+      max-width: 100%;
+    }
+    h1, h2, h3, h4, h5, h6 {
+      margin-top: 1.4em;
+    }
+    h5, h6 {
+      font-size: 1em;
+      font-style: italic;
+    }
+    h6 {
+      font-weight: normal;
+    }
+    ol, ul {
+      padding-left: 1.7em;
+      margin-top: 1em;
+    }
+    li > ol, li > ul {
+      margin-top: 0;
+    }
+    blockquote {
+      margin: 1em 0 1em 1.7em;
+      padding-left: 1em;
+      border-left: 2px solid #e6e6e6;
+      color: #606060;
+    }
+    code {
+      font-family: Menlo, Monaco, 'Lucida Console', Consolas, monospace;
+      font-size: 85%;
+      margin: 0;
+    }
+    pre {
+      margin: 1em 0;
+      overflow: auto;
+    }
+    pre code {
+      padding: 0;
+      overflow: visible;
+      overflow-wrap: normal;
+    }
+    .sourceCode {
+     background-color: transparent;
+     overflow: visible;
+    }
+    hr {
+      background-color: #1a1a1a;
+      border: none;
+      height: 1px;
+      margin: 1em 0;
+    }
+    table {
+      margin: 1em 0;
+      border-collapse: collapse;
+      width: 100%;
+      overflow-x: auto;
+      display: block;
+      font-variant-numeric: lining-nums tabular-nums;
+    }
+    table caption {
+      margin-bottom: 0.75em;
+    }
+    tbody {
+      margin-top: 0.5em;
+      border-top: 1px solid #1a1a1a;
+      border-bottom: 1px solid #1a1a1a;
+    }
+    th {
+      border-top: 1px solid #1a1a1a;
+      padding: 0.25em 0.5em 0.25em 0.5em;
+    }
+    td {
+      padding: 0.125em 0.5em 0.25em 0.5em;
+    }
+    header {
+      margin-bottom: 4em;
+      text-align: center;
+    }
+    #TOC li {
+      list-style: none;
+    }
+    #TOC ul {
+      padding-left: 1.3em;
+    }
+    #TOC > ul {
+      padding-left: 0;
+    }
+    #TOC a:not(:hover) {
+      text-decoration: none;
+    }
+    code{white-space: pre-wrap;}
+    span.smallcaps{font-variant: small-caps;}
+    span.underline{text-decoration: underline;}
+    div.column{display: inline-block; vertical-align: top; width: 50%;}
+    div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+    ul.task-list{list-style: none;}
+  </style>
+</head>
+<body>
+<header id="title-block-header">
+<h1 class="title">Efficient Synchronization of Linux Memory Regions over
+a Network: A Comparative Study and Implementation (Notes)</h1>
+<p class="subtitle">A user-friendly approach to application-agnostic
+state synchronization</p>
+<p class="author">Felicitas Pojtinger (Stuttgart Media University)</p>
+<p class="date">2023-08-04</p>
+</header>
+<ul>
+<li>Abstract: A comparative analysis and implementation of various
+methods for synchronizing Linux memory options over a network</li>
+<li>Introduction
+<ul>
+<li>Examining Linux’s memory management and relevant APIs</li>
+<li>Use cases for memory region synchronization</li>
+</ul></li>
+<li>Option 1: Handling page faults in userspace with
+<code>userfaultfd</code>
+<ul>
+<li>Introduction to userfaultfd</li>
+<li>Implementing userfaultfd handlers and registration in Go</li>
+<li>Transferring sockets between processes</li>
+<li>Examples of handler and registration interfaces (byte slice, file,
+S3 object)</li>
+<li>Performance assessment of this approach</li>
+</ul></li>
+<li>Option 2: Utilizing <code>mmap</code> for change notifications
+<ul>
+<li>Concept: <code>mmap</code> a memory region with MMAP_SHARED to track
+changes in a file</li>
+<li>Method 1 for detecting file changes: inotify</li>
+<li>Limitations: <code>mmap</code> does not generate WRITE events</li>
+</ul></li>
+<li>Option 3: Hash-based change detection
+<ul>
+<li>Comparing hashes of local and remote <code>mmap</code>ed
+regions</li>
+<li>Evaluation of hashing algorithms</li>
+<li>Introduction to delta synchronization (e.g., rsync)</li>
+<li>Custom protocol for delta synchronization</li>
+<li>Multiplexing synchronization streams</li>
+<li>The function of <code>msync</code></li>
+<li>Performance assessment of this approach</li>
+</ul></li>
+<li>Option 4: Detecting changes with a custom filesystem implementation
+<ul>
+<li>Intercepting writes to the <code>mmap</code>ed region using a custom
+filesystem</li>
+<li>Exploring methods for creating a new, custom Linux filesystem
+<ul>
+<li>In the kernel</li>
+<li>NBD</li>
+<li>CUSE</li>
+<li>BUSE</li>
+<li>FUSE</li>
+<li>Upcoming options (ublk, etc.)</li>
+</ul></li>
+<li>Detailed analysis of the NBD protocol (client &amp; server)</li>
+<li>Implementing the client and server in Go based on the protocol</li>
+<li>Server backend interface and example implementations</li>
+<li>Asynchronous writeback protocol and caching mechanism</li>
+<li>Performance assessment of this approach</li>
+</ul></li>
+<li>Summary:
+<ul>
+<li>Comparing options in terms of ease of implementation, CPU load, and
+network traffic</li>
+<li>Identifying the optimal solution for specific use cases: data change
+frequency, kernel/OS compatibility, etc.</li>
+</ul></li>
+</ul>
+</body>
+</html>
