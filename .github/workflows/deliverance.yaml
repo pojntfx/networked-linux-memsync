@@ -1,0 +1,16 @@
+name: Deliverance CI
+
+on:
+  push:
+  pull_request:
+  schedule:
+    - cron: "0 0 * * 0"
+
+jobs:
+  build-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout, build and publish with Deliverance
+        uses: pojntfx/deliverance@latest
+        with:
+          github_token: "${{ secrets.GITHUB_TOKEN }}"

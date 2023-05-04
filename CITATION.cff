@@ -1,0 +1,9 @@
+cff-version: 1.2.0
+message: "If you use this paper in your work, please cite it as below."
+authors:
+  - family-names: "Pojtinger"
+    given-names: "Felicitas"
+title: "Efficient Synchronization of Linux Memory Regions over a Network: A Comparative Study and Implementation"
+version: 1.0.0
+date-released: "2023-08-04"
+url: "https://github.com/pojntfx/networked-linux-memsync"
