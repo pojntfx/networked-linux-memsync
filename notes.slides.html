@@ -34,8 +34,17 @@ Felicitas Pojtinger (Stuttgart Media University)
   </p>
   <p class="date">2023-08-04</p>
 </div>
-<div class="slide section level6" number="0.0.0.0.0.1">
-
+<div class="slide" id="TOC">
+<ul>
+<li><a href="#rough-structure"><span class="toc-section-number">1</span>
+Rough Structure</a></li>
+<li><a href="#sectionsresearch-questionsideas-brainstorming"><span class="toc-section-number">2</span> Sections/Research Questions/Ideas
+Brainstorming</a></li>
+<li><a href="#alternative-outline"><span class="toc-section-number">3</span> Alternative Outline</a></li>
+</ul>
+</div>
+<div id="rough-structure" class="slide section level1" number="1">
+<h1><span class="header-section-number">1</span> Rough Structure</h1>
 <ul>
 <li>Abstract: A comparative analysis and implementation of various
 methods for synchronizing Linux memory options over a network</li>
@@ -99,6 +108,193 @@ network traffic</li>
 frequency, kernel/OS compatibility, etc.</li>
 </ul></li>
 </ul>
+</div>
+<div id="sectionsresearch-questionsideas-brainstorming" class="slide section level1" number="2">
+<h1><span class="header-section-number">2</span> Sections/Research
+Questions/Ideas Brainstorming</h1>
+<ul>
+<li>Usecases: Direct Mount vs. Managed Mount vs. Migration</li>
+<li>Effects of high latency on different pull methods (esp. direct
+vs. managed)</li>
+<li>Effects of slow local disks or RAM on pull methods</li>
+<li>The asynchronous background push method (for mounts); how chunks are
+marked as dirty when they are being written to before the download has
+finished completely</li>
+<li>Mount backend API vs. seeder API</li>
+<li>Preemptive pulls and parallelized startups (n MB saved)</li>
+<li>Background pulling system and interface (rwat), % of
+availability</li>
+<li>Chunking system/non-aligned reads and writes, checking for correct
+chunking behavior</li>
+<li>Local vs. remote chunking</li>
+<li>Backend implementations, performance and usecases: File, memory,
+directory, dudirekta, gRPC, fRPC, Redis, S3, Cassandra</li>
+<li>Transport layers: Dudirekta, gRPC, fRPC (esp. benefits and problems
+with concurrent RPCs, connection pooling like with dRPC, benchmarks with
+latency and throughput etc.)</li>
+<li>NBD protocol overview and limitations</li>
+<li>NBD protocol phases</li>
+<li>Minimal viable NBD protocol needs</li>
+<li>Go NBD server implementation: Multiple clients, error handling</li>
+<li>Go NBD client and server implementation: The kernel’s NBD client,
+CGo for <code>ioctl</code> numbers</li>
+<li>Finding unused NBD devices, detecting client availability (polling
+sysfs vs. udev; add benchmarks)</li>
+<li>go-nbd pluggable backend API design/interface</li>
+<li>go-nbd project scope &amp; keeping it maintainable, esp. vs other
+NBD implementations</li>
+<li>Migration API lifecycle &amp; lockable rwats</li>
+<li>Path vs. file vs. slice mounts/migrations</li>
+<li>Migration protocol actors, phases and state machine</li>
+<li>Managed mount protocol actors, phases, sequence and state
+machine</li>
+<li>Performance tuning parameters (chunk size, push/pull workers)</li>
+<li>P2P vs. relay systems/hub and spoke systems</li>
+<li>Pull priority function/heuristic: Benchmarks when accessing from end
+of file to start vs. other way around, latency vs. throughput changes
+with/without heuristic, using LLMs etc. to analyze access patterns with
+<code>pullWorkers: 0</code> and then generating an automatic pull
+heuristic</li>
+<li>Performance of different hashing algorithms for detecting changes to
+a <code>mmap</code>ed region</li>
+<li>Usage of the r3map’s API vs. e.g. “Remote regions” paper</li>
+<li>Tapisk as an example of using the mount APIs for a filesystem;
+esp. with support for writebacks in the future, and comparing this to
+STFS</li>
+<li><code>ram-dl</code> as an example of using a remote backend to
+provide more RAM/Swap</li>
+<li>Migrating app state (e.g. a TODO list) between two hosts</li>
+<li>Minimum acceptable downtime</li>
+<li>Concurrent access/consistency guarantees for mounts vs. migrations
+etc. - <code>Track()</code>, why we can’t modify a mount’s source</li>
+<li>Usage of QUIC, UDP and other protocols for skipping on RTT to
+improve minimal latency</li>
+<li>Limitations and benefits of <code>mmap</code> for accessing a mount
+vs. a file (concurrent reads/writes etc.)</li>
+<li>Criticality in protocols (e.g. recovering from a network outage in
+mount vs. migration, finalization step can’t be aborted etc.)</li>
+<li>Encryption of regions and the wire protocol, authn, DoS
+vulnerabilities</li>
+<li>Integration with existing app migration systems</li>
+<li>When to best <code>Finalize()</code> a migration; analyzing app
+usage patterns?</li>
+<li>How does Linux actually manage memory, O_DIRECT vs
+<code>mmap</code>, RAM vs Swap etc.</li>
+</ul>
+</div>
+<div id="alternative-outline" class="slide section level1" number="3">
+<h1><span class="header-section-number">3</span> Alternative
+Outline</h1>
+<ol style="list-style-type: decimal">
+<li>Abstract
+<ul>
+<li>A comparative analysis and implementation of various methods for
+synchronizing Linux memory options over a network</li>
+</ul></li>
+<li>Introduction
+<ol style="list-style-type: decimal">
+<li>Background: Examining Linux’s memory management and relevant
+APIs</li>
+<li>Purpose: Use cases for memory region synchronization (Direct Mount,
+Managed Mount, Migration)
+<ul>
+<li>Discuss potential effects of high latency, slow local disks or RAM
+on different pull methods</li>
+</ul></li>
+</ol></li>
+<li>Methodologies
+<ol style="list-style-type: decimal">
+<li>Option 1: Handling page faults in userspace with
+<code>userfaultfd</code>
+<ol style="list-style-type: decimal">
+<li>Explanation of userfaultfd and its implementation</li>
+<li>Description of userfaultfd handlers and registration in Go</li>
+<li>The process of transferring sockets between processes</li>
+<li>Examples of handler and registration interfaces</li>
+<li>Performance assessment of this approach, with focus on pull methods
+and effects of system constraints</li>
+</ol></li>
+<li>Option 2: Utilizing <code>mmap</code> for change notifications
+<ol style="list-style-type: decimal">
+<li>Understanding mmap and its application</li>
+<li>Detecting file changes using inotify and its limitations</li>
+<li>Performance evaluation of this approach, with focus on preemptive
+pulls and parallelized startups</li>
+</ol></li>
+<li>Option 3: Hash-based change detection
+<ol style="list-style-type: decimal">
+<li>Comparing hashes of local and remote <code>mmap</code>ed
+regions</li>
+<li>Evaluation of different hashing algorithms</li>
+<li>Introduction to delta synchronization and the role of rsync</li>
+<li>Custom protocol for delta synchronization</li>
+<li>Multiplexing synchronization streams and the function of
+<code>msync</code></li>
+<li>Performance assessment of this approach, with an analysis of the
+effects of various pull priority functions/heuristics</li>
+</ol></li>
+<li>Option 4: Detecting changes with a custom filesystem implementation
+<ol style="list-style-type: decimal">
+<li>Intercepting writes to the <code>mmap</code>ed region using a custom
+filesystem</li>
+<li>Understanding methods for creating a new, custom Linux filesystem
+(in the kernel, NBD, CUSE, BUSE, FUSE, etc.)</li>
+<li>Performance assessment of this approach</li>
+</ol></li>
+<li>Option 5: Block device with userspace backend
+<ol style="list-style-type: decimal">
+<li>Detailed analysis of the NBD protocol and its implementation in
+Go</li>
+<li>Server backend interface and example implementations</li>
+<li>Asynchronous writeback protocol and caching mechanism</li>
+<li>Performance assessment of this approach, with an analysis of Go NBD
+client and server implementation and the project scope</li>
+</ol></li>
+</ol></li>
+<li>Evaluation and Comparison of Approaches
+<ol style="list-style-type: decimal">
+<li>Comparing options in terms of ease of implementation, CPU load, and
+network traffic</li>
+<li>Identifying the optimal solution for specific use cases: data change
+frequency, kernel/OS compatibility, etc.</li>
+<li>Analysis of Go NBD client and server implementation and the project
+scope</li>
+<li>Examination of different transport layers and their implications on
+performance and concurrency</li>
+<li>Discussion on migration protocol actors, phases and state
+machine</li>
+<li>Performance tuning parameters (chunk size, push/pull workers)</li>
+<li>Examination of P2P vs. relay systems/hub and spoke systems</li>
+</ol></li>
+<li>Case Studies
+<ol style="list-style-type: decimal">
+<li>Tapisk as an example of using the mount APIs for a filesystem,
+esp. one with very low read/write speeds and high latency</li>
+<li><code>ram-dl</code> as an example of using a remote backend to
+provide more RAM/Swap</li>
+<li>Migrating app state (e.g. a TODO list) between two hosts in a
+universal (byte-slice/by using the underlying memory) manner</li>
+<li>Mounting remote filesystems and combining the benefits of
+traditional FUSE-based mounts (e.g. s3-fuse) with Google
+Drive/Nextcloud-style synchronization</li>
+<li>Using mounts for SQLite etc. database access without having to use
+range requests</li>
+<li>Streaming video using formats that usually don’t support streaming,
+e.g. MP4, where an index is required</li>
+<li>Improving game download speeds by mounting the remote assets with
+managed mounts, using a pull heuristic that defines typical access
+patterns, e.g. by levels (making the game immediately playable)</li>
+<li>Executing remote binaries or scripts that don’t need to be scanned
+first without fully downloading them</li>
+</ol></li>
+<li>Conclusion
+<ol style="list-style-type: decimal">
+<li>Summary of findings and optimal solutions for specific use
+cases</li>
+<li>Discussion of minimum acceptable downtime</li>
+<li>Future recommendations for research and improvements</li>
+</ol></li>
+</ol>
 </div>
 </body>
 </html>

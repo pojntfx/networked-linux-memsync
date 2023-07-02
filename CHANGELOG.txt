@@ -1,3 +1,9 @@
+commit 38fcd6cf87f5c86a0804f59a7eb15b5b9dd97658
+Author: Felicitas Pojtinger <felicitas@pojtinger.com>
+Date:   Sun Jul 2 22:54:09 2023 +0200
+
+    docs: Start adding notes on the alternative outline etc.
+
 commit d57e8599aca8891cee44435dcccfe2409ee3e53b
 Author: Felicitas Pojtinger <felicitas@pojtinger.com>
 Date:   Fri May 5 00:43:37 2023 +0200
