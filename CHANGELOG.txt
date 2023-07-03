@@ -1,3 +1,9 @@
+commit bd88c2b45082fba0f0c0075e472d23a91ab65914
+Author: Felicitas Pojtinger <felicitas@pojtinger.com>
+Date:   Mon Jul 3 15:42:49 2023 +0200
+
+    docs: Merge different structures and unsorted search questions into single structure
+
 commit ce6cfa076817be1af6f5f6430f9d32548f74f66a
 Author: Felicitas Pojtinger <felicitas@pojtinger.com>
 Date:   Mon Jul 3 14:26:34 2023 +0200
