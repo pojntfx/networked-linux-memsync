@@ -103,6 +103,12 @@ lang: en-US
 - Integration with existing app migration systems
 - When to best `Finalize()` a migration; analyzing app usage patterns?
 - How does Linux actually manage memory, O_DIRECT vs `mmap`, RAM vs Swap etc.
+- userfaultfd is read-only
+- userfaultfd can only be used to fetch the first (missing) chunk, not subsequent ones
+- userfaultfd is limited to ~50MB/s of throughput
+- Biggest benefit of userfaultfd: It has minimal registration overhead & latency
+- userfaultfd's interface is just an io.ReaderAt
+- Backends can use custom indexes to map linear media (e.g. tape drives) into memory by mapping the block device offset to a real, append-only record number and swapping it out for a new one when things get overwritten in the block device
 
 ## Alternative Outline
 
@@ -160,3 +166,23 @@ lang: en-US
    1. Summary of findings and optimal solutions for specific use cases
    2. Discussion of minimum acceptable downtime
    3. Future recommendations for research and improvements
+
+## Story
+
+- Introduction: How does memory in Linux work? Paging, swap etc.
+- An introduction to mmap and how we can use it to map a file into memory/a byte slice, the role of `msync`
+- Implementing push-based memory sync by tracking changes to a `mmap`ed slice with polled hashing of individual chunks, why we can't use `inotify`, and the CPU-bound limitations of this approach
+- Implementing pull-based memory sync with `userfaultfd`; and implementation and throughput limitations
+- Implementing push-pull based memory sync with a FUSE; limitations and complexity (citing STFS)
+- Implementing push-pull based memory sync with NBD; implementation of go-nbd
+- Using NBD directly as a mount-based sync system with the direct mount API; limitations with latency etc., and improvements with background pulls and pushes, different backends etc., the mount wire protocol, pull heuristics
+- Taking inspiration from VM live migration and adding a migration system for memory sync, two-phase commit, the sync wire protocol, minimum acceptable downtime as the metric to optimize for
+- Use cases, case studies and comparison of approaches, finding the one that is right for each one, and showing an implementation for each, benchmarks, performance tuning
+- Conclusion with a summary of the different approaches, further research recommendations
+
+## Revised Structure
+
+1. Introduction
+2. Synchronization Strategies
+3. Case Studies
+4. Conclusion
