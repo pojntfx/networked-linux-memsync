@@ -185,230 +185,251 @@ Unsorted Research Questions</h2>
 <h2 data-number="1.2"><span class="header-section-number">1.2</span>
 Structure</h2>
 <ul>
-<li><strong>Introduction</strong>
+<li>Introduction
 <ul>
-<li>How does memory in Linux work? Paging, swap etc.</li>
-<li>Examining Linux’s memory management and relevant APIs</li>
-<li>An introduction to mmap and how we can use it to map a file into
-memory/a byte slice, the role of <code>msync</code></li>
-<li>Concept: <code>mmap</code> a memory region with MMAP_SHARED to track
-changes in a file</li>
-<li>Use cases for memory region synchronization (rough overview,
-esp. what is currently popular in the industry)</li>
+<li>Memory management in Linux</li>
+<li>Memory as the universal storage API</li>
+<li>What would be possible if memory would be the universal way to
+access resources?</li>
+<li>Why efficient memory synchronization is the missing key
+component</li>
+<li>High-level use cases for memory synchronization in the industry
+today</li>
 </ul></li>
-<li><strong>Synchronization Strategies</strong>
+<li>Pull-Based Memory Synchronization with <code>userfaultfd</code>
 <ul>
-<li><strong>Implementing push-based memory sync by tracking changes to a
-<code>mmap</code>ed slice with polled hashing of individual
-chunks</strong>, why we can’t use <code>inotify</code>, and the
-CPU-bound limitations of this approach
-<ul>
-<li>Detecting file changes: inotify; but <code>mmap</code> does not
-generate WRITE events</li>
-<li>Comparing hashes of local and remote <code>mmap</code>ed
-regions</li>
-<li>Evaluation of hashing algorithms</li>
-<li>Introduction to delta synchronization (e.g., rsync)</li>
-<li>Custom protocol for delta synchronization</li>
-<li>CPU-bound bottlenecks</li>
-<li>Multiplexing synchronization streams (central forwarding hub
-etc.)</li>
-<li>Comparing hashes of local and remote <code>mmap</code>ed
-regions</li>
-<li>O_DIRECT vs <code>mmap</code>, RAM vs Swap etc.</li>
-<li>Function of <code>msync</code>, lack of <code>O_DIRECT</code> (and
-why it lacks this/doesn’t support it)</li>
-<li>All clients need to be connected from the beginning; strong risk of
-inconsistencies</li>
-<li>Performance of different hashing algorithms for detecting changes to
-a <code>mmap</code>ed region</li>
-</ul></li>
-<li><strong>Implementing pull-based memory sync with
-<code>userfaultfd</code>; and implementation and throughput
-limitations</strong>
-<ul>
-<li>Introduction to userfaultfd</li>
-<li>Implementing userfaultfd handlers and registration in Go</li>
-<li>The function of <code>msync</code></li>
-<li>Transferring sockets between processes</li>
-<li>Performance assessment of this approach</li>
-<li>Examples of handler and registration interfaces (byte slice, file,
+<li>Plain language description of <code>userfaultfd</code> (what are
+page faults)</li>
+<li>Exploring an alternative method by handling page faults using
+signals</li>
+<li>Handlers and registration</li>
+<li>History of <code>userfaultfd</code></li>
+<li>Allocating the shared region</li>
+<li>Maximum shared region size is limited by available physical
+memory</li>
+<li>Transferring handler sockets between processes</li>
+<li>Implementing <code>userfaultfd</code> bindings in Go</li>
+<li>Example usages of <code>userfaultfd</code> in Go (byte slice, file,
 S3 object)</li>
-<li>Performance assessment of this approach</li>
-<li>Explanation of userfaultfd and its implementation</li>
-<li>Description of userfaultfd handlers and registration in Go</li>
-<li>I/O-bound bottlenecks</li>
-<li>No option to pre-emptively pull data</li>
-<li>userfaultfd is read-only</li>
-<li>userfaultfd can only be used to fetch the first (missing) chunk, not
-subsequent ones</li>
-<li>userfaultfd is limited to ~50MB/s of throughput</li>
-<li>Biggest benefit of userfaultfd: It has minimal registration overhead
-&amp; latency</li>
-<li>userfaultfd’s interface is just an io.ReaderAt, making it extremely
-simple to use</li>
+<li>Implications of not being able to catch writes to the region (its
+read-only)</li>
+<li>Design of a <code>userfaultfd</code> backend (io.ReaderAt)</li>
+<li>Limitations of only being able to catch the first page fault (no way
+of updating the region)</li>
+<li>Implications of not being able to pull chunks before they are being
+accessed</li>
+<li>Limitations of only being able to pull chunks synchronously</li>
+<li>Benefits of minimal registration and latency overhead</li>
+<li>Benchmark: Why is it limited to ~50MB/s of throughput?</li>
+<li>Benchmark: Sensitivity of <code>userfaultfd</code> to network
+latency and throughput</li>
 </ul></li>
-<li><strong>Implementing push-pull based memory sync with a
-FUSE</strong>; limitations and complexity (citing STFS)
+<li>Push-Based Memory Synchronization with <code>mmap</code> and Hashing
 <ul>
-<li>Intercepting writes to the <code>mmap</code>ed region using a custom
-filesystem</li>
-<li>Mounting the filesystem</li>
-<li>Exploring methods for creating a new, custom Linux filesystem: FUSE,
-in the Kernel</li>
-<li>Taking a look at STFS for how to implement this; tape-specific
-optimizations were possible, so we could also do this for files I
-presume</li>
-<li>Why this approach is suboptimal (we need just one file, not a full
+<li>Plain language description of this approach (mapping a file into
+memory, then syncing the file)</li>
+<li>Paging and swap in Linux</li>
+<li>Introduction to <code>mmap</code> to map a file into a memory
+region</li>
+<li><code>MAP_SHARED</code> for writing changes back from the memory
+region to a file</li>
+<li>Caching with <code>mmap</code>, why <code>O_DIRECT</code> doesn’t
+work and what the role of <code>msync</code> is</li>
+<li>Detecting writes to a file with <code>inotify</code> and why this
+does not work for <code>mmap</code></li>
+<li>Hashing (chunks of) the backing file in order to detect writes on a
+periodic basis</li>
+<li>Benchmark: Performance of different Go hashing algorithms for
+detecting writes</li>
+<li>Effects on maximum acceptable downtime due to CPU-bound limitations
+in having to calculate hashes and polling</li>
+<li>Introduction to delta synchronization protocols like rsync</li>
+<li>Implementation of a custom delta synchronization protocol with chunk
+support</li>
+<li>Multiplexing different synchronization streams in the protocol</li>
+<li>Benchmark: Throughput of this custom synchronization protocol
+vs. rsync (which hashes entire files)</li>
+<li>Using a central forwarding hub for star-based architectures with
+multiple destinations</li>
+<li>Limitations of only being able to catch writes, not reads to the
+region (its write-only, can’t add hosts later on)</li>
+</ul></li>
+<li>Push-Pull Memory Synchronization with a FUSE
+<ul>
+<li>Plain language description of this approach (mapping a file into
+memory, catching reads/writes to/from the file with a custom
 filesystem)</li>
+<li>Methods for creating a new, custom file system (FUSE vs. in the
+kernel)</li>
+<li>STFS shows that it is possible to create file systems backed by
+complex data stores, e.g. a tape/non-random access stores</li>
+<li>Is not the best option for implementing this due to significant
+overhead and us only needing a single file to map</li>
 </ul></li>
-<li><strong>Implementing push-pull based memory sync with NBD;
-implementation of go-nbd</strong>
+<li>Pull-Based Memory Synchronization with NBD
 <ul>
-<li>Detailed analysis of the NBD protocol (client &amp; server)</li>
-<li>Implementing the client and server in Go based on the protocol</li>
-<li>Server backend interface and example implementations</li>
-<li>Backends can use custom indexes to map linear media (e.g. tape
-drives) into memory by mapping the block device offset to a real,
-append-only record number and swapping it out for a new one when things
-get overwritten in the block device vs. FUSE, where its much more
-complicated/needs to be a full filesystem</li>
-<li>Caching mechanism (mounting the fd with O_DIRECT vs. not)</li>
-<li>Performance assessment of this approach</li>
-<li>Project scope (why only the minimal protocol was implemented)</li>
-<li>NBD protocol overview and limitations</li>
-<li>NBD protocol phases</li>
-<li>Minimal viable NBD protocol needs</li>
-<li>Go NBD server implementation: Multiple clients, error handling</li>
-<li>Go NBD client and server implementation: The kernel’s NBD client,
-CGo for <code>ioctl</code> numbers</li>
-<li>Finding unused NBD devices, detecting client availability (polling
-sysfs vs. udev; add benchmarks)</li>
-<li>go-nbd pluggable backend API design/interface</li>
-<li>go-nbd project scope &amp; keeping it maintainable, esp. vs other
-NBD implementations</li>
-<li>Using <code>ublk</code> instead of NBD in the future; should be much
-faster than NBD for concurrency/random-access as it supports</li>
-<li>Using a BUSE as a NBD server (library/CGo limitations)</li>
-<li>Extending the kernel with a new resource or a filesystem like FUSE,
-but actually in the kernel with a more efficient user-space protocol
-optimized for random access</li>
+<li>Plain language description of this approach (mapping a block device
+into memory, catching reads/writes with a NBD server)</li>
+<li>Why NBD is the better choice compared to FUSE (much less complex
+interface)</li>
+<li>Overview of the NBD protocol</li>
+<li>Phases, actors and messages in the NBD protocol (negotiation,
+transmission)</li>
+<li>Minimal viable NBD protocol needs, and why only this minimal set is
+implemented</li>
+<li>Listing exports</li>
+<li>Limitations of NBD, esp. the kernel client and message sizes</li>
+<li>Reduced flexibility of NBD compared to FUSE (can still be used for
+e.g. linear media, but will offer fewer interfaces for
+optimization)</li>
+<li>Server backend interface design</li>
+<li>File backend example</li>
+<li>How the servers handling multiple users/connections</li>
+<li>Server handling in the NBD protocol implementation</li>
+<li>Using the kernel NBD client without CGO/with ioctls</li>
+<li>Finding an unused NBD device using <code>sysfs</code></li>
+<li>Benchmark: <code>nbd</code> kernel module quirks and how to detect
+whether a NBD device is open (polling <code>sysfs</code>
+vs. <code>udev</code>)</li>
+<li>Caching mechanisms and limitations (aligned reads) when opening the
+block device (<code>O_DIRECT</code>)</li>
+<li>Future outlook: Using <code>ublk</code> instead of NBD, allowing for
+potentially much faster concurrent access thanks to
+<code>io_uring</code></li>
+<li>Why using BUSE to implement a NBD server would be possible but
+unrealistic (library &amp; docs situation, CGo)</li>
+<li><code>go-buse</code> as a preview of how such a CGo implementation
+could still work</li>
+<li>Alternatively implementing a new file system entirely in the kernel,
+only exposing a single file/block device to <code>mmap</code> and
+optimizing the user space protocol for this</li>
 </ul></li>
-<li><strong>Using NBD directly as a mount-based sync system with the
-direct mount API</strong>; limitations with latency etc., and
-improvements with background pulls and pushes, different backends etc.,
-the mount wire protocol, pull heuristics
+<li>Push-Pull Memory Synchronization with Mounts
 <ul>
-<li>Use cases</li>
-<li>Path vs. file vs. slice mounts/migrations</li>
-<li>Limitations and benefits of <code>mmap</code> for accessing a mount
-vs. a file (concurrent reads/writes etc.)</li>
-<li>Instead of <code>mmap</code>ing the block device, formatting the
-block device with e.g. EXT4 and then <code>mmap</code>ing a file on
-through that (would allow synchronization of multiple separate memory
-regions, e.g. multiple app states, over the network)</li>
-<li>Discussion on mount protocol actors, phases and state machine</li>
-<li>Managed mount protocol actors, phases, sequence and state
+<li>Plain language description of this approach (like NBD, but starting
+the client and server locally, then connecting the <em>server</em>’s
+backend to a backend)</li>
+<li>Benefits: Can use a secure wire protocol and more complex/abstract
+backends</li>
+<li>Mounting the block device as a path vs. file vs. slice: Benefits of
+<code>mmap</code> (concurrent reads/writes)</li>
+<li>Alternative approach: Formatting the block device as e.g. EXT4, then
+mounting the filesystem, and <code>mmap</code>ing a file on the file
+system (allows syncing multiple regions with a single file system, but
+has FS overhead)</li>
+<li>Mount protocol actors, phases and state machine</li>
+<li>Chunking system for non-aligned reads/writes (arbitrary rwat and
+chunked rwat)</li>
+<li>Benchmark: Local vs. remote chunking</li>
+<li>Optimizing the mount process with the Managed Mount interface</li>
+<li>Asynchronous background push system interface and how edge cases
+(like accessing dirty chunks as they are being pulled or being written
+to) are handled</li>
+<li>Preemptive background pulls interface</li>
+<li>Syncer interface</li>
+<li>Benchmark: Parallelizing startups and pulling n MBs as the device
+starts</li>
+<li>Using a pull heuristic function to optimize which chunks should be
+scheduled to be pulled first</li>
+<li>Internal rwat pipeline (create a graphic) for direct mounts
+vs. managed mounts</li>
+<li>Unit testing the rwats</li>
+<li>Comparing this mount API to other existing remote memory access
+APIs, e.g. “Remote Regions”</li>
+<li>Complexities when <code>mmap</code>ing a region in Go as the GC
+halts the entire world to collect garbage, but that also stops the NBD
+server in the same process that tries to satisfy the region being
+scanned</li>
+<li>Potentially using Rust for this component to cut down on memory
+complexities and GC latencies</li>
+</ul></li>
+<li>Pull-Based Memory Synchronization with Migrations
+<ul>
+<li>Plain language description of this approach (like NBD, but two
+phases to start the device and pull, then only flush the latest changes
+to minimize downtime)</li>
+<li>Inspired by live VM migration, where changes are continuously being
+pulled to the destination node until a % has been reached, after which
+the VM is migrated</li>
+<li>Migration protocol actors (seeders, leechers etc.), phases and state
 machine</li>
-<li>The asynchronous background push method (for mounts); how chunks are
-marked as dirty when they are being written to before the download has
-finished completely</li>
-<li>Chunking system/non-aligned reads and writes, checking for correct
-chunking behavior</li>
-<li>Making it unit testable; rwat pipeline</li>
-<li>Local vs. remote chunking</li>
-<li>Pull priority function/heuristic: Benchmarks when accessing from end
-of file to start vs. other way around, latency vs. throughput changes
-with/without heuristic, using LLMs etc. to analyze access patterns with
-<code>pullWorkers: 0</code> and then generating an automatic pull
-heuristic</li>
-<li>Usage of the r3map’s API vs. e.g. “Remote regions” paper</li>
-<li>Using Rust for a future implementation; esp. to prevent
-<code>mmap</code> blocks from being scanned by the garbage
-collector</li>
+<li>How the migration API is completely independent of a transport
+layer</li>
+<li>Switching from the seeder to the leecher state</li>
+<li>Using preemptive pulls and pull heuristics to optimize just like for
+the mounts</li>
+<li>Lifecycle of the migration API and why lockable rwats are
+required</li>
+<li>How a successful migration causes the <code>Seeder</code> to
+exit</li>
+<li>The role of maximum acceptable downtime</li>
+<li>The role of <code>Track()</code>, concurrent access and consistency
+guarantees vs. mounts (where the source must not change)</li>
+<li>When to best <code>Finalize()</code> a migration and how analyzing
+app usage patterns could help</li>
+<li>Benchmark: Maximum acceptable downtime for a migration scenario with
+the Managed Mount API vs the Migration API</li>
 </ul></li>
-<li><strong>Taking inspiration from VM live migration and adding a
-migration system</strong> for memory sync, two-phase commit, the sync
-wire protocol, minimum acceptable downtime as the metric to optimize for
+<li>Optimizing Mounts and Migrations
 <ul>
-<li>Use cases</li>
-<li>Discussion on migration protocol actors, phases and state
-machine</li>
-<li>Migration protocol actors, phases and state machine</li>
-<li>Examination of P2P vs. relay systems/hub and spoke systems</li>
-<li>Preemptive pulls and parallelized startups (n MB saved)</li>
-<li>Background pulling system and interface (rwat), % of
-availability</li>
-<li>Migration API lifecycle &amp; the role of lockable rwats</li>
-<li>Minimum acceptable downtime</li>
-<li>Concurrent access/consistency guarantees for mounts vs. migrations
-etc. - <code>Track()</code>, why we can’t modify a mount’s source</li>
-<li>When to best <code>Finalize()</code> a migration; analyzing app
-usage patterns?</li>
+<li>Encryption of memory regions and the wire protocol</li>
+<li>Authentication of the protocol</li>
+<li>DoS vulnerabilities in the NBD protocol (large message sizes; not
+meant for the public internet) and why the indirection of client &amp;
+server on each node is needed</li>
+<li>Mitigating DoS vulnerabilities in the
+<code>ReadAt</code>/<code>WriteAt</code> RPCs with
+<code>maxChunkSize</code> and/or client-side chunking</li>
+<li>Critical <code>Finalizing</code> state in the migration API and how
+it could be remedied</li>
+<li>How network outages are handled in the mount and migration API</li>
+<li>Analyzing the file and memory backend implementations</li>
+<li>Analyzing the directory backend</li>
+<li>Analyzing the dudirekta, gRPC and fRPC backends</li>
+<li>Benchmark: Latency till first n chunks <em>and</em> throughput for
+dudirekta, gRPC and fRPC backends (how they are affected by having/not
+having connection polling and/or concurrent RPCs)</li>
+<li>Benchmark: Effect of tuning the amount of push/pull workers in
+high-latency scenarios</li>
+<li>Analyzing the Redis backend</li>
+<li>Analyzing the S3 backend</li>
+<li>Analyzing the Cassandra backend</li>
+<li>Benchmark: Latency and throughput of all benchmarks on localhost and
+in a realistic latency and throughput scenario</li>
+<li>Effects of slow disks/memory on local backends, and why direct
+mounts can outperform managed mounts in tests on localhosts</li>
+<li>Using P2P vs. star architectures for mounts and migrations</li>
+<li>Looking back at all options and comparing ease of implementation,
+CPU load and network traffic between them</li>
 </ul></li>
-<li><strong>Optimizing the Mount and Migration Implementations</strong>
+<li>Case Studies
 <ul>
-<li>Encryption of regions and the wire protocol, authn, DoS
-vulnerabilities without max size</li>
-<li>Criticality/critical phases in protocols (e.g. recovering from a
-network outage in mount vs. migration, finalization step can’t be
-aborted etc.)</li>
-<li>Performance tuning parameters (chunk size, push/pull workers)</li>
-<li>Backend implementations: File, memory, directory, dudirekta, gRPC,
-fRPC, Redis, S3, Cassandra (a section for each)</li>
-<li>Transport layers: Dudirekta, gRPC, fRPC (esp. benefits and problems
-with concurrent RPCs, connection pooling like with dRPC, benchmarks with
-latency and throughput etc.)</li>
-<li>Usage of QUIC, UDP and other protocols for skipping on RTT to
-improve minimal latency</li>
-<li>Examination of different transport layers and their implications on
-performance and concurrency</li>
-<li>Discuss potential effects of high latency, slow local disks or RAM
-on different pull methods</li>
-<li>Effects of slow local disks or RAM on pull methods</li>
-<li>Comparing options in terms of ease of implementation, CPU load, and
-network traffic</li>
-<li>Effects of high latency on different pull methods (esp. direct
-vs. managed)</li>
-<li>Performance tuning parameters (chunk size, push/pull workers)</li>
-<li>P2P vs. relay systems/hub and spoke systems</li>
-</ul></li>
-</ul></li>
-<li><strong>Case Studies</strong>
-<ul>
-<li>Mount backend API vs. seeder API</li>
-<li>Use cases: Direct Mount vs. Managed Mount vs. Migration</li>
-<li>Use cases, case studies and comparison of approaches, finding the
-one that is right for each one, and showing an implementation for each,
-benchmarks, performance tuning</li>
-<li>Identifying the optimal solution for specific use cases: data change
-frequency, kernel/OS compatibility, etc.</li>
-<li>Tapisk as an example of using the mount APIs for a filesystem,
-esp. one with very low read/write speeds and high latency; esp. with
-support for writebacks in the future, and comparing this to STFS which
-was a FUSE instead of a block device</li>
-<li><code>ram-dl</code> as an example of using a remote backend to
-provide more RAM/Swap</li>
-<li>Migrating app state (e.g. a TODO list) between two hosts in a
-universal (byte-slice/by using the underlying memory) manner,
-integration with existing app migration systems</li>
-<li>Mounting remote filesystems and combining the benefits of
-traditional FUSE-based mounts (e.g. s3-fuse) with Google
-Drive/Nextcloud-style synchronization</li>
-<li>Using mounts for SQLite etc. database access without having to use
-range requests</li>
-<li>Streaming video using formats that usually don’t support streaming,
-e.g. MP4, where an index is required</li>
+<li><code>ram-dl</code> as an example of using the direct mount API
+for</li>
+<li><code>tapisk</code> as an example of using the managed mount API for
+a file system with very high latencies, linear access and asynchronous
+to/from fast local memory vs. STFS</li>
+<li>Migration app state (e.g. TODO list) between two hosts in a
+universal (underlying memory) manner</li>
+<li>Mounting remote file systems as managed mounts and combining the
+benefits of traditional FUSE mounts (e.g. s3-fuse) with Google
+Drive-style synchronization</li>
+<li>Using manged mounts for remote SQLite databases without having to
+download it first</li>
+<li>Streaming video formats like e.g. MP4 that don’t support streaming
+due to indexes/compression</li>
 <li>Improving game download speeds by mounting the remote assets with
 managed mounts, using a pull heuristic that defines typical access
-patterns, e.g. by levels (making the game immediately playable)</li>
-<li>Executing remote binaries or scripts that don’t need to be scanned
-first without fully downloading them</li>
+patterns (like which levels are accessed first), making any game
+immediately playable without changes</li>
+<li>Executing remote binaries or scrips that don’t need to be scanned
+first without having to fully download them</li>
 </ul></li>
-<li><strong>Conclusion</strong>
+<li>Conclusion
 <ul>
-<li>Conclusion with a summary of the different approaches, further
-research recommendations</li>
+<li>Summary of the different approaches, and how the new solutions might
+make it possible to use memory as the universal access format</li>
+<li>Further research recommendations (e.g. <code>ublk</code>)</li>
 </ul></li>
 </ul>
 </section>
