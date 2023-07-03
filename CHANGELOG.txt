@@ -1,3 +1,9 @@
+commit ce6cfa076817be1af6f5f6430f9d32548f74f66a
+Author: Felicitas Pojtinger <felicitas@pojtinger.com>
+Date:   Mon Jul 3 14:26:34 2023 +0200
+
+    docs: Add new reader story, prepare for unified notes
+
 commit 38fcd6cf87f5c86a0804f59a7eb15b5b9dd97658
 Author: Felicitas Pojtinger <felicitas@pojtinger.com>
 Date:   Sun Jul 2 22:54:09 2023 +0200
