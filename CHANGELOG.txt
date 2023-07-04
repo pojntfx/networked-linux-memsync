@@ -1,3 +1,9 @@
+commit b286a45b97ff7ece59e4f7dc4f76d829161d9577
+Author: Felicitas Pojtinger <felicitas@pojtinger.com>
+Date:   Wed Jul 5 01:17:16 2023 +0200
+
+    feat: Start implementing the section on pull-based memory synchronization with NBD
+
 commit 86e9ffe47f65934d3e0c8d4e481446519ead6624
 Author: Felicitas Pojtinger <felicitas@pojtinger.com>
 Date:   Tue Jul 4 23:56:21 2023 +0200

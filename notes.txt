@@ -542,3 +542,159 @@ Content
         file system to track changes, but rather a single file
     -   As a result of this, the significant implementation overhead of
         such a file system led to it not being chosen
+
+-   Pull-Based Memory Synchronization with NBD
+
+    -   As hinted at before, a better API would be able to catch
+        reads/writes to a single mmaped file instead of having to
+        implement a complete file system
+
+    -   It does however not have to be an actual file, a block device
+        also works
+
+    -   In Linux, block devices are (typically storage) devices that
+        support reading/writing fixed chunks (blocks) of data
+
+    -   We can mmap a block device in the same way that we can mmap a
+        file
+
+    -   Similarly to how a file system can be implemented in a kernel
+        module, a block device is typically implemented as a kernel
+        module/in kernel space
+
+    -   However, the same security, portability and developer experience
+        issues as with the former also apply here
+
+    -   Instead of implementing a FUSE to solve this, we can create a
+        NBD (network block device) server that can be used by the kernel
+        NBD module similarly to how the process that connected to the
+        FUSE kernel module functioned
+
+    -   The difference between a FUSE and NBD is that a NBD server
+        doesn’t provide a file system
+
+    -   A NBD server provides the storage device that (typically) hosts
+        a file system, which means that the interface for it is much,
+        much simpler
+
+    -   The implementation overhead of a NBD server’s backend is much
+        more similar to how userfaultfd-go works, rather than a FUSE
+
+    -   NBD uses a protocol to communicate between a server (provided by
+        user space) and a client (provided by the NBD kernel module)
+
+    -   The protocol can run over WAN, but is really mostly meant for
+        LAN or localhost usage
+
+    -   It has two phases: Handshake and transmission
+
+    -   There are two actors in the protocol: One or multiple clients,
+        the server and the virtual concept of an export
+
+    -   When the client connects to the server, the server sends a
+        greeting message with the server’s flags
+
+    -   The client responds with its own flags and an export name (a
+        single NBD server can expose multiple devices) to use
+
+    -   The server sends the export’s size and other metadata, after
+        which the client acknowledges the received data and the
+        handshake is complete
+
+    -   After the handshake, the client and server start exchanging
+        commands and replies
+
+    -   A command can be any of the basic operations needed to access a
+        block device, e.g. read, write or flush
+
+    -   Depending on the command, it can also contain data (such as the
+        chunk to be written), offsets, lengths and more
+
+    -   Replies can contain an error, success value or data depending on
+        the reply’s type
+
+    -   NBD is however limited in some respects; the maximum message
+        size is 32 MB, but the maximum block/chunk size supported by the
+        kernel is just 4096 KB, making it a suboptimal protocol to run
+        over WAN, esp. in high latency scenarios
+
+    -   The protocol also allows for listing exports, making it possible
+        to e.g. list multiple memory regions on a single server
+
+    -   NBD is an older protocol with multiple different handshake
+        versions and legacy features
+
+    -   Since the purpose of NBD in this use case is minimal and both
+        the server and the client are typically controlled, it makes
+        sense to only implement the latest recommended versions and the
+        baseline feature set
+
+    -   The baseline feature set requires no TLS, the latest “fixed
+        newstyle” handshake, the ability to list and choose an export,
+        as well as the read, write and disc(onnect) commands and replies
+
+    -   As such, the protocol is very simple to implement
+
+    -   With this simplicity however also come some drawbacks: NBD is
+        less suited for use cases where the backing device behaves very
+        differently from a random-access store device, like for example
+        a tape drive, since it is not possible to work with high-level
+        abstractions such as files or directories
+
+    -   This is, for the narrow memory synchronization use case, however
+        more of a feature than a bug
+
+    -   Due to the lack of pre-existing libraries, a new pure Go NBD
+        library was implemented
+
+    -   This library does not rely on CGo/a pre-existing C library,
+        meaning that a lot of context switching can be skipped
+
+    -   The backend interface for go-nbd is very simple and only
+        requires four methods: ReadAt, WriteAt, Size and Sync
+
+    -   A good example backend that maps well to a block device is the
+        file backend (code snippet from
+        https://github.com/pojntfx/go-nbd/blob/main/pkg/backend/file.go)
+
+    -   The key difference here to the way backends were designed in
+        userfaultfd-go is that they can also handle writes
+
+    -   go-nbd exposes a Handle function to support multiple users
+        without depending on a specific transport layer (code snippet
+        from
+        https://github.com/pojntfx/go-nbd/blob/main/pkg/server/nbd.go)
+
+    -   This means that systems that are peer-to-peer (e.g. WebRTC), and
+        thus don’t provide a TCP-style accept syscall can still be used
+        easily
+
+    -   It also allows for easily hosting NBD and other services on the
+        same TCP socket
+
+    -   How the server encodes/decodes messages
+
+    -   Message type modelling
+
+    -   Using the kernel NBD client without CGO/with ioctls
+
+    -   Finding an unused NBD device using sysfs
+
+    -   Benchmark: nbd kernel module quirks and how to detect whether a
+        NBD device is open (polling sysfs vs. udev)
+
+    -   Caching mechanisms and limitations (aligned reads) when opening
+        the block device (O_DIRECT)
+
+    -   Future outlook: Using ublk instead of NBD, allowing for
+        potentially much faster concurrent access thanks to io_uring
+
+    -   Why using BUSE to implement a NBD server would be possible but
+        unrealistic (library & docs situation, CGo)
+
+    -   go-buse as a preview of how such a CGo implementation could
+        still work
+
+    -   Alternatively implementing a new file system entirely in the
+        kernel, only exposing a single file/block device to mmap and
+        optimizing the user space protocol for this
