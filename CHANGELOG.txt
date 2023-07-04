@@ -1,3 +1,9 @@
+commit 12702cc29da110afe0c60d054a66e820a329c54c
+Author: Felicitas Pojtinger <felicitas@pojtinger.com>
+Date:   Tue Jul 4 23:11:26 2023 +0200
+
+    docs: Elaborate on section on push-based memory synchronization with `mmap` and hashing
+
 commit dc2a0d7489ea9cf5e9ddb04913f5ea9716129cff
 Author: Felicitas Pojtinger <felicitas@pojtinger.com>
 Date:   Tue Jul 4 17:56:56 2023 +0200

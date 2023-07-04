@@ -544,6 +544,136 @@ latency and throughput</li>
 Go, for most data, esp. larger datasets and in high-latency scenarios/in
 WAN, we need a better solution</li>
 </ul></li>
+<li><p>Push-Based Memory Synchronization with <code>mmap</code> and
+Hashing</p>
+<ul>
+<li>This approach tries to improve on <code>userfaultfd</code> by
+switching to push-based synchronization method</li>
+<li>Instead of reacting to page faults, this one a file to track changes
+to a memory region</li>
+<li>By synchronizing the file representing the memory region between two
+systems, we can effectively synchronize the memory region itself</li>
+<li>In Linux, swap space allows Linux to move pages of memory to disk or
+other swap partition if the fast speed of RAM is not needed (“paging
+out”)</li>
+<li>Similarly to this, Linux can also load missing pages from a
+disk</li>
+<li>This works similarly to how <code>userfaultfd</code> handled page
+faults, except this time it doesn’t need to go through user space, which
+can make it much faster</li>
+<li>We can do this by using <code>mmap</code>, which allows us to map a
+file into memory</li>
+<li>By default, <code>mmap</code> doesn’t write changes from a file back
+into memory, no matter if the file descriptor passed to it would allow
+it to or not</li>
+<li>We can however add the <code>MAP_SHARED</code> flag; this tells the
+kernel to write back changes to the memory region to the corresponding
+regions of the backing file</li>
+<li>Linux caches reads to such a backing file, so only the first page
+fault would be answered by fetching from disk, just like with
+<code>userfaultfd</code></li>
+<li>The same applies to writes; similar to how files need to be
+<code>sync</code>ed in order for them to be written to disks,
+<code>mmap</code>ed regions need to be <code>msync</code>ed in order to
+flush changes to the backing file</li>
+<li>In order to synchronize changes to the region between hosts by
+syncing the underlying file, we need to have the changes actually be
+represented in the file, which is why <code>msync</code> is
+critical</li>
+<li>For files, you can use <code>O_DIRECT</code> to skip this kernel
+caching if your process already does caching on its own, but this flag
+is ignored by the <code>mmap</code></li>
+<li>Usually, one would use <code>inotify</code> to watch changes to a
+file</li>
+<li><code>inotify</code> allows applications to register handlers on a
+file’s events, e.g. <code>WRITE</code> or <code>SYNC</code>. This allows
+for efficient file synchronization, and is used by many file
+synchronization tools</li>
+<li>It is also possible to filter only the events that we need to sync
+the writes, making it the perfect choice for this use case</li>
+<li>For technical reasons however (mostly because the file is
+represented by a memory region), Linux doesn’t fire these events for
+<code>mmap</code>ed files though, so we can’t use it</li>
+<li>The next best option are two: Either polling for file attribute
+changes (e.g. last write), or by continously hashing the file to check
+if it has changed</li>
+<li>Polling on its own has a lot of downsides, like it adding a
+guaranteed minimum latency by virtue of having to wait for the next
+polling cycle</li>
+<li>This negatively impacts a maximum allowed downtime scenario, where
+the overhead of polling can make or break a system</li>
+<li>Hashing the entire file is also a naturally IO- and CPU-intensive
+process because the entire file needs to be read at some point</li>
+<li>Still, polling &amp; hashing is probably the only reliable way of
+detecting changes to a file</li>
+<li>When picking algorithms for this hashing process, the most important
+metric to consider is the throughput with which it can compute hashes,
+as well as the change of collisions</li>
+<li>Benchmark: Performance of different Go hashing algorithms for
+detecting writes</li>
+<li>Instead of hashing the entire file, then syncing the entire file, we
+can want to really sync only the parts of the file that have changed
+between two polling iterations</li>
+<li>We can do this by opening up the file multiple times, then hashing
+individual offsets, and aggregating the chunks that have changed</li>
+<li>If the underlying hashing algorithm is CPU-bound, this also allows
+for better concurrent processing</li>
+<li>Increases the initial latency/overhead by having to open up multiple
+file descriptors</li>
+<li>Benchmark: Hashing the chunks individually vs. hashing the entire
+file</li>
+<li>But this can not only increase the speed of each individual polling
+tick, it can also drastically decrease the amount of data that needs to
+be transferred since only the delta needs to be synchronized</li>
+<li>Hashing and/or syncing individual chunks that have changed is a
+common practice</li>
+<li>The probably most popular tool for file synchronization like this is
+rsync</li>
+<li>When the delta-transfer algorithm for rsync is active, it computes
+the difference between the local and the remote file, and then
+synchronizes the changes</li>
+<li>The delta sync algorithm first does file block division</li>
+<li>The file on the destination is divided into fixed-size blocks</li>
+<li>For each block in the destination, a weak and fast checksum is
+calculated</li>
+<li>The checksums are sent over to the source</li>
+<li>On the source, the same checksum calculation process is run, and
+compared against the checksums that were sent over (matching block
+identification)</li>
+<li>Once the changed blocks are known, the source sends over the offset
+of each block and the changed block’s data to the destination</li>
+<li>When a block is received, the destination writes the chunk to the
+specified offset, reconstructing the file</li>
+<li>Once one polling interval is done, the process begins again</li>
+<li>We have implemented a simple TCP-based protocol for this delta
+synchronization, just like rsync’s delta synchronization algorithm (code
+snippet from
+https://github.com/loopholelabs/darkmagyk/blob/master/cmd/darkmagyk-orchestrator/main.go#L1337-L1411
+etc.)</li>
+<li>For this protocol specifically, we send the changed file’s name as
+the first message when starting the synchronization, but a simple
+multiplexing system could easily be implemented by sending a file ID
+with each message</li>
+<li>Similarly to <code>userfaultfd</code>, this system also has
+limitations</li>
+<li>While <code>userfaultfd</code> was only able to catch reads, this
+system is only able to catch writes to the file</li>
+<li>Essentially this system is write-only, and it is very inefficient to
+add hosts to the network later on</li>
+<li>As a result, if there are many possible destinations to migrate
+state too, a star-based architecture with a central forwarding hub can
+be used</li>
+<li>The static topology of this approach can be used to only ever
+require hashing on one of the destinations and the source instead of all
+of them</li>
+<li>This way, we only need to push the changes to one component (the
+hub), instead of having to push them to each destination on their
+own</li>
+<li>The hub simply forwards the messages to all the other
+destinations</li>
+<li>Benchmark: Throughput of this custom synchronization protocol
+vs. rsync (which hashes entire files)</li>
+</ul></li>
 </ul>
 </section>
 </body>
