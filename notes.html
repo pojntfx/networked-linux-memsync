@@ -175,6 +175,8 @@ state synchronization</p>
 Questions</a></li>
 <li><a href="#structure"><span class="toc-section-number">1.2</span>
 Structure</a></li>
+<li><a href="#content"><span class="toc-section-number">1.3</span>
+Content</a></li>
 </ul>
 </nav>
 <section id="unsorted-research-questions" data-number="0.1">
@@ -214,13 +216,13 @@ S3 object)</li>
 <li>Implications of not being able to catch writes to the region (its
 read-only)</li>
 <li>Design of a <code>userfaultfd</code> backend (io.ReaderAt)</li>
+<li>Limiations: ~50MB/s of throughput</li>
 <li>Limitations of only being able to catch the first page fault (no way
 of updating the region)</li>
 <li>Implications of not being able to pull chunks before they are being
 accessed</li>
 <li>Limitations of only being able to pull chunks synchronously</li>
 <li>Benefits of minimal registration and latency overhead</li>
-<li>Benchmark: Why is it limited to ~50MB/s of throughput?</li>
 <li>Benchmark: Sensitivity of <code>userfaultfd</code> to network
 latency and throughput</li>
 </ul></li>
@@ -322,6 +324,9 @@ has FS overhead)</li>
 chunked rwat)</li>
 <li>Benchmark: Local vs. remote chunking</li>
 <li>Optimizing the mount process with the Managed Mount interface</li>
+<li>Pre- and post-copy systems and why we should combine them (see
+Optimizing Virtual Machine Live Migration without Shared Storage in
+Hybrid Clouds)</li>
 <li>Asynchronous background push system interface and how edge cases
 (like accessing dirty chunks as they are being pulled or being written
 to) are handled</li>
@@ -335,7 +340,8 @@ scheduled to be pulled first</li>
 vs. managed mounts</li>
 <li>Unit testing the rwats</li>
 <li>Comparing this mount API to other existing remote memory access
-APIs, e.g. “Remote Regions”</li>
+APIs, e.g. “Remote Regions” (“Remote regions: a simple abstraction for
+remote memory”)</li>
 <li>Complexities when <code>mmap</code>ing a region in Go as the GC
 halts the entire world to collect garbage, but that also stops the NBD
 server in the same process that tries to satisfy the region being
@@ -366,7 +372,9 @@ exit</li>
 <li>The role of <code>Track()</code>, concurrent access and consistency
 guarantees vs. mounts (where the source must not change)</li>
 <li>When to best <code>Finalize()</code> a migration and how analyzing
-app usage patterns could help</li>
+app usage patterns could help (A Framework for Task-Guided Virtual
+Machine Live Migration, Reducing Virtual Machine Live Migration Overhead
+via Workload Analysis)</li>
 <li>Benchmark: Maximum acceptable downtime for a migration scenario with
 the Managed Mount API vs the Migration API</li>
 </ul></li>
@@ -404,8 +412,8 @@ CPU load and network traffic between them</li>
 </ul></li>
 <li>Case Studies
 <ul>
-<li><code>ram-dl</code> as an example of using the direct mount API
-for</li>
+<li><code>ram-dl</code> as an example of using the direct mount API for
+extending system memory</li>
 <li><code>tapisk</code> as an example of using the managed mount API for
 a file system with very high latencies, linear access and asynchronous
 to/from fast local memory vs. STFS</li>
@@ -430,6 +438,111 @@ first without having to fully download them</li>
 <li>Summary of the different approaches, and how the new solutions might
 make it possible to use memory as the universal access format</li>
 <li>Further research recommendations (e.g. <code>ublk</code>)</li>
+</ul></li>
+</ul>
+</section>
+<section id="content" data-number="0.3">
+<h2 data-number="1.3"><span class="header-section-number">1.3</span>
+Content</h2>
+<ul>
+<li><p>Pull-Based Memory Synchronization with
+<code>userfaultfd</code></p>
+<ul>
+<li>Page faults occur when a process tries to access a memory region
+that has not yet been mapped into a process’ address space</li>
+<li>By listening to these page faults, we know when a process wants to
+access a specific piece of memory</li>
+<li>We can use this to then pull the chunk of memory from a remote, map
+it to the address on which the page fault occured, thus only fetching
+data when it is required</li>
+<li>Usually, handling page faults is something that the kernel does</li>
+<li>In our case, we want to handle page faults in userspace</li>
+<li>In the past, this used to be possible by handling the
+<code>SIGSEGV</code> signal in the process</li>
+<li>In our case however, we can use a recent system called
+<code>userfaultfd</code> to do this in a more elegant way (available
+since kernel 4.11)</li>
+<li><code>userfaultfd</code> allows handling these page faults in
+userspace</li>
+<li>Implementing this in Go was quite tricky, and it involves using
+<code>unsafe</code></li>
+<li>We can use the <code>syscall</code> and <code>unix</code> packages
+to interact with <code>ioctl</code> etc.</li>
+<li>We can use the <code>ioctl</code> syscall to get a file descriptor
+to the <code>userfaultfd</code> API, and then register the API to handle
+any faults on the region (code snippet from
+https://github.com/loopholelabs/userfaultfd-go/blob/master/pkg/mapper/register.go#L15)</li>
+<li>The region that should be handled can be allocated with
+e.g. <code>mmap</code></li>
+<li>Once we have the file descriptor for the <code>userfaultfd</code>
+API, we need to transfer this file descriptor to a process that should
+respond with the chunks of memory to be put into the faulting
+address</li>
+<li>Passing file descriptors between processes is possible by using a
+UNIX socket (code snippet from
+https://github.com/loopholelabs/userfaultfd-go/blob/master/pkg/transfer/unix.go)</li>
+<li>Once we have received the socket we need to register the handler for
+the API to use</li>
+<li>If the handler receives an address that has faulted, it responds
+with the <code>UFFDIO_COPY</code> <code>ioctl</code> and a pointer to
+the chunk of memory that should be used on the file descriptor (code
+snippet from
+https://github.com/loopholelabs/userfaultfd-go/blob/master/pkg/mapper/handler.go)</li>
+<li>A big benefit of using <code>userfaultfd</code> and the pull method
+is that we are able to simplify the backend of the entire system down to
+a <code>io.ReaderAt</code> (code snippet from
+https://pkg.go.dev/io#ReaderAt)</li>
+<li>That means we can use almost any <code>io.ReaderAt</code> as a
+backend for a <code>userfaultfd-go</code> registered object</li>
+<li>We know that access will always be aligned to 4 KB chunks/the system
+page size, so we can assume a chunk size on the server based on
+that</li>
+<li>For the first example, we can return a random pattern in the backend
+(code snippet from
+https://github.com/loopholelabs/userfaultfd-go/blob/master/cmd/userfaultfd-go-example-abc/main.go)
+- this shows a great way of exposing truly arbitrary information into a
+byte slice without having to pre-compute everything or changing the
+application</li>
+<li>Since a file is a valid <code>io.ReaderAt</code>, we can also use a
+file as the backend directly, creating a system that essentially allows
+for mounting a (remote) file into memory (code snippet from
+https://github.com/loopholelabs/userfaultfd-go/blob/master/cmd/userfaultfd-go-example-file/main.go)</li>
+<li>Similarly so, we can use it map a remote object from S3 into memory,
+and access only the chunks of it that we actually require (which in the
+case of S3 is achieved with HTTP range requests) (code snippet from
+https://github.com/loopholelabs/userfaultfd-go/blob/master/cmd/userfaultfd-go-example-s3/main.go)</li>
+<li>As we can see, using <code>userfaultfd</code> we are able to map
+almost any object into memory</li>
+<li>This approach is very clean and has comparatively little overhead,
+but also has significant architecture-related problems that limit its
+uses</li>
+<li>The first big problem is only being able to catch page faults - that
+means we can only ever respond the first time a chunk of memory gets
+accessed, all future requests will return the memory directly from RAM
+on the destination host</li>
+<li>This prevents us from using this approach for remote resources that
+update over</li>
+<li>Also prevents us from using it for things that might have concurrent
+writers/shared resources, since there would be no way of updating the
+conflicting section</li>
+<li>Essentially makes this system only usable for a read-only “mount” of
+a remote resource, not really synchronization</li>
+<li>Also prevents pulling chunks before they are being accessed without
+layers of indirection</li>
+<li>The <code>userfaultfd</code> API socket is also synchronous, so each
+chunk needs to be sent one after the other, meaning that it is very
+vulnerable to long RTT values</li>
+<li>Also means that the initial latency will be at minimum the RTT to
+the remote source, and (without caching) so will be each future
+request</li>
+<li>The biggest problem however: All of these drawbacks mean that in
+real-life usecases, the maximum throughput, even if a local process
+handles page faults on a modern computer, is ~50MB/s</li>
+<li>Benchmark: Sensitivity of <code>userfaultfd</code> to network
+latency and throughput</li>
+<li>In summary, while this approach is interesting and very idiomatic to
+Go, for most data, esp. larger datasets and in high-latency scenarios/in
+WAN, we need a better solution</li>
 </ul></li>
 </ul>
 </section>

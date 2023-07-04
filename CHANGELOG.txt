@@ -1,3 +1,9 @@
+commit dc2a0d7489ea9cf5e9ddb04913f5ea9716129cff
+Author: Felicitas Pojtinger <felicitas@pojtinger.com>
+Date:   Tue Jul 4 17:56:56 2023 +0200
+
+    docs: Elaborate on section on pull-based memory synchronization with `userfaultfd`
+
 commit 83b2a9bb919c36002182888e786cc73a3ee2eaae
 Author: Felicitas Pojtinger <felicitas@pojtinger.com>
 Date:   Mon Jul 3 22:49:40 2023 +0200
