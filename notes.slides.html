@@ -536,6 +536,81 @@ destinations</li>
 <li>Benchmark: Throughput of this custom synchronization protocol
 vs. rsync (which hashes entire files)</li>
 </ul></li>
+<li><p>Push-Pull Memory Synchronization with a FUSE</p>
+<ul>
+<li>Since the push method requires polling and is very CPU and I/O
+intensive, and <code>userfaultfd-go</code> has too low of a throughput,
+a better solution is needed</li>
+<li>What if we could still get the events for the writes and reads
+without having to use <code>userfaultfd-go</code> or hashing?</li>
+<li>We can create a custom file system in Linux and load it as a kernel
+module</li>
+<li>This file system could then intercept reads/writes to/from the
+<code>mmap</code>ed region, making it possible to respond to them with a
+custom backend</li>
+<li>But such a system would need to run in the kernel directly, which
+leads to a lot of potential drawbacks</li>
+<li>While it is possible to write kernel modules with Rust instead of C
+these days, a lot of problems remain</li>
+<li>Kernel modules aren’t portable; they are built for a specific
+kernel, which makes them hard to distribute to users</li>
+<li>A kernel file system is able to skip having to go through user space
+and thus save on context switching, but that will also mean that it will
+run in the kernel address space, making for a poor level of
+isolation</li>
+<li>Iterating on a kernel module is much harder than iterating on a
+program running in user space</li>
+<li>If we want the user to be able to provide their own backends from/to
+which to pull/push, that will still require communication between user
+space and the kernel</li>
+<li>So while adding this implementation in the kernel would be possible,
+it would also be very complex</li>
+<li>In order to implement file systems in user space, we can use the
+FUSE API</li>
+<li>Here, a user space program registers itself with the FUSE kernel
+module</li>
+<li>This program provides callbacks for the file system operations,
+e.g. for <code>open</code>, <code>read</code>, <code>write</code>
+etc.</li>
+<li>When the user performs a file system operation on a mounted FUSE
+file system, the kernel module will send a request for the operation to
+the user space program, which can then reply with a response, which the
+FUSE kernel module will then return to the user</li>
+<li>This makes it much easier to create a file system compared to
+writing it in the kernel, as it can run in user space</li>
+<li>It is also much safer as no custom kernel module is required and an
+error in the FUSE or the backend can’t crash the entire kernel</li>
+<li>Unlike a file system implemented as a kernel module, this layer of
+indirection makes the file system portable, since it only needs to
+communicate with the FUSE module</li>
+<li>It is possible to use even very complex and at first view
+non-compatible backends as a FUSE file system’s backend</li>
+<li>By using a file system abstraction API like <code>afero.Fs</code>,
+we can separate the FUSE implementation from the actual file system
+structure, making it unit testable and making it possible to add caching
+in user space (code snippet from
+https://github.com/pojntfx/stfs/blob/main/pkg/fs/file.go)</li>
+<li>It is possible to map any <code>afero.Fs</code> to a FUSE backend,
+so it would be possible to switch between different file system backends
+without having to write FUSE-specific (code snippet from
+https://github.com/JakWai01/sile-fystem/blob/main/pkg/filesystem/fs.go)</li>
+<li>For example, STFS used a tape drive as the backend, which is not
+random access, but instead append-only and linear
+(https://github.com/pojntfx/stfs/blob/main/pkg/operations/update.go)</li>
+<li>By using an on-disk index and access optimizations, the resulting
+file system was still performant enough to be used, and supported almost
+all features required for the average user</li>
+<li>FUSE does however also have downsides</li>
+<li>It operates in user space, which means that it needs to do context
+switching</li>
+<li>Some advanced features aren’t available for a FUSE</li>
+<li>The overhead of FUSE (and implementing a completely custom file
+system) for synchronizing memory is still significant</li>
+<li>If possible, the optimal solution would be to not expose a full file
+system to track changes, but rather a single file</li>
+<li>As a result of this, the significant implementation overhead of such
+a file system led to it not being chosen</li>
+</ul></li>
 </ul>
 </div>
 </body>

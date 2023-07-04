@@ -1,3 +1,9 @@
+commit 86e9ffe47f65934d3e0c8d4e481446519ead6624
+Author: Felicitas Pojtinger <felicitas@pojtinger.com>
+Date:   Tue Jul 4 23:56:21 2023 +0200
+
+    docs: Elaborate on section on push-pull memory synchronization with a FUSE
+
 commit 12702cc29da110afe0c60d054a66e820a329c54c
 Author: Felicitas Pojtinger <felicitas@pojtinger.com>
 Date:   Tue Jul 4 23:11:26 2023 +0200
