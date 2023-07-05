@@ -1,3 +1,9 @@
+commit 8adbbbd46a06ed41ed5f144b020949e0702f19d7
+Author: Felicitas Pojtinger <felicitas@pojtinger.com>
+Date:   Wed Jul 5 17:18:26 2023 +0200
+
+    docs: Finish section on `go-nbd`'s implementation
+
 commit b286a45b97ff7ece59e4f7dc4f76d829161d9577
 Author: Felicitas Pojtinger <felicitas@pojtinger.com>
 Date:   Wed Jul 5 01:17:16 2023 +0200
