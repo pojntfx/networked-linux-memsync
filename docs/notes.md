@@ -362,3 +362,62 @@ lang: en-US
   - The last alternative to NBD devices would be to extend the kernel with a new construct that allows for essentially a virtual file to be `mmap`ed, not a block device
   - This could use a custom protocol that is optimized for this use case instead of a full block device
   - Because of the extensive setup required to implement such a system however, and the possibility of `ublk` providing a performant alternative in the future, going forward with NBD was chosen for now
+
+- Push-Pull Memory Synchronization with Mounts
+
+  - Usually, the NBD server and client don't run on the same system
+  - NBD was originally designed to used as a LAN protocol to access a remote hard disk
+  - As mentioned before, NBD can run over WAN, but is not designed for this
+  - The biggest problem with running NBD over a public network, even if TLS is enabled is latency
+  - Individual chunks would only be fetched to the local system as they are being accessed, adding a guaranteed minimum latency of at least the RTT
+  - Instead of directly connecting a client to a remote server, we add a layer of indirection, called a `Mount` that consists of both a client and a server, both running on the local system
+  - We then connect the server to the backend with an API that is better suited for WAN usage
+  - This also makes it possible to implement smart pull/push strategies instead of simply directly writing to/from the network ("managed mounts")
+  - The server and client are connected by creating a connected UNIX socket pair (code snippet from https://github.com/pojntfx/r3map/blob/main/pkg/mount/path_direct.go#L59-L62)
+  - By building on this basic direct mount, we can add a file (code snippet from https://github.com/pojntfx/r3map/blob/main/pkg/mount/file_direct.go) and slice (code snippet from https://github.com/pojntfx/r3map/blob/main/pkg/mount/slice_direct.go) mount API, which allows for easy usage and integration with `sync`/`msync` respectively
+  - Using the `mmap`/slice approach has a few benefits
+  - First, it makes it possible to use the byte slice directly as though it were a byte slice allocated by `make`, except its transparently mapped to the (remote) backend
+  - `mmap`/the byte slices also swaps out the syscall-based file interface with a random access one, which allows for faster concurrent reads from the underlying backend
+  - Alternatively, it would also be possible to format the server's backend or the block device using standard file system tools
+  - When the device then becomes ready, it can be mounted to a directory on the system
+  - This way it is possible to `mmap` one or multiple files on the mounted file system instead of `mmap`ing the block device directly
+  - This allows for handling multiple remote regions using a single server, and thus saving on initialization time and overhead
+  - Using a proper file system however does introduce both storage overhead and complexity, which is why e.g. the FUSE approach was not chosen
+  - The simplest form of the mount API is the direct mount API
+  - This API simply swaps out NBD for a transport-independent RPC framework, but does not do additional optimizations
+  - It has two simple actors: A client and a server, with only the server providing methods to be called (code snippet from https://github.com/pojntfx/r3map/blob/main/pkg/services/backend.go#L14-L19)
+  - The protocol as such is stateless, as there is only a simple remote read/write interface (add state machine and sequence diagram here)
+  - One additional layer that needs to be implemented however is proper chunking support
+  - While we can specify a chunk size for the NBD client in the form of a block size, we can only go up to 4 KB chunks
+  - For scenarios where the RTT between the backend and server is large, it might make sense to use a much larger chunk size for the actual networked transfers
+  - Many backends also have constraints that prevent them from functioning without a specific chunk size or aligned offsets, such as using e.g. tape drives, which require setting a block size and work best when these chunks are multiple MBs instead of KBs
+  - Even if there are no constraints on chunking on the backend side (e.g. when a file is used as the backend), it might make sense to limit the maximum supported message size between the client and server to prevent DoS attacks by forcing the backend to allocate large chunks of memory to satisfy requests, which requires a chunking system to work
+  - In order to implement the chunking system, we can use a abstraction layer that allows us to create a pipeline of readers/writers - the `ReadWriterAt`, combining an `io.ReaderAt` and a `io.WriterAt`
+  - This way, we can forward the `Size` and `Sync` syscalls directly to the underlying backend, but wrap a backend's `ReadAt` and `WriteAt` methods in a pipeline of other `ReadWriterAt`s
+  - One such `ReadWriterAt` is the `ArbitraryReadWriterAt` (code snippet from https://github.com/pojntfx/r3map/blob/main/pkg/chunks/arbitrary_rwat.go)
+  - It allows breaking down a larger data stream into smaller chunks
+  - In `ReadAt`, it calculates the index of the chunk that the offset falls into and the position within the offsets
+  - It then reads the entire chunk from the backend into a buffer, copies the necessary portion of the buffer into the input slice, and repeats the process until all requested data is read
+  - Similarly for the writer, it calculates the chunk's index and offset
+  - If an entire chunk is being written to, it bypasses the chunking system, and writes it directly to not have to unnecessarily copy the data twice
+  - If only parts of a chunk need to be written, it first reads the complete chunk into a buffer, modifies the buffer with the data that has changed, and writes the entire chunk back, until all data has been written
+  - This simple implementation can be used to allow for writing data of arbitrary length at arbitrary offsets, even if the backend only supports a few chunks
+  - In addition to this chunking system, there is also a `ChunkedReadWriterAt`, which ensures that the limits concerning the maximum size supported by the backend and the actual chunks are being respected
+  - This is particularly useful when the client is expected to do the chunking, and the server simply checks that the chunking system's chunk size is respected
+  - In order to check if a read or write is valid, it checks whether a read is done to an offset multiple of the chunk size, and whether the length of the slice of data to read/write is the chunk size (code snippet from https://github.com/pojntfx/r3map/blob/main/pkg/chunks/chunked_rwat.go)
+  - It is possible to do the chunking in two places; on the mount API's side, and on the (potentially remote) backend's side
+  - Doing the chunking on the backend's side is usually much faster than on the mount API's side, as writes with lengths smaller than the chunk size will mean that the remote chunk needs to be fetched first, significantly increasing the latency esp. in scenarios with high RTT
+  - Benchmark: Local vs. remote chunking
+
+  - Optimizing the mount process with the Managed Mount interface
+  - Pre- and post-copy systems and why we should combine them (see Optimizing Virtual Machine Live Migration without Shared Storage in Hybrid Clouds)
+  - Asynchronous background push system interface and how edge cases (like accessing dirty chunks as they are being pulled or being written to) are handled
+  - Preemptive background pulls interface
+  - Syncer interface
+  - Benchmark: Parallelizing startups and pulling n MBs as the device starts
+  - Using a pull heuristic function to optimize which chunks should be scheduled to be pulled first
+  - Internal rwat pipeline (create a graphic) for direct mounts vs. managed mounts
+  - Unit testing the rwats
+  - Comparing this mount API to other existing remote memory access APIs, e.g. "Remote Regions" ("Remote regions: a simple abstraction for remote memory")
+  - Complexities when `mmap`ing a region in Go as the GC halts the entire world to collect garbage, but that also stops the NBD server in the same process that tries to satisfy the region being scanned
+  - Potentially using Rust for this component to cut down on memory complexities and GC latencies
