@@ -1,3 +1,9 @@
+commit 8d38da97c729c41d4d35c596afbcaa3a77804bf9
+Author: Felicitas Pojtinger <felicitas@pojtinger.com>
+Date:   Wed Jul 5 23:55:50 2023 +0200
+
+    docs: Start implementing the section on direct mounts, explain chunking system
+
 commit 8adbbbd46a06ed41ed5f144b020949e0702f19d7
 Author: Felicitas Pojtinger <felicitas@pojtinger.com>
 Date:   Wed Jul 5 17:18:26 2023 +0200
