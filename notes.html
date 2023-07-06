@@ -1089,20 +1089,126 @@ chunk size will mean that the remote chunk needs to be fetched first,
 significantly increasing the latency esp. in scenarios with high
 RTT</p></li>
 <li><p>Benchmark: Local vs. remote chunking</p></li>
-<li><p>Optimizing the mount process with the Managed Mount
-interface</p></li>
-<li><p>Pre- and post-copy systems and why we should combine them (see
-Optimizing Virtual Machine Live Migration without Shared Storage in
-Hybrid Clouds)</p></li>
+<li><p>While these systems already allow for some optimizations over
+simply using the NBD protocol over WAN, they still mean that chunks will
+only be fetched as they are being needed, which means that there still
+is a guaranteed minimum downtime</p></li>
+<li><p>In order to improve on this, a more advanced API (the managed
+mount API) was created</p></li>
+<li><p>A field that tries to optimize for this use case is live
+migration of VMs</p></li>
+<li><p>Live migration refers to moving a virtual machine, its state and
+connected devices from one host to another with as little downtime as
+possible</p></li>
+<li><p>There are two types of such migration algorithms; pre-copy and
+post-copy migration</p></li>
+<li><p>Pre-copy migration works by copying data from the source to the
+destination as the VM continues to run (or in the case of a generic
+migration, app/other state continues being written to)</p></li>
+<li><p>First, the initial state of the VM’s memory is copied to the
+destination</p></li>
+<li><p>If, during the push, chunks are being modified, they are being
+marked as dirty</p></li>
+<li><p>These dirty chunks are being copied over to the destination until
+the number of remaining chunks is small enough to satisfy a maximum
+downtime criteria</p></li>
+<li><p>Once this is the case, the VM is suspended on the source, and the
+remaining chunks are synced over to destination</p></li>
+<li><p>Once the transfer is complete, the VM is resumed on the
+destination</p></li>
+<li><p>This process is helpful since the VM is always available in full
+on either the source or the destination, and it is resilient to a
+network outage occurring during the synchronization</p></li>
+<li><p>If the VM (or app etc.) is however changing too many chunks on
+the source during the migration, the maximum acceptable downtime
+criteria might never get reached, and the maximum acceptable downtime is
+also somewhat limited by the available RTT</p></li>
+<li><p>An alternative to pre-copy migration</p></li>
+<li><p>In this approach, the VM is immediately suspended on the source,
+moved to the destination with only a minimal set of chunks</p></li>
+<li><p>After the VM has been moved to the destination, it is
+resumed</p></li>
+<li><p>If the VM tries to access a chunk on the destination, a page
+fault is raised, and the missing page is fetched from the source, and
+the VM continues to execute</p></li>
+<li><p>The benefit of post-copy migration is that it does not require
+re-transmitting dirty chunks to the destination before the maximum
+tolerable downtime is reached</p></li>
+<li><p>The big drawback of post-copy migration is that it can result in
+longer migration times, because the chunks need to be fetched from the
+network on-demand, which is very latency/RTT-sensitive</p></li>
+<li><p>For the managed mount API, both paradigms were
+implemented</p></li>
+<li><p>The managed mount API is primarily intended as an API for reading
+from a remote resource and then syncing changes back to it however, not
+migrating a resource between two hosts</p></li>
+<li><p>The migration API (will be discussed later) is a more
+well-optimized version for this use case</p></li>
+<li><p>The pre-copy API is implemented in the form of preemptive pulls
+based on another <code>ReaderAt</code></p></li>
+<li><p>The <code>Puller</code> component asynchronously pulls chunks in
+the background (code snipped from
+https://github.com/pojntfx/r3map/blob/main/pkg/chunks/puller.go)</p></li>
+<li><p>It allows passing in a pull heuristic function, which it uses to
+determine which chunks should be pulled in which order</p></li>
+<li><p>Many applications commonly access certain bits of data
+first</p></li>
+<li><p>If a resource should be available locally as quickly as possible,
+then using the correct pull heuristic can help a lot</p></li>
+<li><p>For example, if the data pulled consists of a header, then using
+a pull heuristic that pulls these header chunks first can be of
+help</p></li>
+<li><p>If a file system is being synchronized, and the superblocks of
+the file system are being stored in a known pattern, the pull heuristic
+can be used to fetch these superblocks first</p></li>
+<li><p>If a format like MP4, which has an index, is used then said index
+can be fetched first, be accessed first and during the time needed to
+parse the index, the remaining data can be pulled in the
+background</p></li>
+<li><p>After sorting the chunks, the puller starts a fixed number of
+worker threads in the background, each of which ask for a chunk to
+pull</p></li>
+<li><p>Note that the puller itself does not copy to/from a destination;
+this use case is handled by a separate component</p></li>
+<li><p>It simply reads from the provided <code>ReaderAt</code>, which is
+then expected to handle the actual copying on its own</p></li>
+<li><p>The actual copy logic is provided by the
+<code>SyncedReadWriterAt</code> instead</p></li>
+<li><p>This component takes both a remote reader and a local
+<code>ReadWriterAt</code></p></li>
+<li><p>If a chunk is read, e.g. by the puller component calling
+<code>ReadAt</code>, it is tracked and market as remote by adding it to
+a local map</p></li>
+<li><p>The chunk is then read from the remote reader and written to the
+local <code>ReadWriterAt</code>, and is then marked as locally
+available, so that on the second read it is fetched locally
+directly</p></li>
+<li><p>A callback is then called which can be used to monitor the pull
+process</p></li>
+<li><p>Note that if it is used in a pipeline with the
+<code>Puller</code>, this also means that if a chunk which hasn’t been
+fetched asynchronously yet will be scheduled to be pulled
+immediately</p></li>
+<li><p>WriteAt also starts by tracking a chunk, but then immediately
+marks the chunk as available locally no matter whether it has been
+pulled before</p></li>
+<li><p>The combination of the <code>SyncedReadWriterAt</code> and the
+<code>Puller</code> component implements the pull post-copy system in a
+modular and testable way</p></li>
+<li><p>Unlike the usual way of only fetching chunks when they are
+available however, this system also allows fetching them pre-emptively,
+gaining some benefits of pre-copy migration, too</p></li>
+<li><p>Using this <code>Puller</code> interface, it is possible to
+implement a read-only managed mount</p></li>
+<li><p>In order to also be able to write back however, it needs to have
+a push system as well</p></li>
+<li><p>This push system is being activated after the pull has
+completed</p></li>
 <li><p>Asynchronous background push system interface and how edge cases
 (like accessing dirty chunks as they are being pulled or being written
 to) are handled</p></li>
-<li><p>Preemptive background pulls interface</p></li>
-<li><p>Syncer interface</p></li>
 <li><p>Benchmark: Parallelizing startups and pulling n MBs as the device
 starts</p></li>
-<li><p>Using a pull heuristic function to optimize which chunks should
-be scheduled to be pulled first</p></li>
 <li><p>Internal rwat pipeline (create a graphic) for direct mounts
 vs. managed mounts</p></li>
 <li><p>Unit testing the rwats</p></li>
