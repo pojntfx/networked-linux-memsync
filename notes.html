@@ -963,264 +963,352 @@ now</li>
 </ul></li>
 <li><p>Push-Pull Memory Synchronization with Mounts</p>
 <ul>
-<li><p>Usually, the NBD server and client don’t run on the same
-system</p></li>
-<li><p>NBD was originally designed to used as a LAN protocol to access a
-remote hard disk</p></li>
-<li><p>As mentioned before, NBD can run over WAN, but is not designed
-for this</p></li>
-<li><p>The biggest problem with running NBD over a public network, even
-if TLS is enabled is latency</p></li>
-<li><p>Individual chunks would only be fetched to the local system as
-they are being accessed, adding a guaranteed minimum latency of at least
-the RTT</p></li>
-<li><p>Instead of directly connecting a client to a remote server, we
-add a layer of indirection, called a <code>Mount</code> that consists of
-both a client and a server, both running on the local system</p></li>
-<li><p>We then connect the server to the backend with an API that is
-better suited for WAN usage</p></li>
-<li><p>This also makes it possible to implement smart pull/push
-strategies instead of simply directly writing to/from the network
-(“managed mounts”)</p></li>
-<li><p>The server and client are connected by creating a connected UNIX
+<li>Usually, the NBD server and client don’t run on the same system</li>
+<li>NBD was originally designed to used as a LAN protocol to access a
+remote hard disk</li>
+<li>As mentioned before, NBD can run over WAN, but is not designed for
+this</li>
+<li>The biggest problem with running NBD over a public network, even if
+TLS is enabled is latency</li>
+<li>Individual chunks would only be fetched to the local system as they
+are being accessed, adding a guaranteed minimum latency of at least the
+RTT</li>
+<li>Instead of directly connecting a client to a remote server, we add a
+layer of indirection, called a <code>Mount</code> that consists of both
+a client and a server, both running on the local system</li>
+<li>We then connect the server to the backend with an API that is better
+suited for WAN usage</li>
+<li>This also makes it possible to implement smart pull/push strategies
+instead of simply directly writing to/from the network (“managed
+mounts”)</li>
+<li>The server and client are connected by creating a connected UNIX
 socket pair (code snippet from
-https://github.com/pojntfx/r3map/blob/main/pkg/mount/path_direct.go#L59-L62)</p></li>
-<li><p>By building on this basic direct mount, we can add a file (code
+https://github.com/pojntfx/r3map/blob/main/pkg/mount/path_direct.go#L59-L62)</li>
+<li>By building on this basic direct mount, we can add a file (code
 snippet from
 https://github.com/pojntfx/r3map/blob/main/pkg/mount/file_direct.go) and
 slice (code snippet from
 https://github.com/pojntfx/r3map/blob/main/pkg/mount/slice_direct.go)
 mount API, which allows for easy usage and integration with
-<code>sync</code>/<code>msync</code> respectively</p></li>
-<li><p>Using the <code>mmap</code>/slice approach has a few
-benefits</p></li>
-<li><p>First, it makes it possible to use the byte slice directly as
-though it were a byte slice allocated by <code>make</code>, except its
-transparently mapped to the (remote) backend</p></li>
-<li><p><code>mmap</code>/the byte slices also swaps out the
-syscall-based file interface with a random access one, which allows for
-faster concurrent reads from the underlying backend</p></li>
-<li><p>Alternatively, it would also be possible to format the server’s
-backend or the block device using standard file system tools</p></li>
-<li><p>When the device then becomes ready, it can be mounted to a
-directory on the system</p></li>
-<li><p>This way it is possible to <code>mmap</code> one or multiple
-files on the mounted file system instead of <code>mmap</code>ing the
-block device directly</p></li>
-<li><p>This allows for handling multiple remote regions using a single
-server, and thus saving on initialization time and overhead</p></li>
-<li><p>Using a proper file system however does introduce both storage
+<code>sync</code>/<code>msync</code> respectively</li>
+<li>Using the <code>mmap</code>/slice approach has a few benefits</li>
+<li>First, it makes it possible to use the byte slice directly as though
+it were a byte slice allocated by <code>make</code>, except its
+transparently mapped to the (remote) backend</li>
+<li><code>mmap</code>/the byte slices also swaps out the syscall-based
+file interface with a random access one, which allows for faster
+concurrent reads from the underlying backend</li>
+<li>Alternatively, it would also be possible to format the server’s
+backend or the block device using standard file system tools</li>
+<li>When the device then becomes ready, it can be mounted to a directory
+on the system</li>
+<li>This way it is possible to <code>mmap</code> one or multiple files
+on the mounted file system instead of <code>mmap</code>ing the block
+device directly</li>
+<li>This allows for handling multiple remote regions using a single
+server, and thus saving on initialization time and overhead</li>
+<li>Using a proper file system however does introduce both storage
 overhead and complexity, which is why e.g. the FUSE approach was not
-chosen</p></li>
-<li><p>The simplest form of the mount API is the direct mount
-API</p></li>
-<li><p>This API simply swaps out NBD for a transport-independent RPC
-framework, but does not do additional optimizations</p></li>
-<li><p>It has two simple actors: A client and a server, with only the
+chosen</li>
+<li>The simplest form of the mount API is the direct mount API</li>
+<li>This API simply swaps out NBD for a transport-independent RPC
+framework, but does not do additional optimizations</li>
+<li>It has two simple actors: A client and a server, with only the
 server providing methods to be called (code snippet from
-https://github.com/pojntfx/r3map/blob/main/pkg/services/backend.go#L14-L19)</p></li>
-<li><p>The protocol as such is stateless, as there is only a simple
-remote read/write interface (add state machine and sequence diagram
-here)</p></li>
-<li><p>One additional layer that needs to be implemented however is
-proper chunking support</p></li>
-<li><p>While we can specify a chunk size for the NBD client in the form
-of a block size, we can only go up to 4 KB chunks</p></li>
-<li><p>For scenarios where the RTT between the backend and server is
-large, it might make sense to use a much larger chunk size for the
-actual networked transfers</p></li>
-<li><p>Many backends also have constraints that prevent them from
+https://github.com/pojntfx/r3map/blob/main/pkg/services/backend.go#L14-L19)</li>
+<li>The protocol as such is stateless, as there is only a simple remote
+read/write interface (add state machine and sequence diagram here)</li>
+<li>One additional layer that needs to be implemented however is proper
+chunking support</li>
+<li>While we can specify a chunk size for the NBD client in the form of
+a block size, we can only go up to 4 KB chunks</li>
+<li>For scenarios where the RTT between the backend and server is large,
+it might make sense to use a much larger chunk size for the actual
+networked transfers</li>
+<li>Many backends also have constraints that prevent them from
 functioning without a specific chunk size or aligned offsets, such as
 using e.g. tape drives, which require setting a block size and work best
-when these chunks are multiple MBs instead of KBs</p></li>
-<li><p>Even if there are no constraints on chunking on the backend side
+when these chunks are multiple MBs instead of KBs</li>
+<li>Even if there are no constraints on chunking on the backend side
 (e.g. when a file is used as the backend), it might make sense to limit
 the maximum supported message size between the client and server to
 prevent DoS attacks by forcing the backend to allocate large chunks of
 memory to satisfy requests, which requires a chunking system to
-work</p></li>
-<li><p>In order to implement the chunking system, we can use a
-abstraction layer that allows us to create a pipeline of readers/writers
-- the <code>ReadWriterAt</code>, combining an <code>io.ReaderAt</code>
-and a <code>io.WriterAt</code></p></li>
-<li><p>This way, we can forward the <code>Size</code> and
-<code>Sync</code> syscalls directly to the underlying backend, but wrap
-a backend’s <code>ReadAt</code> and <code>WriteAt</code> methods in a
-pipeline of other <code>ReadWriterAt</code>s</p></li>
-<li><p>One such <code>ReadWriterAt</code> is the
+work</li>
+<li>In order to implement the chunking system, we can use a abstraction
+layer that allows us to create a pipeline of readers/writers - the
+<code>ReadWriterAt</code>, combining an <code>io.ReaderAt</code> and a
+<code>io.WriterAt</code></li>
+<li>This way, we can forward the <code>Size</code> and <code>Sync</code>
+syscalls directly to the underlying backend, but wrap a backend’s
+<code>ReadAt</code> and <code>WriteAt</code> methods in a pipeline of
+other <code>ReadWriterAt</code>s</li>
+<li>One such <code>ReadWriterAt</code> is the
 <code>ArbitraryReadWriterAt</code> (code snippet from
-https://github.com/pojntfx/r3map/blob/main/pkg/chunks/arbitrary_rwat.go)</p></li>
-<li><p>It allows breaking down a larger data stream into smaller
-chunks</p></li>
-<li><p>In <code>ReadAt</code>, it calculates the index of the chunk that
-the offset falls into and the position within the offsets</p></li>
-<li><p>It then reads the entire chunk from the backend into a buffer,
+https://github.com/pojntfx/r3map/blob/main/pkg/chunks/arbitrary_rwat.go)</li>
+<li>It allows breaking down a larger data stream into smaller
+chunks</li>
+<li>In <code>ReadAt</code>, it calculates the index of the chunk that
+the offset falls into and the position within the offsets</li>
+<li>It then reads the entire chunk from the backend into a buffer,
 copies the necessary portion of the buffer into the input slice, and
-repeats the process until all requested data is read</p></li>
-<li><p>Similarly for the writer, it calculates the chunk’s index and
-offset</p></li>
-<li><p>If an entire chunk is being written to, it bypasses the chunking
+repeats the process until all requested data is read</li>
+<li>Similarly for the writer, it calculates the chunk’s index and
+offset</li>
+<li>If an entire chunk is being written to, it bypasses the chunking
 system, and writes it directly to not have to unnecessarily copy the
-data twice</p></li>
-<li><p>If only parts of a chunk need to be written, it first reads the
+data twice</li>
+<li>If only parts of a chunk need to be written, it first reads the
 complete chunk into a buffer, modifies the buffer with the data that has
 changed, and writes the entire chunk back, until all data has been
-written</p></li>
-<li><p>This simple implementation can be used to allow for writing data
-of arbitrary length at arbitrary offsets, even if the backend only
-supports a few chunks</p></li>
-<li><p>In addition to this chunking system, there is also a
+written</li>
+<li>This simple implementation can be used to allow for writing data of
+arbitrary length at arbitrary offsets, even if the backend only supports
+a few chunks</li>
+<li>In addition to this chunking system, there is also a
 <code>ChunkedReadWriterAt</code>, which ensures that the limits
 concerning the maximum size supported by the backend and the actual
-chunks are being respected</p></li>
-<li><p>This is particularly useful when the client is expected to do the
+chunks are being respected</li>
+<li>This is particularly useful when the client is expected to do the
 chunking, and the server simply checks that the chunking system’s chunk
-size is respected</p></li>
-<li><p>In order to check if a read or write is valid, it checks whether
-a read is done to an offset multiple of the chunk size, and whether the
+size is respected</li>
+<li>In order to check if a read or write is valid, it checks whether a
+read is done to an offset multiple of the chunk size, and whether the
 length of the slice of data to read/write is the chunk size (code
 snippet from
-https://github.com/pojntfx/r3map/blob/main/pkg/chunks/chunked_rwat.go)</p></li>
-<li><p>It is possible to do the chunking in two places; on the mount
-API’s side, and on the (potentially remote) backend’s side</p></li>
-<li><p>Doing the chunking on the backend’s side is usually much faster
-than on the mount API’s side, as writes with lengths smaller than the
-chunk size will mean that the remote chunk needs to be fetched first,
+https://github.com/pojntfx/r3map/blob/main/pkg/chunks/chunked_rwat.go)</li>
+<li>It is possible to do the chunking in two places; on the mount API’s
+side, and on the (potentially remote) backend’s side</li>
+<li>Doing the chunking on the backend’s side is usually much faster than
+on the mount API’s side, as writes with lengths smaller than the chunk
+size will mean that the remote chunk needs to be fetched first,
 significantly increasing the latency esp. in scenarios with high
-RTT</p></li>
-<li><p>Benchmark: Local vs. remote chunking</p></li>
-<li><p>While these systems already allow for some optimizations over
-simply using the NBD protocol over WAN, they still mean that chunks will
-only be fetched as they are being needed, which means that there still
-is a guaranteed minimum downtime</p></li>
-<li><p>In order to improve on this, a more advanced API (the managed
-mount API) was created</p></li>
-<li><p>A field that tries to optimize for this use case is live
-migration of VMs</p></li>
-<li><p>Live migration refers to moving a virtual machine, its state and
+RTT</li>
+<li>Benchmark: Local vs. remote chunking</li>
+<li>While these systems already allow for some optimizations over simply
+using the NBD protocol over WAN, they still mean that chunks will only
+be fetched as they are being needed, which means that there still is a
+guaranteed minimum downtime</li>
+<li>In order to improve on this, a more advanced API (the managed mount
+API) was created</li>
+<li>A field that tries to optimize for this use case is live migration
+of VMs</li>
+<li>Live migration refers to moving a virtual machine, its state and
 connected devices from one host to another with as little downtime as
-possible</p></li>
-<li><p>There are two types of such migration algorithms; pre-copy and
-post-copy migration</p></li>
-<li><p>Pre-copy migration works by copying data from the source to the
+possible</li>
+<li>There are two types of such migration algorithms; pre-copy and
+post-copy migration</li>
+<li>Pre-copy migration works by copying data from the source to the
 destination as the VM continues to run (or in the case of a generic
-migration, app/other state continues being written to)</p></li>
-<li><p>First, the initial state of the VM’s memory is copied to the
-destination</p></li>
-<li><p>If, during the push, chunks are being modified, they are being
-marked as dirty</p></li>
-<li><p>These dirty chunks are being copied over to the destination until
+migration, app/other state continues being written to)</li>
+<li>First, the initial state of the VM’s memory is copied to the
+destination</li>
+<li>If, during the push, chunks are being modified, they are being
+marked as dirty</li>
+<li>These dirty chunks are being copied over to the destination until
 the number of remaining chunks is small enough to satisfy a maximum
-downtime criteria</p></li>
-<li><p>Once this is the case, the VM is suspended on the source, and the
-remaining chunks are synced over to destination</p></li>
-<li><p>Once the transfer is complete, the VM is resumed on the
-destination</p></li>
-<li><p>This process is helpful since the VM is always available in full
-on either the source or the destination, and it is resilient to a
-network outage occurring during the synchronization</p></li>
-<li><p>If the VM (or app etc.) is however changing too many chunks on
-the source during the migration, the maximum acceptable downtime
-criteria might never get reached, and the maximum acceptable downtime is
-also somewhat limited by the available RTT</p></li>
-<li><p>An alternative to pre-copy migration</p></li>
-<li><p>In this approach, the VM is immediately suspended on the source,
-moved to the destination with only a minimal set of chunks</p></li>
-<li><p>After the VM has been moved to the destination, it is
-resumed</p></li>
-<li><p>If the VM tries to access a chunk on the destination, a page
-fault is raised, and the missing page is fetched from the source, and
-the VM continues to execute</p></li>
-<li><p>The benefit of post-copy migration is that it does not require
+downtime criteria</li>
+<li>Once this is the case, the VM is suspended on the source, and the
+remaining chunks are synced over to destination</li>
+<li>Once the transfer is complete, the VM is resumed on the
+destination</li>
+<li>This process is helpful since the VM is always available in full on
+either the source or the destination, and it is resilient to a network
+outage occurring during the synchronization</li>
+<li>If the VM (or app etc.) is however changing too many chunks on the
+source during the migration, the maximum acceptable downtime criteria
+might never get reached, and the maximum acceptable downtime is also
+somewhat limited by the available RTT</li>
+<li>An alternative to pre-copy migration</li>
+<li>In this approach, the VM is immediately suspended on the source,
+moved to the destination with only a minimal set of chunks</li>
+<li>After the VM has been moved to the destination, it is resumed</li>
+<li>If the VM tries to access a chunk on the destination, a page fault
+is raised, and the missing page is fetched from the source, and the VM
+continues to execute</li>
+<li>The benefit of post-copy migration is that it does not require
 re-transmitting dirty chunks to the destination before the maximum
-tolerable downtime is reached</p></li>
-<li><p>The big drawback of post-copy migration is that it can result in
+tolerable downtime is reached</li>
+<li>The big drawback of post-copy migration is that it can result in
 longer migration times, because the chunks need to be fetched from the
-network on-demand, which is very latency/RTT-sensitive</p></li>
-<li><p>For the managed mount API, both paradigms were
-implemented</p></li>
-<li><p>The managed mount API is primarily intended as an API for reading
+network on-demand, which is very latency/RTT-sensitive</li>
+<li>For the managed mount API, both paradigms were implemented</li>
+<li>The managed mount API is primarily intended as an API for reading
 from a remote resource and then syncing changes back to it however, not
-migrating a resource between two hosts</p></li>
-<li><p>The migration API (will be discussed later) is a more
-well-optimized version for this use case</p></li>
-<li><p>The pre-copy API is implemented in the form of preemptive pulls
-based on another <code>ReaderAt</code></p></li>
-<li><p>The <code>Puller</code> component asynchronously pulls chunks in
-the background (code snipped from
-https://github.com/pojntfx/r3map/blob/main/pkg/chunks/puller.go)</p></li>
-<li><p>It allows passing in a pull heuristic function, which it uses to
-determine which chunks should be pulled in which order</p></li>
-<li><p>Many applications commonly access certain bits of data
-first</p></li>
-<li><p>If a resource should be available locally as quickly as possible,
-then using the correct pull heuristic can help a lot</p></li>
-<li><p>For example, if the data pulled consists of a header, then using
-a pull heuristic that pulls these header chunks first can be of
-help</p></li>
-<li><p>If a file system is being synchronized, and the superblocks of
-the file system are being stored in a known pattern, the pull heuristic
-can be used to fetch these superblocks first</p></li>
-<li><p>If a format like MP4, which has an index, is used then said index
+migrating a resource between two hosts</li>
+<li>The migration API (will be discussed later) is a more well-optimized
+version for this use case</li>
+<li>The pre-copy API is implemented in the form of preemptive pulls
+based on another <code>ReaderAt</code></li>
+<li>The <code>Puller</code> component asynchronously pulls chunks in the
+background (code snipped from
+https://github.com/pojntfx/r3map/blob/main/pkg/chunks/puller.go)</li>
+<li>It allows passing in a pull heuristic function, which it uses to
+determine which chunks should be pulled in which order</li>
+<li>Many applications commonly access certain bits of data first</li>
+<li>If a resource should be available locally as quickly as possible,
+then using the correct pull heuristic can help a lot</li>
+<li>For example, if the data pulled consists of a header, then using a
+pull heuristic that pulls these header chunks first can be of help</li>
+<li>If a file system is being synchronized, and the superblocks of the
+file system are being stored in a known pattern, the pull heuristic can
+be used to fetch these superblocks first</li>
+<li>If a format like MP4, which has an index, is used then said index
 can be fetched first, be accessed first and during the time needed to
-parse the index, the remaining data can be pulled in the
-background</p></li>
-<li><p>After sorting the chunks, the puller starts a fixed number of
-worker threads in the background, each of which ask for a chunk to
-pull</p></li>
-<li><p>Note that the puller itself does not copy to/from a destination;
-this use case is handled by a separate component</p></li>
-<li><p>It simply reads from the provided <code>ReaderAt</code>, which is
-then expected to handle the actual copying on its own</p></li>
-<li><p>The actual copy logic is provided by the
-<code>SyncedReadWriterAt</code> instead</p></li>
-<li><p>This component takes both a remote reader and a local
-<code>ReadWriterAt</code></p></li>
-<li><p>If a chunk is read, e.g. by the puller component calling
+parse the index, the remaining data can be pulled in the background</li>
+<li>After sorting the chunks, the puller starts a fixed number of worker
+threads in the background, each of which ask for a chunk to pull</li>
+<li>Note that the puller itself does not copy to/from a destination;
+this use case is handled by a separate component</li>
+<li>It simply reads from the provided <code>ReaderAt</code>, which is
+then expected to handle the actual copying on its own</li>
+<li>The actual copy logic is provided by the
+<code>SyncedReadWriterAt</code> instead</li>
+<li>This component takes both a remote reader and a local
+<code>ReadWriterAt</code></li>
+<li>If a chunk is read, e.g. by the puller component calling
 <code>ReadAt</code>, it is tracked and market as remote by adding it to
-a local map</p></li>
-<li><p>The chunk is then read from the remote reader and written to the
+a local map</li>
+<li>The chunk is then read from the remote reader and written to the
 local <code>ReadWriterAt</code>, and is then marked as locally
 available, so that on the second read it is fetched locally
-directly</p></li>
-<li><p>A callback is then called which can be used to monitor the pull
-process</p></li>
-<li><p>Note that if it is used in a pipeline with the
-<code>Puller</code>, this also means that if a chunk which hasn’t been
-fetched asynchronously yet will be scheduled to be pulled
-immediately</p></li>
-<li><p>WriteAt also starts by tracking a chunk, but then immediately
-marks the chunk as available locally no matter whether it has been
-pulled before</p></li>
-<li><p>The combination of the <code>SyncedReadWriterAt</code> and the
+directly</li>
+<li>A callback is then called which can be used to monitor the pull
+process</li>
+<li>Note that if it is used in a pipeline with the <code>Puller</code>,
+this also means that if a chunk which hasn’t been fetched asynchronously
+yet will be scheduled to be pulled immediately</li>
+<li>WriteAt also starts by tracking a chunk, but then immediately marks
+the chunk as available locally no matter whether it has been pulled
+before</li>
+<li>The combination of the <code>SyncedReadWriterAt</code> and the
 <code>Puller</code> component implements the pull post-copy system in a
-modular and testable way</p></li>
-<li><p>Unlike the usual way of only fetching chunks when they are
-available however, this system also allows fetching them pre-emptively,
-gaining some benefits of pre-copy migration, too</p></li>
-<li><p>Using this <code>Puller</code> interface, it is possible to
-implement a read-only managed mount</p></li>
-<li><p>In order to also be able to write back however, it needs to have
-a push system as well</p></li>
-<li><p>This push system is being activated after the pull has
-completed</p></li>
-<li><p>Asynchronous background push system interface and how edge cases
-(like accessing dirty chunks as they are being pulled or being written
-to) are handled</p></li>
-<li><p>Benchmark: Parallelizing startups and pulling n MBs as the device
-starts</p></li>
-<li><p>Internal rwat pipeline (create a graphic) for direct mounts
-vs. managed mounts</p></li>
-<li><p>Unit testing the rwats</p></li>
-<li><p>Comparing this mount API to other existing remote memory access
-APIs, e.g. “Remote Regions” (“Remote regions: a simple abstraction for
-remote memory”)</p></li>
-<li><p>Complexities when <code>mmap</code>ing a region in Go as the GC
-halts the entire world to collect garbage, but that also stops the NBD
-server in the same process that tries to satisfy the region being
-scanned</p></li>
-<li><p>Potentially using Rust for this component to cut down on memory
-complexities and GC latencies</p></li>
+modular and testable way</li>
+<li>Unlike the usual way of only fetching chunks when they are available
+however, this system also allows fetching them pre-emptively, gaining
+some benefits of pre-copy migration, too</li>
+<li>Using this <code>Puller</code> interface, it is possible to
+implement a read-only managed mount</li>
+<li>This is very similar the <code>rr+</code> prefetching mechanism from
+“Remote Regions” (reference atc18-aguilera)</li>
+<li>In order to also be able to write back however, it needs to have a
+push system as well</li>
+<li>This push system is being started in parallel with the pull
+system</li>
+<li>It also takes a local and a remote <code>ReadWriterAt</code></li>
+<li>Chunks that have changed/are pushable are marked with
+<code>MarkOffsetPushable</code> (code snippet from
+https://github.com/pojntfx/r3map/blob/main/pkg/mount/path_managed.go#L171C24-L185)</li>
+<li>This integrates with the callbacks supplied by the syncer, which
+ensures that we don’t sync back changes that have been pulled but not
+modified, only the ones that have been changed locally</li>
+<li>Once opened, the pusher starts a new goroutine in the background
+which calls <code>Sync</code> in a set recurring interval (code snippet
+from
+https://github.com/pojntfx/r3map/blob/main/pkg/chunks/pusher.go)</li>
+<li>Once sync is called by this background worker system or manually, it
+launches workers in the background</li>
+<li>These workers all wait for a chunk to handle</li>
+<li>Once a worker receives a chunk, it reads it from the local
+<code>ReadWriter</code>, and copies it to the remote</li>
+<li>Safe access is ensures by individually locking each chunk</li>
+<li>The pusher also serves as a step in the <code>ReadWriterAt</code>
+pipeline</li>
+<li>In order to do this, it exposes <code>ReadAt</code> and
+<code>WriteAt</code></li>
+<li><code>ReadAt</code> is a simple proxy, while <code>WriteAt</code>
+also marks a chunk as pushable (since it mutates data) before writing to
+the local <code>ReadWriterAt</code></li>
+<li>For the direct mount, the NBD server was directly connected to the
+remote, while in this setup a pipeline of pullers, pushers, a syncer and
+an <code>ArbitraryReadWriter</code> is used (graphic of the four systems
+and how they are connected to each other vs. how the direct mounts
+work)</li>
+<li>For a read-only scenario, the <code>Pusher</code> step is simply
+skipped (code snippet from
+https://github.com/pojntfx/r3map/blob/main/pkg/mount/path_managed.go#L142-L169)</li>
+<li>If no background pulls are enabled, the creation of the
+<code>Puller</code> is simply skipped (code snippet from
+https://github.com/pojntfx/r3map/blob/main/pkg/mount/path_managed.go#L187-L222)</li>
+<li>This setup allows pulling from the remote <code>ReadWriterAt</code>
+before the NBD device is open</li>
+<li>This means that we can start pulling in the background as the NBD
+client and server are still starting (code snippet from
+https://github.com/pojntfx/r3map/blob/main/pkg/mount/path_managed.go#L251-L272)</li>
+<li>These two components typically start fairly quickly, but can still
+take multiple ms</li>
+<li>Often, it takes as long as one RTT, so parallelizing this startup
+process can significantly reduce the initial latency and pre-emptively
+pull quite a bit of data</li>
+<li>Benchmark: Parallelizing startups and pulling n MBs as the device
+starts</li>
+<li>Using this benchmark and simple interface also makes the entire
+system very testable</li>
+<li>In the tests, a memory reader or file can be used as the local or
+remote <code>ReaderWriterAt</code>s and then a simple table-driven test
+can be used (code snippet from
+https://github.com/pojntfx/r3map/blob/main/pkg/chunks/puller_test.go)</li>
+<li>With all of these components in place, the managed mounts API serves
+as a fast and efficient option to access almost any remote resource in
+memory</li>
+<li>Similarly to how the direct mounts API used the basic path mount to
+build the file and <code>mmap</code> interfaces, the managed mount
+builds on this interface in order to provide the same interfaces</li>
+<li>It is however a bit more complicated for the lifecycle to work</li>
+<li>For example, in order to allow for a <code>Sync()</code> API,
+e.g. the <code>msync</code> on the <code>mmap</code>ed file must happen
+before <code>Sync()</code> is called on the syncer</li>
+<li>This is done through a hooks system (code snippet from
+https://github.com/pojntfx/r3map/blob/main/pkg/mount/file_managed.go#L34-L37)</li>
+<li>The same hooks system is also used to implement the correct
+lifecycle when <code>Close</code>ing the mount</li>
+<li>While the managed mounts API mostly works, there are some issues
+with it being implemented in Go</li>
+<li>This is mostly due to deadlocking issues; if the GC tries to release
+memory, it has to stop the world</li>
+<li>If the <code>mmap</code> API is used, it is possible that the GC
+tries to manage the underlying slice, or tries to release memory as data
+is being copied from the mount</li>
+<li>Because the NBD server that provides the byte slice is also running
+in the same process, this causes a deadlock as the server that provides
+the backend for the mount is also frozen
+(https://github.com/pojntfx/r3map/blob/main/pkg/mount/slice_managed.go#L70-L93)</li>
+<li>A workaround for this is to lock the <code>mmap</code>ed region into
+memory, but this will also cause all chunks to be fetched, which leads
+to a high <code>Open()</code> latency</li>
+<li>This is fixable by simply starting the server in separate thread,
+and then <code>mmap</code>ing</li>
+<li>Issues like this however are hard to fix, and point to Go
+potentially not being the correct language to use for this part of the
+system</li>
+<li>In the future, using a language without a GC (such as Rust) could
+provide a good alternative</li>
+<li>While the current API is Go-specific, it could also be exposed
+through a different interface to make it usable in Go</li>
+<li>A similar approach was made in RegionFS (reference
+atc18-aguilera)</li>
+<li>RegionFS is implemented as a kernel module, but it is functionally
+similar to how this API exposes a NBD device for memory interaction</li>
+<li>In RegionFS, the regions file system is mounted to a path, which
+then exposes regions as virtual files</li>
+<li>Instead of using a custom configuration (such as configuring the
+amount of pushers to make a mount read-only), such an approach makes it
+possible to use <code>chmod</code> on the virtual file for a memory
+region to set permissions</li>
+<li>By using standard utilities like <code>open</code> and
+<code>chmod</code>, this API usable from different programming languages
+with ease</li>
+<li>Unlike the managed mounts API however, the system proposed in Remote
+Regions is mostly intended for private usecases with a limited amount of
+hosts and in LAN, with low-RTT connections</li>
+<li>It is also not designed to be used for a potential migration
+scenarios, which the modular approach of r3map allows for</li>
+<li>While Remote Regions’ file system approach does allow for
+authorization based on permissions, it doesn’t specify how
+authentication could work</li>
+<li>In terms of the wire protocol, Remote Regions also seems to target
+mostly LAN with protocols like RDMA comm modules, while r3map targets
+mostly WAN with a pluggable transport protocol interface</li>
 </ul></li>
 </ul>
 </section>
