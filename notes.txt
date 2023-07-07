@@ -1098,3 +1098,91 @@ Content
         target mostly LAN with protocols like RDMA comm modules, while
         r3map targets mostly WAN with a pluggable transport protocol
         interface
+
+-   Pull-Based Memory Synchronization with Migrations
+
+    -   We have now implemented a managed mounts API
+
+    -   This API allows for efficient access to a remote resource
+        through memory
+
+    -   It is however not well suited for a migration scenario
+
+    -   For migrations, more optimization is needed to minimize the
+        maximum acceptable downtime
+
+    -   The flexible architecture of the ReadWriterAt components allow
+        the reuse of lots of code for both use cases
+
+    -   For the migration, the process is split into two distinct phases
+
+    -   The same preemptive background pulls and parallelized
+        device/syncer startup can be used, but the push process is
+        dropped
+
+    -   The two phases allow pulling the majority of the data first, and
+        only finalize the move later with the remaining data
+
+    -   This is inspired by the pre-copy approach to VM live migration,
+        but also allows for some of the benefits of the post-copy
+        approach as we’ll see later
+
+    -   Why is this useful? A constraint for the mount-based API that we
+        haven’t mentioned before is that it doesn’t allow safe
+        concurrent access of a resource by two readers or writers at the
+        same time
+
+    -   This poses a problem for migration, where the downtime is what
+        should be optimized for, as the VM or app that is writing to the
+        source device would need to be suspended before the transfer
+        could begin
+
+    -   This adds very significant latency, which is a problem
+
+    -   The mount API was also designed in such a way as to make it hard
+        to share a ressource this way
+
+    -   The remote backend for example API doesn’t itself provide a
+        mount to access the underlying data, which further complicates
+        migration by not implementing a migration lifecycle
+
+    -   To fix this, the migration API defines two new actors: The
+        seeder and the leecher
+
+    -   The seeder represents a resource that can be migrated from
+
+    -   It defines a simple read-only API with the familiar ReadAt
+        methods, but also new APIs such as returning dirty chunks from
+        Sync and adding a Track method (code snippet from
+        https://github.com/pojntfx/r3map/blob/main/pkg/services/seeder.go#L15-L21)
+
+    -   Migration protocol actors (seeders, leechers etc.), phases and
+        state machine
+
+    -   How the migration protocol works
+
+    -   How the migration API is completely independent of a transport
+        layer
+
+    -   Switching from the seeder to the leecher state
+
+    -   Using preemptive pulls and pull heuristics to optimize just like
+        for the mounts
+
+    -   Lifecycle of the migration API and why lockable rwats are
+        required
+
+    -   How a successful migration causes the Seeder to exit
+
+    -   The role of maximum acceptable downtime
+
+    -   The role of Track(), concurrent access and consistency
+        guarantees vs. mounts (where the source must not change)
+
+    -   When to best Finalize() a migration and how analyzing app usage
+        patterns could help (A Framework for Task-Guided Virtual Machine
+        Live Migration, Reducing Virtual Machine Live Migration Overhead
+        via Workload Analysis)
+
+    -   Benchmark: Maximum acceptable downtime for a migration scenario
+        with the Managed Mount API vs the Migration API

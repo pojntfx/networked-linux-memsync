@@ -1,3 +1,9 @@
+commit 0b48daa3f66eaafdd25aa17ecb5b1caf8866c440
+Author: Felicitas Pojtinger <felicitas@pojtinger.com>
+Date:   Fri Jul 7 23:58:43 2023 +0200
+
+    docs: Start implementing section on migration
+
 commit 249a461d65b0b3b3c722047cef9b59f1a6056292
 Author: Felicitas Pojtinger <felicitas@pojtinger.com>
 Date:   Fri Jul 7 23:22:18 2023 +0200
