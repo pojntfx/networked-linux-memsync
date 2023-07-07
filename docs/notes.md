@@ -451,13 +451,51 @@ lang: en-US
   - The combination of the `SyncedReadWriterAt` and the `Puller` component implements the pull post-copy system in a modular and testable way
   - Unlike the usual way of only fetching chunks when they are available however, this system also allows fetching them pre-emptively, gaining some benefits of pre-copy migration, too
   - Using this `Puller` interface, it is possible to implement a read-only managed mount
+  - This is very similar the `rr+` prefetching mechanism from "Remote Regions" (reference atc18-aguilera)
   - In order to also be able to write back however, it needs to have a push system as well
-  - This push system is being activated after the pull has completed
-
-  - Asynchronous background push system interface and how edge cases (like accessing dirty chunks as they are being pulled or being written to) are handled
+  - This push system is being started in parallel with the pull system
+  - It also takes a local and a remote `ReadWriterAt`
+  - Chunks that have changed/are pushable are marked with `MarkOffsetPushable` (code snippet from https://github.com/pojntfx/r3map/blob/main/pkg/mount/path_managed.go#L171C24-L185)
+  - This integrates with the callbacks supplied by the syncer, which ensures that we don't sync back changes that have been pulled but not modified, only the ones that have been changed locally
+  - Once opened, the pusher starts a new goroutine in the background which calls `Sync` in a set recurring interval (code snippet from https://github.com/pojntfx/r3map/blob/main/pkg/chunks/pusher.go)
+  - Once sync is called by this background worker system or manually, it launches workers in the background
+  - These workers all wait for a chunk to handle
+  - Once a worker receives a chunk, it reads it from the local `ReadWriter`, and copies it to the remote
+  - Safe access is ensures by individually locking each chunk
+  - The pusher also serves as a step in the `ReadWriterAt` pipeline
+  - In order to do this, it exposes `ReadAt` and `WriteAt`
+  - `ReadAt` is a simple proxy, while `WriteAt` also marks a chunk as pushable (since it mutates data) before writing to the local `ReadWriterAt`
+  - For the direct mount, the NBD server was directly connected to the remote, while in this setup a pipeline of pullers, pushers, a syncer and an `ArbitraryReadWriter` is used (graphic of the four systems and how they are connected to each other vs. how the direct mounts work)
+  - For a read-only scenario, the `Pusher` step is simply skipped (code snippet from https://github.com/pojntfx/r3map/blob/main/pkg/mount/path_managed.go#L142-L169)
+  - If no background pulls are enabled, the creation of the `Puller` is simply skipped (code snippet from https://github.com/pojntfx/r3map/blob/main/pkg/mount/path_managed.go#L187-L222)
+  - This setup allows pulling from the remote `ReadWriterAt` before the NBD device is open
+  - This means that we can start pulling in the background as the NBD client and server are still starting (code snippet from https://github.com/pojntfx/r3map/blob/main/pkg/mount/path_managed.go#L251-L272)
+  - These two components typically start fairly quickly, but can still take multiple ms
+  - Often, it takes as long as one RTT, so parallelizing this startup process can significantly reduce the initial latency and pre-emptively pull quite a bit of data
   - Benchmark: Parallelizing startups and pulling n MBs as the device starts
-  - Internal rwat pipeline (create a graphic) for direct mounts vs. managed mounts
-  - Unit testing the rwats
-  - Comparing this mount API to other existing remote memory access APIs, e.g. "Remote Regions" ("Remote regions: a simple abstraction for remote memory")
-  - Complexities when `mmap`ing a region in Go as the GC halts the entire world to collect garbage, but that also stops the NBD server in the same process that tries to satisfy the region being scanned
-  - Potentially using Rust for this component to cut down on memory complexities and GC latencies
+  - Using this benchmark and simple interface also makes the entire system very testable
+  - In the tests, a memory reader or file can be used as the local or remote `ReaderWriterAt`s and then a simple table-driven test can be used (code snippet from https://github.com/pojntfx/r3map/blob/main/pkg/chunks/puller_test.go)
+  - With all of these components in place, the managed mounts API serves as a fast and efficient option to access almost any remote resource in memory
+  - Similarly to how the direct mounts API used the basic path mount to build the file and `mmap` interfaces, the managed mount builds on this interface in order to provide the same interfaces
+  - It is however a bit more complicated for the lifecycle to work
+  - For example, in order to allow for a `Sync()` API, e.g. the `msync` on the `mmap`ed file must happen before `Sync()` is called on the syncer
+  - This is done through a hooks system (code snippet from https://github.com/pojntfx/r3map/blob/main/pkg/mount/file_managed.go#L34-L37)
+  - The same hooks system is also used to implement the correct lifecycle when `Close`ing the mount
+  - While the managed mounts API mostly works, there are some issues with it being implemented in Go
+  - This is mostly due to deadlocking issues; if the GC tries to release memory, it has to stop the world
+  - If the `mmap` API is used, it is possible that the GC tries to manage the underlying slice, or tries to release memory as data is being copied from the mount
+  - Because the NBD server that provides the byte slice is also running in the same process, this causes a deadlock as the server that provides the backend for the mount is also frozen (https://github.com/pojntfx/r3map/blob/main/pkg/mount/slice_managed.go#L70-L93)
+  - A workaround for this is to lock the `mmap`ed region into memory, but this will also cause all chunks to be fetched, which leads to a high `Open()` latency
+  - This is fixable by simply starting the server in separate thread, and then `mmap`ing
+  - Issues like this however are hard to fix, and point to Go potentially not being the correct language to use for this part of the system
+  - In the future, using a language without a GC (such as Rust) could provide a good alternative
+  - While the current API is Go-specific, it could also be exposed through a different interface to make it usable in Go
+  - A similar approach was made in RegionFS (reference atc18-aguilera)
+  - RegionFS is implemented as a kernel module, but it is functionally similar to how this API exposes a NBD device for memory interaction
+  - In RegionFS, the regions file system is mounted to a path, which then exposes regions as virtual files
+  - Instead of using a custom configuration (such as configuring the amount of pushers to make a mount read-only), such an approach makes it possible to use `chmod` on the virtual file for a memory region to set permissions
+  - By using standard utilities like `open` and `chmod`, this API usable from different programming languages with ease
+  - Unlike the managed mounts API however, the system proposed in Remote Regions is mostly intended for private usecases with a limited amount of hosts and in LAN, with low-RTT connections
+  - It is also not designed to be used for a potential migration scenarios, which the modular approach of r3map allows for
+  - While Remote Regions' file system approach does allow for authorization based on permissions, it doesn't specify how authentication could work
+  - In terms of the wire protocol, Remote Regions also seems to target mostly LAN with protocols like RDMA comm modules, while r3map targets mostly WAN with a pluggable transport protocol interface
