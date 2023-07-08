@@ -1347,36 +1347,81 @@ the Managed Mount API vs the Migration API</li>
 </ul></li>
 <li><p>Optimizing Mounts and Migrations</p>
 <ul>
-<li>Encryption of memory regions and the wire protocol (this runs over
-WAN!)</li>
-<li>Authentication of the protocol</li>
-<li>DoS vulnerabilities in the NBD protocol (large message sizes; not
-meant for the public internet) and why the indirection of client &amp;
-server on each node is needed</li>
-<li>Mitigating DoS vulnerabilities in the
-<code>ReadAt</code>/<code>WriteAt</code> RPCs with
-<code>maxChunkSize</code> and/or client-side chunking</li>
-<li>Critical <code>Finalizing</code> state in the migration API and how
-it could be remedied</li>
-<li>How network outages are handled in the mount and migration API</li>
-<li>Analyzing the file and memory backend implementations</li>
-<li>Analyzing the directory backend</li>
-<li>Analyzing the dudirekta, gRPC and fRPC backends</li>
-<li>Benchmark: Latency till first n chunks <em>and</em> throughput for
-dudirekta, gRPC and fRPC backends (how they are affected by having/not
-having connection polling and/or concurrent RPCs)</li>
-<li>Benchmark: Effect of tuning the amount of push/pull workers in
-high-latency scenarios</li>
-<li>Analyzing the Redis backend</li>
-<li>Analyzing the S3 backend</li>
-<li>Analyzing the Cassandra backend</li>
-<li>Benchmark: Latency and throughput of all benchmarks on localhost and
-in a realistic latency and throughput scenario</li>
-<li>Effects of slow disks/memory on local backends, and why direct
-mounts can outperform managed mounts in tests on localhosts</li>
-<li>Using P2P vs. star architectures for mounts and migrations</li>
-<li>Looking back at all options and comparing ease of implementation,
-CPU load and network traffic between them</li>
+<li><p>Compared to existing remote mount and migration solutions, r3map
+is a bit special</p></li>
+<li><p>As mentioned before, most systems are designed for scenarios
+where such resources are accessible in a high-bandwidth, low-latency
+LAN</p></li>
+<li><p>This means that some assumptions concerning security,
+authentication, authorization and scalability were made that can not be
+made here</p></li>
+<li><p>For example encryption; while for a LAN deployment scenario it is
+probably assumed that there are no bad actors in the subnet, the same
+can not be said for WAN</p></li>
+<li><p>While depending on e.g. TLS etc. for the migration could have
+been an option, r3map should still be useful for LAN migration use
+cases, too, which is why it was made to be completely
+transport-agnostic</p></li>
+<li><p>This makes adding encryption very simple</p></li>
+<li><p>E.g. for LAN, the same assumptions that are being made in
+existing systems can be made, and fast latency-sensitive protocols like
+the SCSI RDMA protocol (SRP) or a bespoke protocol can be used</p></li>
+<li><p>For WAN, a standard internet protocol like TLS over TCP or QUIC
+can be used instead, which will allow for migration over the public
+internet, too</p></li>
+<li><p>For RPC frameworks with exchangeable transport layers such as
+dudirekta (will be explained later), this also allows for unique
+migration or mount scenarios in NATed environments over WebRTC data
+channels, which would be very hard to implement with more traditional
+setups</p></li>
+<li><p>Similarly so, authentication and authorization can be implemented
+in many ways</p></li>
+<li><p>While for migration in LAN, the typical approach of simply
+trusting the local subnet can be used, for public deployments mTLS
+certificates or even higher-level protocols such as OIDC can be used
+depending on the transport layer chosen</p></li>
+<li><p>For WAN specifically, new protocols such as QUIC allow tight
+integration with TLS for authentication and encryption</p></li>
+<li><p>While less relevant for the migration use case (since connections
+can be established ahead of time), for the mount use case the initial
+remote <code>ReadAt</code> requests’ latency is an important metric
+since it strongly correlates with the total latency</p></li>
+<li><p>QUIC has a way to establish 0-RTT TLS, which can save one or
+multiple RTTs and thus signficantly reduce this overhead, and handle
+authentication in the same step</p></li>
+<li><p>Another optimization that has been made to support this WAN
+deployment scenario is the pull-only architecture</p></li>
+<li><p>Usually, a pre-copy system pushes changes to the destination in
+the migration API</p></li>
+<li><p>This however makes such a system hard to use in a scenario where
+NATs exist, or a scenario in which the network might have an outage
+during the migration</p></li>
+<li><p>With a pull-only system emulating the pre-copy setup, the client
+can simply keep track of which chunks it still needs to pull itself, so
+if there is a network outage, it can just resume pulling like before,
+which would be much harder to implement with a push system as the server
+would have to track this state for multiple clients and handle the
+lifecycle there</p></li>
+<li><p>Analyzing the file and memory backend implementations</p></li>
+<li><p>Analyzing the directory backend</p></li>
+<li><p>Analyzing the dudirekta (what is dudirekta?), gRPC and fRPC
+backends</p></li>
+<li><p>Benchmark: Latency till first n chunks <em>and</em> throughput
+for dudirekta, gRPC and fRPC backends (how they are affected by
+having/not having connection polling and/or concurrent RPCs)</p></li>
+<li><p>Benchmark: Effect of tuning the amount of push/pull workers in
+high-latency scenarios</p></li>
+<li><p>Analyzing the Redis backend</p></li>
+<li><p>Analyzing the S3 backend</p></li>
+<li><p>Analyzing the Cassandra backend</p></li>
+<li><p>Benchmark: Latency and throughput of all benchmarks on localhost
+and in a realistic latency and throughput scenario</p></li>
+<li><p>Effects of slow disks/memory on local backends, and why direct
+mounts can outperform managed mounts in tests on localhosts</p></li>
+<li><p>Using P2P vs. star architectures for mounts and
+migrations</p></li>
+<li><p>Looking back at all options and comparing ease of implementation,
+CPU load and network traffic between them</p></li>
 </ul></li>
 </ul>
 </div>

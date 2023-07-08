@@ -1,3 +1,9 @@
+commit 6b754cc7f9dadeba5671e2c03ca5493060947e1b
+Author: Felicitas Pojtinger <felicitas@pojtinger.com>
+Date:   Sat Jul 8 23:59:03 2023 +0200
+
+    feat: Start implementation of section on network protocols and protocol optimization
+
 commit 94d7b20aa342b88adde67ede60c0e14d442f4eab
 Author: Felicitas Pojtinger <felicitas@pojtinger.com>
 Date:   Sat Jul 8 23:23:02 2023 +0200
