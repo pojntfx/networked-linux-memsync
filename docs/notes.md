@@ -567,15 +567,29 @@ lang: en-US
   - Benchmark: Maximum acceptable downtime for a migration scenario with the Managed Mount API vs the Migration API
 
 - Optimizing Mounts and Migrations
-  - Encryption of memory regions and the wire protocol (this runs over WAN!)
-  - Authentication of the protocol
-  - DoS vulnerabilities in the NBD protocol (large message sizes; not meant for the public internet) and why the indirection of client & server on each node is needed
-  - Mitigating DoS vulnerabilities in the `ReadAt`/`WriteAt` RPCs with `maxChunkSize` and/or client-side chunking
-  - Critical `Finalizing` state in the migration API and how it could be remedied
-  - How network outages are handled in the mount and migration API
+
+  - Compared to existing remote mount and migration solutions, r3map is a bit special
+  - As mentioned before, most systems are designed for scenarios where such resources are accessible in a high-bandwidth, low-latency LAN
+  - This means that some assumptions concerning security, authentication, authorization and scalability were made that can not be made here
+  - For example encryption; while for a LAN deployment scenario it is probably assumed that there are no bad actors in the subnet, the same can not be said for WAN
+  - While depending on e.g. TLS etc. for the migration could have been an option, r3map should still be useful for LAN migration use cases, too, which is why it was made to be completely transport-agnostic
+  - This makes adding encryption very simple
+  - E.g. for LAN, the same assumptions that are being made in existing systems can be made, and fast latency-sensitive protocols like the SCSI RDMA protocol (SRP) or a bespoke protocol can be used
+  - For WAN, a standard internet protocol like TLS over TCP or QUIC can be used instead, which will allow for migration over the public internet, too
+  - For RPC frameworks with exchangeable transport layers such as dudirekta (will be explained later), this also allows for unique migration or mount scenarios in NATed environments over WebRTC data channels, which would be very hard to implement with more traditional setups
+  - Similarly so, authentication and authorization can be implemented in many ways
+  - While for migration in LAN, the typical approach of simply trusting the local subnet can be used, for public deployments mTLS certificates or even higher-level protocols such as OIDC can be used depending on the transport layer chosen
+  - For WAN specifically, new protocols such as QUIC allow tight integration with TLS for authentication and encryption
+  - While less relevant for the migration use case (since connections can be established ahead of time), for the mount use case the initial remote `ReadAt` requests' latency is an important metric since it strongly correlates with the total latency
+  - QUIC has a way to establish 0-RTT TLS, which can save one or multiple RTTs and thus signficantly reduce this overhead, and handle authentication in the same step
+  - Another optimization that has been made to support this WAN deployment scenario is the pull-only architecture
+  - Usually, a pre-copy system pushes changes to the destination in the migration API
+  - This however makes such a system hard to use in a scenario where NATs exist, or a scenario in which the network might have an outage during the migration
+  - With a pull-only system emulating the pre-copy setup, the client can simply keep track of which chunks it still needs to pull itself, so if there is a network outage, it can just resume pulling like before, which would be much harder to implement with a push system as the server would have to track this state for multiple clients and handle the lifecycle there
+
   - Analyzing the file and memory backend implementations
   - Analyzing the directory backend
-  - Analyzing the dudirekta, gRPC and fRPC backends
+  - Analyzing the dudirekta (what is dudirekta?), gRPC and fRPC backends
   - Benchmark: Latency till first n chunks _and_ throughput for dudirekta, gRPC and fRPC backends (how they are affected by having/not having connection polling and/or concurrent RPCs)
   - Benchmark: Effect of tuning the amount of push/pull workers in high-latency scenarios
   - Analyzing the Redis backend
