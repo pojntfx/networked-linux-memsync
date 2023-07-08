@@ -199,8 +199,8 @@ lang: en-US
   - This approach tries to improve on `userfaultfd` by switching to push-based synchronization method
   - Instead of reacting to page faults, this one a file to track changes to a memory region
   - By synchronizing the file representing the memory region between two systems, we can effectively synchronize the memory region itself
-  - In Linux, swap space allows Linux to move pages of memory to disk or other swap partition if the fast speed of RAM is not needed ("paging out")
-  - Similarly to this, Linux can also load missing pages from a disk
+  - In Linux, swap space allows Linux to move chunks of memory to disk or other swap partition if the fast speed of RAM is not needed ("paging out")
+  - Similarly to this, Linux can also load missing chunks from a disk
   - This works similarly to how `userfaultfd` handled page faults, except this time it doesn't need to go through user space, which can make it much faster
   - We can do this by using `mmap`, which allows us to map a file into memory
   - By default, `mmap` doesn't write changes from a file back into memory, no matter if the file descriptor passed to it would allow it to or not
@@ -546,10 +546,42 @@ lang: en-US
   - As described before, after a satisfactory local availability level has been reached, `Finalize` can be called
   - `Finalize` then calls `Sync()` on the remote, marks the changed chunks as remote, and schedules them also be pulled in the background (code snippet from https://github.com/pojntfx/r3map/blob/main/pkg/migration/path_leecher.go#L257-L280)
   - As an additional measure aside from the lockable `ReadWriterAt` to make accessing the path/file/slice too early harder, only `Finalize` returns the managed object, so that the happy path can less easily lead to deadlocks
-
-  - Switching from the seeder to the leecher state
-  - Using preemptive pulls and pull heuristics to optimize just like for the mounts
-  - How a successful migration causes the `Seeder` to exit
-  - The role of `Track()`, concurrent access and consistency guarantees vs. mounts (where the source must not change)
-  - When to best `Finalize()` a migration and how analyzing app usage patterns could help (A Framework for Task-Guided Virtual Machine Live Migration, Reducing Virtual Machine Live Migration Overhead via Workload Analysis)
+  - After a leecher has successfully reached 100% local availability, it calls `Close` on the seeder and disconnects the leecher from the seeder, causing both to shut down (code snippet from https://github.com/pojntfx/r3map/blob/main/cmd/r3map-migration-benchmark-server/main.go#L137)
+  - Once the leecher has exited, a seeder can be started, to allow for migrating from the destination to another destination again
+  - A interesting question to ask with the two-step migration API is when to start the finalization step
+  - As is visible from the migration API protocol state machine showed beforehand, the finalization stage is critical and hard or impossible to recover from depending on the implementation
+  - While for the memory sync on its own, one could just call `Finalize` multiple times to restart it
+  - But since `Finalize` needs to return a list of dirty chunks, it requires the VM or app on the source device to be suspended before `Finalize` can return
+  - While not necessarily the case, such a suspend operation is not idempotent (since it might not just be a suspension that is required, but also a shutdown of dependencies etc.)
+  - "Reducing Virtual Machine Live Migration Overhead via Workload Analysis" provides an interesting analysis of options on how this decision of when to migrate can be made
+  - While being designed mostly for use with virtual machines, it could serve as a basis for other applications or migration scenarios, too
+  - The proposed method identifies workload cycles of VMs and uses this information to postpone the migration if doing so is beneficial
+  - This works by analyzing cyclic patters that can unnecessarily delay a VM's migration, and identifies optimal cycles to migrate VMs in from this information
+  - For the VM use case, such cycles could for example be the GC of a large application triggering a lot of changes to the VMs memory etc.
+  - If a migration is proposed, the system checks for whether it is currently in a beneficial cycle to migrate in in which case it lets the migration proceed; otherwise, it postpones it until the next cycle
+  - The algorithm uses a Bayesian classifier to identify a favorable or unfavorable cycle
+  - Compared to the alternative, which is usually waiting for a significant percentage of the chunks that were not changed before tracking started to be synced first, this can potentially yield a lot of improvements
+  - The paper has found an improvement of up to 74% in terms of live migration time/downtime and 43% in terms of the amount of data transferred over the network
+  - While such a system was not implemented for r3map, using r3map with such a system would certainly be possible
+  - With these results in mind, it is interesting to look at how the migration API performs compared to the single-phase mount API
   - Benchmark: Maximum acceptable downtime for a migration scenario with the Managed Mount API vs the Migration API
+
+- Optimizing Mounts and Migrations
+  - Encryption of memory regions and the wire protocol (this runs over WAN!)
+  - Authentication of the protocol
+  - DoS vulnerabilities in the NBD protocol (large message sizes; not meant for the public internet) and why the indirection of client & server on each node is needed
+  - Mitigating DoS vulnerabilities in the `ReadAt`/`WriteAt` RPCs with `maxChunkSize` and/or client-side chunking
+  - Critical `Finalizing` state in the migration API and how it could be remedied
+  - How network outages are handled in the mount and migration API
+  - Analyzing the file and memory backend implementations
+  - Analyzing the directory backend
+  - Analyzing the dudirekta, gRPC and fRPC backends
+  - Benchmark: Latency till first n chunks _and_ throughput for dudirekta, gRPC and fRPC backends (how they are affected by having/not having connection polling and/or concurrent RPCs)
+  - Benchmark: Effect of tuning the amount of push/pull workers in high-latency scenarios
+  - Analyzing the Redis backend
+  - Analyzing the S3 backend
+  - Analyzing the Cassandra backend
+  - Benchmark: Latency and throughput of all benchmarks on localhost and in a realistic latency and throughput scenario
+  - Effects of slow disks/memory on local backends, and why direct mounts can outperform managed mounts in tests on localhosts
+  - Using P2P vs. star architectures for mounts and migrations
+  - Looking back at all options and comparing ease of implementation, CPU load and network traffic between them
