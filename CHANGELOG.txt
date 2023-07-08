@@ -1,3 +1,9 @@
+commit 94d7b20aa342b88adde67ede60c0e14d442f4eab
+Author: Felicitas Pojtinger <felicitas@pojtinger.com>
+Date:   Sat Jul 8 23:23:02 2023 +0200
+
+    feat: Add section on workload analysis for optimizing the finalization step
+
 commit e77f781b35f3ad82b2ef74424bec11300dce643e
 Author: Felicitas Pojtinger <felicitas@pojtinger.com>
 Date:   Sat Jul 8 03:29:06 2023 +0200
