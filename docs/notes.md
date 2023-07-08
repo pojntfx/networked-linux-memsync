@@ -501,6 +501,7 @@ lang: en-US
   - In terms of the wire protocol, Remote Regions also seems to target mostly LAN with protocols like RDMA comm modules, while r3map targets mostly WAN with a pluggable transport protocol interface
 
 - Pull-Based Memory Synchronization with Migrations
+
   - We have now implemented a managed mounts API
   - This API allows for efficient access to a remote resource through memory
   - It is however not well suited for a migration scenario
@@ -513,20 +514,42 @@ lang: en-US
   - Why is this useful? A constraint for the mount-based API that we haven't mentioned before is that it doesn't allow safe concurrent access of a resource by two readers or writers at the same time
   - This poses a problem for migration, where the downtime is what should be optimized for, as the VM or app that is writing to the source device would need to be suspended before the transfer could begin
   - This adds very significant latency, which is a problem
-  - The mount API was also designed in such a way as to make it hard to share a ressource this way
+  - The mount API was also designed in such a way as to make it hard to share a resource this way
   - The remote backend for example API doesn't itself provide a mount to access the underlying data, which further complicates migration by not implementing a migration lifecycle
   - To fix this, the migration API defines two new actors: The seeder and the leecher
-  - The seeder represents a resource that can be migrated from
-  - It defines a simple read-only API with the familiar `ReadAt` methods, but also new APIs such as returning dirty chunks from `Sync` and adding a `Track` method (code snippet from https://github.com/pojntfx/r3map/blob/main/pkg/services/seeder.go#L15-L21)
+  - The seeder represents a resource that can be migrated from/a host that exposes a migratable resource
+  - The leecher represents a client that wants to migrate a resource to itself
+  - Initially, the protocol starts by running an application with the application's state on the seeder's mount
+  - When a leecher connects to the seeder, the seeder starts tracking any writes to it's mount
+  - The leecher starts pulling chunks from the seeder to it's local backend
+  - Once the leecher has received a satisfactory level of locally available chunks, it as the seeder to finalize, which then causes the seeder to stop the remote app, `msync`/flushes the drive, and returns the chunks that were changed between it started tracking and finalizing
+  - The leecher then marks these chunks as remote, immediately resumes the VM, and queues them to be pulled immediately
+  - By splitting the migration into these two distinct phases, the overhead of having to start the device on the leecher can be skipped and additional app initialization that doesn't depend on the app's state (e.g. memory allocation, connecting to databases, loading models etc.) can be performed before the application needs to be suspended
+  - This solution combines both the pre-copy algorithm (by pulling the chunks from the seeder ahead of time) and the post-copy algorithm (by resolving dirty chunks from the seeder after the VM has been migrated) into one coherent protocol (add state machine diagram here)
+  - This way, the maximum tolerable downtime can be drastically reduced, and dirty chunks don't need to be re-transmitted multiple times
+  - Effectively, it drops the maximum guaranteed downtime to the time it takes to `msync` the seeder's app state, the RTT and, if they are being accessed immediately, how long it takes to fetch the chunks that were written in between starting to track and finalize
+  - To achieve this, the seeder defines a simple read-only API with the familiar `ReadAt` methods, but also new APIs such as returning dirty chunks from `Sync` and adding a `Track` method (code snippet from https://github.com/pojntfx/r3map/blob/main/pkg/services/seeder.go#L15-L21)
+  - Unlike the remote backend, a seeder also exposes a mount through a path, file or byte slice, so that as the migration is happening, the underlying data can still be accessed by the application
+  - The tracking aspect is implemented in the same modular and composable way as the syncer etc. - by using a `TrackingReadWriterAt` that is connected to the seeder's `ReadWriterAt` pipeline (graphic of the pipeline here)
+  - Once activated by `Track`, the tracker intercepts all `WriteAt` calls and adds them to a local de-duplicated store (code snippet from https://github.com/pojntfx/r3map/blob/main/pkg/chunks/tracking_rwat.go#L28-L40)
+  - When `Sync` is called, the changed chunks are returned and the de-duplicated store is cleared
+  - A benefit of the protocol being defined in such a way that only the client ever calls an RPC, not the other way around, is that the transport layer/RPC system is completely interchangeable
+  - This works by returning a simple abstract `service` utility struct struct from `Open` (code snippet from https://github.com/pojntfx/r3map/blob/main/pkg/services/seeder.go)
+  - This abstract struct can then be used as the backend for any RPC framework, e.g. for gRPC (code snippet https://github.com/pojntfx/r3map/blob/main/pkg/services/seeder_grpc.go)
+  - The leecher then takes this abstract API as an argument
+  - As soon as the leecher is opened, it calls track on the seeder, and in parallel starts the device (code snippet from https://github.com/pojntfx/r3map/blob/main/pkg/migration/path_leecher.go#L144-L203)
+  - The leecher introduces a new component, the `LockableReadWriterAt`, into its internal pipeline (add graphic of the internal pipeline)
+  - This component simply blocks all read and write operations to/from the NBD device until `Finalize` has been called (code snippet from https://github.com/pojntfx/r3map/blob/main/pkg/chunks/lockable_rwat.go#L19-L37)
+  - This is required because otherwise stale data (since `Finalize` did not yet mark the changed chunks) could have poisoned the cache on the e.g. `mmap`ed device
+  - Once the leecher has started the device, it sets up a syncer (code snippet from https://github.com/pojntfx/r3map/blob/main/pkg/migration/path_leecher.go#L214-L252)
+  - A callback can be used to monitor the pull process (code snippet from https://github.com/pojntfx/r3map/blob/main/cmd/r3map-migration-benchmark/main.go#L544-L548)
+  - As described before, after a satisfactory local availability level has been reached, `Finalize` can be called
+  - `Finalize` then calls `Sync()` on the remote, marks the changed chunks as remote, and schedules them also be pulled in the background (code snippet from https://github.com/pojntfx/r3map/blob/main/pkg/migration/path_leecher.go#L257-L280)
+  - As an additional measure aside from the lockable `ReadWriterAt` to make accessing the path/file/slice too early harder, only `Finalize` returns the managed object, so that the happy path can less easily lead to deadlocks
 
-  - Migration protocol actors (seeders, leechers etc.), phases and state machine
-  - How the migration protocol works
-  - How the migration API is completely independent of a transport layer
   - Switching from the seeder to the leecher state
   - Using preemptive pulls and pull heuristics to optimize just like for the mounts
-  - Lifecycle of the migration API and why lockable rwats are required
   - How a successful migration causes the `Seeder` to exit
-  - The role of maximum acceptable downtime
   - The role of `Track()`, concurrent access and consistency guarantees vs. mounts (where the source must not change)
   - When to best `Finalize()` a migration and how analyzing app usage patterns could help (A Framework for Task-Guided Virtual Machine Live Migration, Reducing Virtual Machine Live Migration Overhead via Workload Analysis)
   - Benchmark: Maximum acceptable downtime for a migration scenario with the Managed Mount API vs the Migration API
