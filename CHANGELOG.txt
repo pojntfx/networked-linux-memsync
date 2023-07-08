@@ -1,3 +1,9 @@
+commit e77f781b35f3ad82b2ef74424bec11300dce643e
+Author: Felicitas Pojtinger <felicitas@pojtinger.com>
+Date:   Sat Jul 8 03:29:06 2023 +0200
+
+    docs: Add section on seeder/leecher internals
+
 commit 0b48daa3f66eaafdd25aa17ecb5b1caf8866c440
 Author: Felicitas Pojtinger <felicitas@pojtinger.com>
 Date:   Fri Jul 7 23:58:43 2023 +0200
