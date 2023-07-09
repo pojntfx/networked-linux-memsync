@@ -259,7 +259,7 @@ it could be remedied</li>
 <li>Analyzing the dudirekta, gRPC and fRPC backends</li>
 <li>Benchmark: Latency till first n chunks <em>and</em> throughput for
 dudirekta, gRPC and fRPC backends (how they are affected by having/not
-having connection polling and/or concurrent RPCs)</li>
+having connection pooling and/or concurrent RPCs)</li>
 <li>Benchmark: Effect of tuning the amount of push/pull workers in
 high-latency scenarios</li>
 <li>Analyzing the Redis backend</li>
@@ -1557,15 +1557,83 @@ transparent to use</p></li>
 <li><p>By switching to a well-defined protocol with a DSL instead, we
 can gain further benefits from not having to use reflection and
 generating code instead</p></li>
-<li><p>Analyzing the gRPC backend and how it differs from
-dudirekta</p></li>
-<li><p>Analyzing the fRPC backend and how it differs from gRPC</p></li>
-<li><p>Connecting polling and/or concurrent RPCs</p></li>
-<li><p>Benchmark: Latency till first n chunks <em>and</em> throughput
-for dudirekta, gRPC and fRPC backends (how they are affected by
-having/not having connection polling and/or concurrent RPCs)</p></li>
+<li><p>One popular such framework is gRPC</p></li>
+<li><p>gRPC is a high-performance RPC framework based on Protocol
+Buffers</p></li>
+<li><p>Because it is based on Protobuf, we can define the protocol
+itself in the <code>proto3</code> DSL</p></li>
+<li><p>The DSL also allows to specify the order of each field in the
+resulting wire protocol, making it possible to evolve the protocol over
+time without having to break backwards compatibility</p></li>
+<li><p>This is very important given that r3map could be ported to a
+language with less overhead in the future, e.g. Rust, and being able to
+re-use the existing wire protocol would make this much easier</p></li>
+<li><p>While dudirekta is a simple protocol that is easy to adapt for
+other languages, currently it only supports Go and JS, while gRPC
+supports many more</p></li>
+<li><p>A fairly unique feature of gRPC are streaming RPCs, where a
+stream of requests can be sent to/from the server/client, which, while
+not used for the r3map protocol, could be very useful to implementing a
+pre-copy migration API with pushes similarly to how dudirekta does it by
+exposing RPCs from the client</p></li>
+<li><p>As mentioned before, for WAN migration or mount scenarios, things
+like authentication, authorization and encryption are important, which
+gRPC is well-suited for</p></li>
+<li><p>Protobuf being a proper byte-, not plaintext-based wire format is
+also very helpful, since it means that e.g. sending bytes back from
+<code>ReadAt</code> RPCs doesn’t require any encoding (wereas JSON, used
+by dudirekta, <code>base64</code> encodes these chunks)</p></li>
+<li><p>gRPC is also based on HTTP/2, which means that it can benefit
+from existing load balancing tooling etc. that is popular in WAN for web
+uses even today</p></li>
+<li><p>This backend is implemented by first defining the protocol in the
+DSL (code snippet from
+https://github.com/pojntfx/r3map/blob/main/api/proto/migration/v1/seeder.proto)</p></li>
+<li><p>After generating the bindings, the generated backend interface is
+implemented by using the dudirekta wrapper struct as the abstraction
+layer (code snippet from
+https://github.com/pojntfx/r3map/blob/main/pkg/services/seeder_grpc.go)</p></li>
+<li><p>Unlike dudirekta, gRPC also implements concurrent RPCs and
+connection pooling</p></li>
+<li><p>Similarly to how having a backend that allows concurrent
+reads/writes can be useful to speed up the concurrent push/pull steps,
+having a protocol that allows for concurrent RPCs can do the
+same</p></li>
+<li><p>Connection pooling is another aspect that can help with
+this</p></li>
+<li><p>Instead of either using one single connection with a multiplexer
+(which is possible because it uses HTTP/2) to allow for multiple
+requests, or creating a new connection for every request, gRPC is able
+to intelligently re-use existing connections for RPCs or create new
+ones, speeding up parallel requests</p></li>
+<li><p>Despite these benefits, gRPC is not perfect however</p></li>
+<li><p>Protobuf specifically, while being faster than JSON, is not the
+fastest serialization framework that could be used</p></li>
+<li><p>This is especially true for large chunks of data, and becomes a
+real bottleneck if the connection between source and destination would
+allow for a high throughput</p></li>
+<li><p>This is where fRPC, a RPC library that is easy to replace gRPC
+with, becomes useful</p></li>
+<li><p>fRPC is 2-4x faster than gRPC, and especially in terms of
+throughput (insert graphics from
+https://frpc.io/performance/grpc-benchmarks)</p></li>
+<li><p>Because throughput and latency determine the maximum acceptable
+downtime of a migration/the initial latency for mounts, choosing the
+right RPC protocol is an important decision</p></li>
+<li><p>fRPC also uses the same proto3 DSL, which makes it an easy
+drop-in replacement, and it also supports multiplexing and connection
+polling</p></li>
+<li><p>Because of these similarities, the usage of fRPC in r3map is
+extremely similar to gRPC (code snippet from
+https://github.com/pojntfx/r3map/blob/main/pkg/services/seeder_frpc.go)</p></li>
+<li><p>A good way to test how well the RPC framework scales for
+concurrent requests is scaling the amount of pull workers, where
+dudirekta only gains marginally from increasing their number, whereas
+both gRPC and fRPC can increase throughput and decrease the initial
+latency by pulling more chunks pre-emptively</p></li>
 <li><p>Benchmark: Effect of tuning the amount of push/pull workers in
-high-latency scenarios</p></li>
+high-latency for these three backends on latency till first n chunks and
+throughput</p></li>
 <li><p>Analyzing the Redis backend</p></li>
 <li><p>Analyzing the S3 backend (empty chunks etc.)</p></li>
 <li><p>Analyzing the Cassandra backend (migrations etc.)</p></li>

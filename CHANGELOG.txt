@@ -1,3 +1,9 @@
+commit 4af2bfca9c175892413e21a8e6cea0b418728335
+Author: Felicitas Pojtinger <felicitas@pojtinger.com>
+Date:   Mon Jul 10 00:38:32 2023 +0200
+
+    docs: Add sections on gRPC and fRPC, and why features like connection pooling are important specifically for a migration usecase
+
 commit d14bfb76463570a3dd0b6fb55c9005492a1e4813
 Author: Felicitas Pojtinger <felicitas@pojtinger.com>
 Date:   Sun Jul 9 23:43:05 2023 +0200
