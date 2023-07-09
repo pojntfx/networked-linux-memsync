@@ -1,3 +1,9 @@
+commit d14bfb76463570a3dd0b6fb55c9005492a1e4813
+Author: Felicitas Pojtinger <felicitas@pojtinger.com>
+Date:   Sun Jul 9 23:43:05 2023 +0200
+
+    docs: Add sections on the benefits of backends with concurrent reads/writes support, add section on dudirekta
+
 commit 6b754cc7f9dadeba5671e2c03ca5493060947e1b
 Author: Felicitas Pojtinger <felicitas@pojtinger.com>
 Date:   Sat Jul 8 23:59:03 2023 +0200

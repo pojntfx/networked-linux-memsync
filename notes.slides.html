@@ -1402,24 +1402,179 @@ if there is a network outage, it can just resume pulling like before,
 which would be much harder to implement with a push system as the server
 would have to track this state for multiple clients and handle the
 lifecycle there</p></li>
-<li><p>Analyzing the file and memory backend implementations</p></li>
-<li><p>Analyzing the directory backend</p></li>
-<li><p>Analyzing the dudirekta (what is dudirekta?), gRPC and fRPC
-backends</p></li>
+<li><p>The pull-only system also means that unlike the push system that
+was implemented for the hash-based synchronization, a central forwarding
+hub is not necessary</p></li>
+<li><p>In the push-based system for the hash-based solution, the
+topology had to be static/all destinations would have to have received
+the changes made to the remote app’s memory since it was
+started</p></li>
+<li><p>In order to cut down on unnecessary duplicate data transmissions,
+a central forwarding hub was implemented</p></li>
+<li><p>This central forwarding hub does however add additional latency,
+which can be removed completely with the migration protocol’s P2P,
+pull-only algorithm</p></li>
+<li><p>In WAN, where latency is high, the ability to fetch chunks
+concurrently is very important</p></li>
+<li><p>Without concurrent background pulls, latency adds up very quickly
+as every memory request would have at least the RTT as latency</p></li>
+<li><p>The first prerequisite for supporting this is that the remote
+backend has to be able to read from multiple regions without locking the
+backend globally</p></li>
+<li><p>For the file backend for example, this is not the case, as the
+lock needs to be acquired for the entire file before an offset can be
+accessed (code snippet from
+https://github.com/pojntfx/go-nbd/blob/main/pkg/backend/file.go#L17-L25)</p></li>
+<li><p>For high-latency scenarios, this can quickly become a
+bottleneck</p></li>
+<li><p>While there are many ways to solve this, one is to use the
+directory backend</p></li>
+<li><p>Instead of using just one backing file, the directory backend is
+a chunked backend that uses a directory with one file for each chunk
+instead of a global file</p></li>
+<li><p>This means that the directory backend can lock each file
+individually, speeding up concurrent access</p></li>
+<li><p>This also applies to writes, where even concurrent writes to
+different chunks can be done at the same time as they are all backed by
+a separate file</p></li>
+<li><p>The directory backend keeps track of these chunks by using an
+internal map of locks (code snippet from
+https://github.com/pojntfx/r3map/blob/main/pkg/backend/directory.go#L22-L24)</p></li>
+<li><p>When a chunk is first accessed, a new file is created for the
+chunk (code snipped from
+https://github.com/pojntfx/r3map/blob/main/pkg/backend/directory.go#L77-L94)</p></li>
+<li><p>If the chunk is being read, the file is also truncated to one
+chunk length</p></li>
+<li><p>Since this could easily exhaust the number of maximum allowed
+file descriptors for a process, a check is added (code snippet from
+https://github.com/pojntfx/r3map/blob/main/pkg/backend/directory.go#L55-L75)</p></li>
+<li><p>If the maximum allowed number of open files is exceeded, the
+first file is closed and removed from the map, causing it to be reopened
+on a subsequent read</p></li>
+<li><p>These optimizations add an initial overhead to operations, but
+can significantly improve the pull speed in scenarios where the backing
+disk is slow or the latency is high</p></li>
+<li><p>Benchmark: File vs. directory backend performance</p></li>
+<li><p>Another aspect that plays an important role in performance for
+real-life deployments is the choice of RPC framework and transport
+protocol</p></li>
+<li><p>As mentioned before, both the mount and the migration APIs are
+transport-independent</p></li>
+<li><p>A simple RPC framework to use is dudirekta</p></li>
+<li><p>Dudirekta is reflection-based, which makes it very simple to use
+to iterate on the protocol quickly</p></li>
+<li><p>To use it, a simple wrapper struct with the needed RPC methods is
+created (code snippet from
+https://github.com/pojntfx/r3map/blob/main/pkg/services/backend.go#L41-L61)</p></li>
+<li><p>This wrapper struct simply calls the backend (or seeder etc.)
+functions</p></li>
+<li><p>The wrapper struct is then passed as the local function struct
+into a registry, which creates the RPC server (code snippet from
+https://github.com/pojntfx/r3map/blob/main/cmd/r3map-mount-benchmark-server/main.go#L146-L166)</p></li>
+<li><p>When the transport protocol, in this case TCP,
+<code>accept</code>s a client it is linked to the registry (code snippet
+from
+https://github.com/pojntfx/r3map/blob/main/cmd/r3map-mount-benchmark-server/main.go#L198-L200)</p></li>
+<li><p>The used protocol is very simple (code snippet from
+https://github.com/pojntfx/dudirekta#protocol)</p></li>
+<li><p>If an RPC, such as <code>ReadAt</code>, is called, it is looked
+up via reflection and validated (code snippet from
+https://github.com/pojntfx/dudirekta/blob/main/pkg/rpc/registry.go#L323-L357)</p></li>
+<li><p>The arguments, which have been supplied as JSON, are then
+unmarshalled into their native types, and the local wrapper struct’s
+method is called in a new goroutine (code snippet from
+https://github.com/pojntfx/dudirekta/blob/main/pkg/rpc/registry.go#L417-L521)</p></li>
+<li><p>This allows for one important feature: Concurrent RPC
+calls</p></li>
+<li><p>Many simple RPC frameworks only support one RPC call at a time,
+because no demuxing is implemented</p></li>
+<li><p>For example, when dRPC (https://github.com/storj/drpc) was used,
+drastic performance issues were noted compared to gRPC etc., because no
+support for concurrent RPCs was implemented</p></li>
+<li><p>To use a RPC backend on the destination side, the wrapper
+struct’s remote representation is used (code snippet from
+https://github.com/pojntfx/r3map/blob/main/pkg/services/backend.go#L14-L19)</p></li>
+<li><p>For the destination site, the remote representation’s fields are
+iterated over, and replaced by functions which marshal and unmarshal the
+function calls into the dudirekta JSON protocol (code snippet from
+https://github.com/pojntfx/dudirekta/blob/main/pkg/rpc/registry.go#L228-L269)</p></li>
+<li><p>To do this, the arguments are marshalled into JSON, and a unique
+call ID is generated (code snippet from
+https://github.com/pojntfx/dudirekta/blob/main/pkg/rpc/registry.go#L109-L130)</p></li>
+<li><p>Once the remote has responded with a message containing the
+unique call ID, it unmarshalls the arguments, and returns (code snippet
+from
+https://github.com/pojntfx/dudirekta/blob/main/pkg/rpc/registry.go#L145-L217)</p></li>
+<li><p>This makes both calling RPCs and defining them completely
+transparent to the user</p></li>
+<li><p>Since dudirekta has a few limitations (such as the fact that
+slices are passed as copies, not references, and that context needs to
+be provided), the resulting remote struct can’t be used
+directly</p></li>
+<li><p>To work around this, the standard <code>go-nbd</code> backend
+interface is implemented for the remote representation, creating a
+universally reusable, generic RPC backend wrapper (code snippet from
+https://github.com/pojntfx/r3map/blob/main/pkg/backend/rpc.go)</p></li>
+<li><p>The same backend implementation is also done for the seeder
+protocol (code snippet from
+https://github.com/pojntfx/r3map/blob/main/pkg/services/seeder.go)</p></li>
+<li><p>While the dudirekta RPC serves as a good reference implementation
+of the basic RPC protocol, it does not scale particularly well</p></li>
+<li><p>This mostly stems from two aspects of how it is designed</p></li>
+<li><p>JSON(L) is used for the wire format, which while simple and easy
+to analyze, is slow to marshal and unmarshal</p></li>
+<li><p>Dudirekta supports defining functions on both the client and the
+server</p></li>
+<li><p>This is very useful for implementing e.g. a pre-copy protocol
+where the source pushes chunks to the destination by simply calling a
+RPC on the destination</p></li>
+<li><p>Usually, RPCs don’t support exposing or calling RPCs on the
+client, too, only on the server</p></li>
+<li><p>This would mean that in order to implement a pre-copy protocol
+with pushes, the destination would have to be <code>dial</code>able from
+the source</p></li>
+<li><p>In a LAN scenario, this is easy to implement, but in WAN it is
+complicated and requires authentication of both the client and the
+server</p></li>
+<li><p>Dudirekta fixes this by making the protocol itself bi-directional
+(example and code snippet from
+https://github.com/pojntfx/dudirekta/tree/main#1-define-local-functions)</p></li>
+<li><p>In addition to this, dudirekta works over any
+<code>io.ReadWriter</code></p></li>
+<li><p>This does however come at the cost of not being able to do
+connection pooling, since each client <code>dial</code>ing the server
+would mean that the server could not reference the multiple client
+connections as one composite client without changes to the
+protocol</p></li>
+<li><p>While implementing such a pooling mechanism in the future could
+be interesting, it turned out to not be necessary thanks to the
+pull-based pre-copy solution described earlier</p></li>
+<li><p>Instead, only calling RPCs exposed on the server from the client
+is the only requirement for an RPC framework, and other, more optimized
+RPC frameworks can already offer this</p></li>
+<li><p>Dudirekta uses reflection to make the RPCs essentially almost
+transparent to use</p></li>
+<li><p>By switching to a well-defined protocol with a DSL instead, we
+can gain further benefits from not having to use reflection and
+generating code instead</p></li>
+<li><p>Analyzing the gRPC backend and how it differs from
+dudirekta</p></li>
+<li><p>Analyzing the fRPC backend and how it differs from gRPC</p></li>
+<li><p>Connecting polling and/or concurrent RPCs</p></li>
 <li><p>Benchmark: Latency till first n chunks <em>and</em> throughput
 for dudirekta, gRPC and fRPC backends (how they are affected by
 having/not having connection polling and/or concurrent RPCs)</p></li>
 <li><p>Benchmark: Effect of tuning the amount of push/pull workers in
 high-latency scenarios</p></li>
 <li><p>Analyzing the Redis backend</p></li>
-<li><p>Analyzing the S3 backend</p></li>
-<li><p>Analyzing the Cassandra backend</p></li>
-<li><p>Benchmark: Latency and throughput of all benchmarks on localhost
-and in a realistic latency and throughput scenario</p></li>
+<li><p>Analyzing the S3 backend (empty chunks etc.)</p></li>
+<li><p>Analyzing the Cassandra backend (migrations etc.)</p></li>
+<li><p>Benchmark: These three backends on localhost and on remote hosts,
+where they could be of use</p></li>
 <li><p>Effects of slow disks/memory on local backends, and why direct
 mounts can outperform managed mounts in tests on localhosts</p></li>
-<li><p>Using P2P vs. star architectures for mounts and
-migrations</p></li>
+<li><p>Benchmark: Latency and throughput of all benchmarks on localhost
+and in a realistic latency and throughput scenario</p></li>
 <li><p>Looking back at all options and comparing ease of implementation,
 CPU load and network traffic between them</p></li>
 </ul></li>
