@@ -1,3 +1,9 @@
+commit bf1eb571d0118fb385d19861097762b0ee95d8b4
+Author: Felicitas Pojtinger <felicitas@pojtinger.com>
+Date:   Mon Jul 10 22:58:08 2023 +0200
+
+    docs: Add required structure basics, start adding code snippets and use cases section
+
 commit 0b0f90d62455310e3b9b4ca8cd959961acabaa0a
 Author: Felicitas Pojtinger <felicitas@pojtinger.com>
 Date:   Mon Jul 10 02:50:33 2023 +0200

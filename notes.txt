@@ -4,10 +4,20 @@ Felicitas Pojtinger (Stuttgart Media University)
 2023-08-04
 
 -   1 Unsorted Research Questions
--   2 Structure
--   3 Content
+-   2 Uni Required Structure
+-   3 Structure
+-   4 Content
 
 Unsorted Research Questions
+
+Uni Required Structure
+
+-   Abstract
+-   Introduction
+-   Theory
+-   Implementation
+-   Results
+-   Conclusion
 
 Structure
 
@@ -268,76 +278,266 @@ Content
         userfaultfd API, and then register the API to handle any faults
         on the region (code snippet from
         https://github.com/loopholelabs/userfaultfd-go/blob/master/pkg/mapper/register.go#L15)
-    -   The region that should be handled can be allocated with
-        e.g. mmap
-    -   Once we have the file descriptor for the userfaultfd API, we
-        need to transfer this file descriptor to a process that should
-        respond with the chunks of memory to be put into the faulting
-        address
-    -   Passing file descriptors between processes is possible by using
-        a UNIX socket (code snippet from
-        https://github.com/loopholelabs/userfaultfd-go/blob/master/pkg/transfer/unix.go)
-    -   Once we have received the socket we need to register the handler
-        for the API to use
-    -   If the handler receives an address that has faulted, it responds
-        with the UFFDIO_COPY ioctl and a pointer to the chunk of memory
-        that should be used on the file descriptor (code snippet from
-        https://github.com/loopholelabs/userfaultfd-go/blob/master/pkg/mapper/handler.go)
-    -   A big benefit of using userfaultfd and the pull method is that
-        we are able to simplify the backend of the entire system down to
-        a io.ReaderAt (code snippet from https://pkg.go.dev/io#ReaderAt)
-    -   That means we can use almost any io.ReaderAt as a backend for a
-        userfaultfd-go registered object
-    -   We know that access will always be aligned to 4 KB chunks/the
-        system page size, so we can assume a chunk size on the server
-        based on that
-    -   For the first example, we can return a random pattern in the
-        backend (code snippet from
-        https://github.com/loopholelabs/userfaultfd-go/blob/master/cmd/userfaultfd-go-example-abc/main.go) -
-        this shows a great way of exposing truly arbitrary information
-        into a byte slice without having to pre-compute everything or
-        changing the application
-    -   Since a file is a valid io.ReaderAt, we can also use a file as
-        the backend directly, creating a system that essentially allows
-        for mounting a (remote) file into memory (code snippet from
-        https://github.com/loopholelabs/userfaultfd-go/blob/master/cmd/userfaultfd-go-example-file/main.go)
-    -   Similarly so, we can use it map a remote object from S3 into
-        memory, and access only the chunks of it that we actually
-        require (which in the case of S3 is achieved with HTTP range
-        requests) (code snippet from
-        https://github.com/loopholelabs/userfaultfd-go/blob/master/cmd/userfaultfd-go-example-s3/main.go)
-    -   As we can see, using userfaultfd we are able to map almost any
-        object into memory
-    -   This approach is very clean and has comparatively little
-        overhead, but also has significant architecture-related problems
-        that limit its uses
-    -   The first big problem is only being able to catch page faults -
-        that means we can only ever respond the first time a chunk of
-        memory gets accessed, all future requests will return the memory
-        directly from RAM on the destination host
-    -   This prevents us from using this approach for remote resources
-        that update over
-    -   Also prevents us from using it for things that might have
-        concurrent writers/shared resources, since there would be no way
-        of updating the conflicting section
-    -   Essentially makes this system only usable for a read-only
-        “mount” of a remote resource, not really synchronization
-    -   Also prevents pulling chunks before they are being accessed
-        without layers of indirection
-    -   The userfaultfd API socket is also synchronous, so each chunk
-        needs to be sent one after the other, meaning that it is very
-        vulnerable to long RTT values
-    -   Also means that the initial latency will be at minimum the RTT
-        to the remote source, and (without caching) so will be each
-        future request
-    -   The biggest problem however: All of these drawbacks mean that in
-        real-life usecases, the maximum throughput, even if a local
-        process handles page faults on a modern computer, is ~50MB/s
-    -   Benchmark: Sensitivity of userfaultfd to network latency and
-        throughput
-    -   In summary, while this approach is interesting and very
-        idiomatic to Go, for most data, esp. larger datasets and in
-        high-latency scenarios/in WAN, we need a better solution
+
+    if _, _, errno = syscall.Syscall(
+        syscall.SYS_IOCTL,
+        uffd,
+        constants.UFFDIO_API,
+        uintptr(unsafe.Pointer(&uffdioAPI)),
+    ); errno != 0 {
+        return []byte{}, 0, 0, fmt.Errorf("%v", errno)
+    }
+
+    // ...
+
+    start := uintptr(unsafe.Pointer(&b[0]))
+
+    uffdioRegister := constants.NewUffdioRegister(
+        constants.CULong(start),
+        constants.CULong(l),
+        constants.UFFDIO_REGISTER_MODE_MISSING,
+    )
+
+    if _, _, errno = syscall.Syscall(
+        syscall.SYS_IOCTL,
+        uffd,
+        constants.UFFDIO_REGISTER,
+        uintptr(unsafe.Pointer(&uffdioRegister)),
+    ); errno != 0 {
+        return []byte{}, 0, 0, fmt.Errorf("%v", errno)
+    }
+
+-   The region that should be handled can be allocated with e.g. mmap
+-   Once we have the file descriptor for the userfaultfd API, we need to
+    transfer this file descriptor to a process that should respond with
+    the chunks of memory to be put into the faulting address
+-   Passing file descriptors between processes is possible by using a
+    UNIX socket (code snippet from
+    https://github.com/loopholelabs/userfaultfd-go/blob/master/pkg/transfer/unix.go)
+
+    syscall.Sendmsg(int(f.Fd()), nil, syscall.UnixRights(b...), nil, 0)
+
+    // ...
+
+    buf := make([]byte, syscall.CmsgSpace(num*4)) // See https://github.com/ftrvxmtrx/fd/blob/master/fd.go#L51
+    if _, _, _, _, err = syscall.Recvmsg(int(f.Fd()), nil, buf, 0); err != nil {
+        return []uintptr{}, err
+    }
+
+    msgs, err := syscall.ParseSocketControlMessage(buf)
+    if err != nil {
+        return []uintptr{}, err
+    }
+
+    fds := []uintptr{}
+    for _, msg := range msgs {
+        newFds, err := syscall.ParseUnixRights(&msg)
+        if err != nil {
+            return []uintptr{}, err
+        }
+
+        for _, newFd := range newFds {
+            fds = append(fds, uintptr(newFd))
+        }
+    }
+
+-   Once we have received the socket we need to register the handler for
+    the API to use
+-   If the handler receives an address that has faulted, it responds
+    with the UFFDIO_COPY ioctl and a pointer to the chunk of memory that
+    should be used on the file descriptor (code snippet from
+    https://github.com/loopholelabs/userfaultfd-go/blob/master/pkg/mapper/handler.go)
+
+    if _, err := unix.Poll(
+        []unix.PollFd{{
+            Fd:     int32(uffd),
+            Events: unix.POLLIN,
+        }},
+        -1,
+    ); err != nil {
+        return err
+    }
+
+      // ...
+
+      addr := constants.GetPagefaultAddress(&pagefault)
+
+    p := make([]byte, pagesize)
+    if n, err := src.ReadAt(p, int64(uintptr(addr)-start)); err != nil {
+        // We always read full pages; the last read can thus `EOF` if the file isn't an exact multiple of `pagesize`
+        if !(errors.Is(err, io.EOF) && n != 0) {
+            return err
+        }
+    }
+
+      // ...
+
+      cpy := constants.NewUffdioCopy(
+        p,
+        addr&^constants.CULong(pagesize-1),
+        constants.CULong(pagesize),
+        0,
+        0,
+    )
+
+    if _, _, errno := syscall.Syscall(
+        syscall.SYS_IOCTL,
+        uintptr(uffd),
+        constants.UFFDIO_COPY,
+        uintptr(unsafe.Pointer(&cpy)),
+    ); errno != 0 {
+        return fmt.Errorf("%v", errno)
+    }
+
+-   A big benefit of using userfaultfd and the pull method is that we
+    are able to simplify the backend of the entire system down to a
+    io.ReaderAt (code snippet from https://pkg.go.dev/io#ReaderAt)
+
+    type ReaderAt interface {
+        ReadAt(p []byte, off int64) (n int, err error)
+    }
+
+-   That means we can use almost any io.ReaderAt as a backend for a
+    userfaultfd-go registered object
+-   We know that access will always be aligned to 4 KB chunks/the system
+    page size, so we can assume a chunk size on the server based on that
+-   For the first example, we can return a random pattern in the backend
+    (code snippet from
+    https://github.com/loopholelabs/userfaultfd-go/blob/master/cmd/userfaultfd-go-example-abc/main.go) -
+    this shows a great way of exposing truly arbitrary information into
+    a byte slice without having to pre-compute everything or changing
+    the application
+
+    type abcReader struct{}
+
+    func (a abcReader) ReadAt(p []byte, off int64) (n int, err error) {
+        log.Println("Reading at offset", off)
+
+        n = copy(p, bytes.Repeat([]byte{'A' + byte(off%20)}, len(p)))
+
+        return n, nil
+    }
+
+    // ...
+
+    uffd, start, err := transfer.ReceiveUFFD(conn)
+    if err != nil {
+        panic(err)
+    }
+
+    if err := mapper.Handle(uffd, start, abcReader{}); err != nil {
+        panic(err)
+    }
+
+    // ..
+
+    b, uffd, start, err := mapper.Register(*length)
+    if err != nil {
+        panic(err)
+    }
+
+    if err := transfer.SendUFFD(conn, uffd, start); err != nil {
+        panic(err)
+    }
+
+    for i, c := range b {
+        log.Printf("%v %c", i, rune(c))
+    }
+
+      // ...
+
+-   Since a file is a valid io.ReaderAt, we can also use a file as the
+    backend directly, creating a system that essentially allows for
+    mounting a (remote) file into memory (code snippet from
+    https://github.com/loopholelabs/userfaultfd-go/blob/master/cmd/userfaultfd-go-example-file/main.go)
+
+    f, err := os.OpenFile(*file, os.O_RDONLY, os.ModePerm)
+    if err != nil {
+        panic(err)
+    }
+
+    // ...
+
+    b, uffd, start, err := mapper.Register(int(s.Size()))
+    if err != nil {
+        panic(err)
+    }
+
+    go func() {
+        if err := mapper.Handle(uffd, start, f); err != nil {
+            panic(err)
+        }
+    }()
+
+-   Similarly so, we can use it map a remote object from S3 into memory,
+    and access only the chunks of it that we actually require (which in
+    the case of S3 is achieved with HTTP range requests) (code snippet
+    from
+    https://github.com/loopholelabs/userfaultfd-go/blob/master/cmd/userfaultfd-go-example-s3/main.go)
+
+      mc, err := minio.New(*s3Endpoint, &minio.Options{
+        Creds:  credentials.NewStaticV4(*s3AccessKeyID, *s3SecretAccessKey, ""),
+        Secure: *s3UseTLS,
+      })
+      if err != nil {
+        panic(err)
+      }
+
+    f, err := mc.GetObject(ctx, *s3BucketName, *s3ObjectName, minio.GetObjectOptions{})
+    if err != nil {
+    panic(err)
+    }
+
+    // ...
+
+    b, uffd, start, err := mapper.Register(int(s.Size))
+    if err != nil {
+    panic(err)
+    }
+
+-   As we can see, using userfaultfd we are able to map almost any
+    object into memory
+
+-   This approach is very clean and has comparatively little overhead,
+    but also has significant architecture-related problems that limit
+    its uses
+
+-   The first big problem is only being able to catch page faults - that
+    means we can only ever respond the first time a chunk of memory gets
+    accessed, all future requests will return the memory directly from
+    RAM on the destination host
+
+-   This prevents us from using this approach for remote resources that
+    update over
+
+-   Also prevents us from using it for things that might have concurrent
+    writers/shared resources, since there would be no way of updating
+    the conflicting section
+
+-   Essentially makes this system only usable for a read-only “mount” of
+    a remote resource, not really synchronization
+
+-   Also prevents pulling chunks before they are being accessed without
+    layers of indirection
+
+-   The userfaultfd API socket is also synchronous, so each chunk needs
+    to be sent one after the other, meaning that it is very vulnerable
+    to long RTT values
+
+-   Also means that the initial latency will be at minimum the RTT to
+    the remote source, and (without caching) so will be each future
+    request
+
+-   The biggest problem however: All of these drawbacks mean that in
+    real-life usecases, the maximum throughput, even if a local process
+    handles page faults on a modern computer, is ~50MB/s
+
+-   Benchmark: Sensitivity of userfaultfd to network latency and
+    throughput
+
+-   In summary, while this approach is interesting and very idiomatic to
+    Go, for most data, esp. larger datasets and in high-latency
+    scenarios/in WAN, we need a better solution
 
 -   Push-Based Memory Synchronization with mmap and Hashing
 
@@ -1657,3 +1857,35 @@ Content
     -   Benchmark: Latency and throughput of all benchmarks on localhost
         and in a realistic latency and throughput scenario (direct
         mounts can outperform managed mounts in tests on localhosts)
+
+-   Case Studies
+
+    -   ram-dl as an example of using the direct mount API for extending
+        system memory
+    -   tapisk as an example of using the managed mount API for a file
+        system with very high latencies, linear access and asynchronous
+        to/from fast local memory vs. STFS
+    -   Migration app state (e.g. TODO list) between two hosts in a
+        universal (underlying memory) manner
+    -   Mounting remote file systems as managed mounts and combining the
+        benefits of traditional FUSE mounts (e.g. s3-fuse) with Google
+        Drive-style synchronization
+    -   Using manged mounts for remote SQLite databases without having
+        to download it first
+    -   Streaming video formats like e.g. MP4 that don’t support
+        streaming due to indexes/compression
+    -   Improving game download speeds by mounting the remote assets
+        with managed mounts, using a pull heuristic that defines typical
+        access patterns (like which levels are accessed first), making
+        any game immediately playable without changes
+    -   Executing remote binaries or scrips that don’t need to be
+        scanned first without having to fully download them
+
+-   Conclusion
+
+    -   Looking back at all synchronization options and comparing ease
+        of implementation, CPU load and network traffic between them
+    -   Summary of the different approaches, and how the new solutions
+        might make it possible to use memory as the universal access
+        format
+    -   Further research recommendations (e.g. ublk)
