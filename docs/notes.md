@@ -151,6 +151,7 @@ lang: en-US
   - Improving game download speeds by mounting the remote assets with managed mounts, using a pull heuristic that defines typical access patterns (like which levels are accessed first), making any game immediately playable without changes
   - Executing remote binaries or scrips that don't need to be scanned first without having to fully download them
 - Conclusion
+  - Looking back at all synchronization options and comparing ease of implementation, CPU load and network traffic between them
   - Summary of the different approaches, and how the new solutions might make it possible to use memory as the universal access format
   - Further research recommendations (e.g. `ublk`)
 
@@ -567,7 +568,6 @@ lang: en-US
   - Benchmark: Maximum acceptable downtime for a migration scenario with the Managed Mount API vs the Migration API
 
 - Optimizing Mounts and Migrations
-
   - Compared to existing remote mount and migration solutions, r3map is a bit special
   - As mentioned before, most systems are designed for scenarios where such resources are accessible in a high-bandwidth, low-latency LAN
   - This means that some assumptions concerning security, authentication, authorization and scalability were made that can not be made here
@@ -669,12 +669,34 @@ lang: en-US
   - Because of these similarities, the usage of fRPC in r3map is extremely similar to gRPC (code snippet from https://github.com/pojntfx/r3map/blob/main/pkg/services/seeder_frpc.go)
   - A good way to test how well the RPC framework scales for concurrent requests is scaling the amount of pull workers, where dudirekta only gains marginally from increasing their number, whereas both gRPC and fRPC can increase throughput and decrease the initial latency by pulling more chunks pre-emptively
   - Benchmark: Effect of tuning the amount of push/pull workers in high-latency for these three backends on latency till first n chunks and throughput
-
-  - Analyzing the Redis backend
-  - Analyzing the S3 backend (empty chunks etc.)
-  - Analyzing the Cassandra backend (migrations etc.)
+  - These backends provide a way to access a remote backend
+  - This is useful, esp. if the remote resource should be protected in some way or if it requires some kind of authorization
+  - Depending on the use case however, esp. for the mount API, having access to a remote backend without this level of indirection can be useful
+  - Fundamentally, a mount maps fairly well to a remote random-access storage device
+  - Many existing protocols and systems provide a way to access essentially this concept over a network
+  - One of these is Redis, an in-memory key-value store with network access
+  - Chunk offsets can be mapped to keys, and bytes are a valid key type, so the chunk itself can be stored directly in the KV store (code snippet from https://github.com/pojntfx/r3map/blob/main/pkg/backend/redis.go#L36-L63)
+  - Using Redis is particularly useful because it is able to handle the locking server-side in a very efficient way, and is well-tested for high-throughput etc. scenarious
+  - Authentication can also be handled using the Redis protocol, so can multi-tenancy by using multiple databases or a prefix
+  - Redis also has very fast read/write speeds due to its bespoke protocol and fast serialization
+  - While the Redis backend is very useful for read-/write usage, when deployment to the public internet is required, it might not be the best one
+  - The S3 backend is an good choice for mapping public information, e.g. media assets, binaries, large read-only filesystems etc. into memory
+  - S3 used to be an object storage service from AWS, but has since become a more or less standard way for accessing blobs thanks to open-source S3 implementations such as Minio
+  - Similarly to how files were used as individual files, one S3 object per chunk is used to store them
+  - S3 is based on HTTP, and like the Redis backend requires chunking due to it not supporting updates of part of a file
+  - In order to prevent having to store empty data, the backend interprets "not found" errors as empty chunks
+  - Another backend option is a NoSQL server such as Cassandra
+  - This is more of a proof of concept than a real usecase, but shows the versitility and flexibility of how a database can be mapped to a memory region, which can be interesting for accessing e.g. a remote database's content without having to use a specific client
+  - `ReadAt` and `WriteAt` are implemented using Cassandra's query language (code snippet from https://github.com/pojntfx/r3map/blob/main/pkg/backend/cassandra.go#L36-L63)
+  - Similarly to Redis, locking individual keys can be handled by the DB server
+  - But in the case of Cassandra, the DB server stores chunks on disk, so it can be used for persistent data
+  - In order to use Cassandra, migrations have to be applied for creating the table etc. (code snippet from https://github.com/pojntfx/r3map/blob/main/cmd/r3map-direct-mount-benchmark/main.go#L369-L396)
   - Benchmark: These three backends on localhost and on remote hosts, where they could be of use
-
-  - Effects of slow disks/memory on local backends, and why direct mounts can outperform managed mounts in tests on localhosts
-  - Benchmark: Latency and throughput of all benchmarks on localhost and in a realistic latency and throughput scenario
-  - Looking back at all options and comparing ease of implementation, CPU load and network traffic between them
+  - Another interesting aspect of optimization to look at is the overhead of managed mounts
+  - It is possible for managed mounts (and migrations) to deliver signficantly lower performance compared to direct mounts
+  - This is because using managed mounts come with the cost of potential duplicate I/O operations
+  - For example, if memory is being accessed linearly from the first to the last offset immediately after it being mounted, then using the background pulls will have no effect other than causing a write operation (to the local caching backend) compared to just directly reading from the remote backend
+  - This however is only the case in scenarios with a very low latency between the local and remote backends
+  - If latency becomes higher, then the ability to pull the chunks in the background and in parallel with the puller will offset the cost of duplicate I/O
+  - The same applies to slow local backends, e.g. if slow disks or memory are being used, which can mean that offsetting the duplicate I/O will need a significantly higher latency to be worth it
+  - Benchmark: Latency and throughput of all benchmarks on localhost and in a realistic latency and throughput scenario (direct mounts can outperform managed mounts in tests on localhosts)
