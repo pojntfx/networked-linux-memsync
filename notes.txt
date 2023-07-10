@@ -234,6 +234,8 @@ Structure
     -   Executing remote binaries or scrips that don’t need to be
         scanned first without having to fully download them
 -   Conclusion
+    -   Looking back at all synchronization options and comparing ease
+        of implementation, CPU load and network traffic between them
     -   Summary of the different approaches, and how the new solutions
         might make it possible to use memory as the universal access
         format
@@ -1288,409 +1290,370 @@ Content
 
     -   Compared to existing remote mount and migration solutions, r3map
         is a bit special
-
     -   As mentioned before, most systems are designed for scenarios
         where such resources are accessible in a high-bandwidth,
         low-latency LAN
-
     -   This means that some assumptions concerning security,
         authentication, authorization and scalability were made that can
         not be made here
-
     -   For example encryption; while for a LAN deployment scenario it
         is probably assumed that there are no bad actors in the subnet,
         the same can not be said for WAN
-
     -   While depending on e.g. TLS etc. for the migration could have
         been an option, r3map should still be useful for LAN migration
         use cases, too, which is why it was made to be completely
         transport-agnostic
-
     -   This makes adding encryption very simple
-
     -   E.g. for LAN, the same assumptions that are being made in
         existing systems can be made, and fast latency-sensitive
         protocols like the SCSI RDMA protocol (SRP) or a bespoke
         protocol can be used
-
     -   For WAN, a standard internet protocol like TLS over TCP or QUIC
         can be used instead, which will allow for migration over the
         public internet, too
-
     -   For RPC frameworks with exchangeable transport layers such as
         dudirekta (will be explained later), this also allows for unique
         migration or mount scenarios in NATed environments over WebRTC
         data channels, which would be very hard to implement with more
         traditional setups
-
     -   Similarly so, authentication and authorization can be
         implemented in many ways
-
     -   While for migration in LAN, the typical approach of simply
         trusting the local subnet can be used, for public deployments
         mTLS certificates or even higher-level protocols such as OIDC
         can be used depending on the transport layer chosen
-
     -   For WAN specifically, new protocols such as QUIC allow tight
         integration with TLS for authentication and encryption
-
     -   While less relevant for the migration use case (since
         connections can be established ahead of time), for the mount use
         case the initial remote ReadAt requests’ latency is an important
         metric since it strongly correlates with the total latency
-
     -   QUIC has a way to establish 0-RTT TLS, which can save one or
         multiple RTTs and thus signficantly reduce this overhead, and
         handle authentication in the same step
-
     -   Another optimization that has been made to support this WAN
         deployment scenario is the pull-only architecture
-
     -   Usually, a pre-copy system pushes changes to the destination in
         the migration API
-
     -   This however makes such a system hard to use in a scenario where
         NATs exist, or a scenario in which the network might have an
         outage during the migration
-
     -   With a pull-only system emulating the pre-copy setup, the client
         can simply keep track of which chunks it still needs to pull
         itself, so if there is a network outage, it can just resume
         pulling like before, which would be much harder to implement
         with a push system as the server would have to track this state
         for multiple clients and handle the lifecycle there
-
     -   The pull-only system also means that unlike the push system that
         was implemented for the hash-based synchronization, a central
         forwarding hub is not necessary
-
     -   In the push-based system for the hash-based solution, the
         topology had to be static/all destinations would have to have
         received the changes made to the remote app’s memory since it
         was started
-
     -   In order to cut down on unnecessary duplicate data
         transmissions, a central forwarding hub was implemented
-
     -   This central forwarding hub does however add additional latency,
         which can be removed completely with the migration protocol’s
         P2P, pull-only algorithm
-
     -   In WAN, where latency is high, the ability to fetch chunks
         concurrently is very important
-
     -   Without concurrent background pulls, latency adds up very
         quickly as every memory request would have at least the RTT as
         latency
-
     -   The first prerequisite for supporting this is that the remote
         backend has to be able to read from multiple regions without
         locking the backend globally
-
     -   For the file backend for example, this is not the case, as the
         lock needs to be acquired for the entire file before an offset
         can be accessed (code snippet from
         https://github.com/pojntfx/go-nbd/blob/main/pkg/backend/file.go#L17-L25)
-
     -   For high-latency scenarios, this can quickly become a bottleneck
-
     -   While there are many ways to solve this, one is to use the
         directory backend
-
     -   Instead of using just one backing file, the directory backend is
         a chunked backend that uses a directory with one file for each
         chunk instead of a global file
-
     -   This means that the directory backend can lock each file
         individually, speeding up concurrent access
-
     -   This also applies to writes, where even concurrent writes to
         different chunks can be done at the same time as they are all
         backed by a separate file
-
     -   The directory backend keeps track of these chunks by using an
         internal map of locks (code snippet from
         https://github.com/pojntfx/r3map/blob/main/pkg/backend/directory.go#L22-L24)
-
     -   When a chunk is first accessed, a new file is created for the
         chunk (code snipped from
         https://github.com/pojntfx/r3map/blob/main/pkg/backend/directory.go#L77-L94)
-
     -   If the chunk is being read, the file is also truncated to one
         chunk length
-
     -   Since this could easily exhaust the number of maximum allowed
         file descriptors for a process, a check is added (code snippet
         from
         https://github.com/pojntfx/r3map/blob/main/pkg/backend/directory.go#L55-L75)
-
     -   If the maximum allowed number of open files is exceeded, the
         first file is closed and removed from the map, causing it to be
         reopened on a subsequent read
-
     -   These optimizations add an initial overhead to operations, but
         can significantly improve the pull speed in scenarios where the
         backing disk is slow or the latency is high
-
     -   Benchmark: File vs. directory backend performance
-
     -   Another aspect that plays an important role in performance for
         real-life deployments is the choice of RPC framework and
         transport protocol
-
     -   As mentioned before, both the mount and the migration APIs are
         transport-independent
-
     -   A simple RPC framework to use is dudirekta
-
     -   Dudirekta is reflection-based, which makes it very simple to use
         to iterate on the protocol quickly
-
     -   To use it, a simple wrapper struct with the needed RPC methods
         is created (code snippet from
         https://github.com/pojntfx/r3map/blob/main/pkg/services/backend.go#L41-L61)
-
     -   This wrapper struct simply calls the backend (or seeder etc.)
         functions
-
     -   The wrapper struct is then passed as the local function struct
         into a registry, which creates the RPC server (code snippet from
         https://github.com/pojntfx/r3map/blob/main/cmd/r3map-mount-benchmark-server/main.go#L146-L166)
-
     -   When the transport protocol, in this case TCP, accepts a client
         it is linked to the registry (code snippet from
         https://github.com/pojntfx/r3map/blob/main/cmd/r3map-mount-benchmark-server/main.go#L198-L200)
-
     -   The used protocol is very simple (code snippet from
         https://github.com/pojntfx/dudirekta#protocol)
-
     -   If an RPC, such as ReadAt, is called, it is looked up via
         reflection and validated (code snippet from
         https://github.com/pojntfx/dudirekta/blob/main/pkg/rpc/registry.go#L323-L357)
-
     -   The arguments, which have been supplied as JSON, are then
         unmarshalled into their native types, and the local wrapper
         struct’s method is called in a new goroutine (code snippet from
         https://github.com/pojntfx/dudirekta/blob/main/pkg/rpc/registry.go#L417-L521)
-
     -   This allows for one important feature: Concurrent RPC calls
-
     -   Many simple RPC frameworks only support one RPC call at a time,
         because no demuxing is implemented
-
     -   For example, when dRPC (https://github.com/storj/drpc) was used,
         drastic performance issues were noted compared to gRPC etc.,
         because no support for concurrent RPCs was implemented
-
     -   To use a RPC backend on the destination side, the wrapper
         struct’s remote representation is used (code snippet from
         https://github.com/pojntfx/r3map/blob/main/pkg/services/backend.go#L14-L19)
-
     -   For the destination site, the remote representation’s fields are
         iterated over, and replaced by functions which marshal and
         unmarshal the function calls into the dudirekta JSON protocol
         (code snippet from
         https://github.com/pojntfx/dudirekta/blob/main/pkg/rpc/registry.go#L228-L269)
-
     -   To do this, the arguments are marshalled into JSON, and a unique
         call ID is generated (code snippet from
         https://github.com/pojntfx/dudirekta/blob/main/pkg/rpc/registry.go#L109-L130)
-
     -   Once the remote has responded with a message containing the
         unique call ID, it unmarshalls the arguments, and returns (code
         snippet from
         https://github.com/pojntfx/dudirekta/blob/main/pkg/rpc/registry.go#L145-L217)
-
     -   This makes both calling RPCs and defining them completely
         transparent to the user
-
     -   Since dudirekta has a few limitations (such as the fact that
         slices are passed as copies, not references, and that context
         needs to be provided), the resulting remote struct can’t be used
         directly
-
     -   To work around this, the standard go-nbd backend interface is
         implemented for the remote representation, creating a
         universally reusable, generic RPC backend wrapper (code snippet
         from
         https://github.com/pojntfx/r3map/blob/main/pkg/backend/rpc.go)
-
     -   The same backend implementation is also done for the seeder
         protocol (code snippet from
         https://github.com/pojntfx/r3map/blob/main/pkg/services/seeder.go)
-
     -   While the dudirekta RPC serves as a good reference
         implementation of the basic RPC protocol, it does not scale
         particularly well
-
     -   This mostly stems from two aspects of how it is designed
-
     -   JSON(L) is used for the wire format, which while simple and easy
         to analyze, is slow to marshal and unmarshal
-
     -   Dudirekta supports defining functions on both the client and the
         server
-
     -   This is very useful for implementing e.g. a pre-copy protocol
         where the source pushes chunks to the destination by simply
         calling a RPC on the destination
-
     -   Usually, RPCs don’t support exposing or calling RPCs on the
         client, too, only on the server
-
     -   This would mean that in order to implement a pre-copy protocol
         with pushes, the destination would have to be dialable from the
         source
-
     -   In a LAN scenario, this is easy to implement, but in WAN it is
         complicated and requires authentication of both the client and
         the server
-
     -   Dudirekta fixes this by making the protocol itself
         bi-directional (example and code snippet from
         https://github.com/pojntfx/dudirekta/tree/main#1-define-local-functions)
-
     -   In addition to this, dudirekta works over any io.ReadWriter
-
     -   This does however come at the cost of not being able to do
         connection pooling, since each client dialing the server would
         mean that the server could not reference the multiple client
         connections as one composite client without changes to the
         protocol
-
     -   While implementing such a pooling mechanism in the future could
         be interesting, it turned out to not be necessary thanks to the
         pull-based pre-copy solution described earlier
-
     -   Instead, only calling RPCs exposed on the server from the client
         is the only requirement for an RPC framework, and other, more
         optimized RPC frameworks can already offer this
-
     -   Dudirekta uses reflection to make the RPCs essentially almost
         transparent to use
-
     -   By switching to a well-defined protocol with a DSL instead, we
         can gain further benefits from not having to use reflection and
         generating code instead
-
     -   One popular such framework is gRPC
-
     -   gRPC is a high-performance RPC framework based on Protocol
         Buffers
-
     -   Because it is based on Protobuf, we can define the protocol
         itself in the proto3 DSL
-
     -   The DSL also allows to specify the order of each field in the
         resulting wire protocol, making it possible to evolve the
         protocol over time without having to break backwards
         compatibility
-
     -   This is very important given that r3map could be ported to a
         language with less overhead in the future, e.g. Rust, and being
         able to re-use the existing wire protocol would make this much
         easier
-
     -   While dudirekta is a simple protocol that is easy to adapt for
         other languages, currently it only supports Go and JS, while
         gRPC supports many more
-
     -   A fairly unique feature of gRPC are streaming RPCs, where a
         stream of requests can be sent to/from the server/client, which,
         while not used for the r3map protocol, could be very useful to
         implementing a pre-copy migration API with pushes similarly to
         how dudirekta does it by exposing RPCs from the client
-
     -   As mentioned before, for WAN migration or mount scenarios,
         things like authentication, authorization and encryption are
         important, which gRPC is well-suited for
-
     -   Protobuf being a proper byte-, not plaintext-based wire format
         is also very helpful, since it means that e.g. sending bytes
         back from ReadAt RPCs doesn’t require any encoding (wereas JSON,
         used by dudirekta, base64 encodes these chunks)
-
     -   gRPC is also based on HTTP/2, which means that it can benefit
         from existing load balancing tooling etc. that is popular in WAN
         for web uses even today
-
     -   This backend is implemented by first defining the protocol in
         the DSL (code snippet from
         https://github.com/pojntfx/r3map/blob/main/api/proto/migration/v1/seeder.proto)
-
     -   After generating the bindings, the generated backend interface
         is implemented by using the dudirekta wrapper struct as the
         abstraction layer (code snippet from
         https://github.com/pojntfx/r3map/blob/main/pkg/services/seeder_grpc.go)
-
     -   Unlike dudirekta, gRPC also implements concurrent RPCs and
         connection pooling
-
     -   Similarly to how having a backend that allows concurrent
         reads/writes can be useful to speed up the concurrent push/pull
         steps, having a protocol that allows for concurrent RPCs can do
         the same
-
     -   Connection pooling is another aspect that can help with this
-
     -   Instead of either using one single connection with a multiplexer
         (which is possible because it uses HTTP/2) to allow for multiple
         requests, or creating a new connection for every request, gRPC
         is able to intelligently re-use existing connections for RPCs or
         create new ones, speeding up parallel requests
-
     -   Despite these benefits, gRPC is not perfect however
-
     -   Protobuf specifically, while being faster than JSON, is not the
         fastest serialization framework that could be used
-
     -   This is especially true for large chunks of data, and becomes a
         real bottleneck if the connection between source and destination
         would allow for a high throughput
-
     -   This is where fRPC, a RPC library that is easy to replace gRPC
         with, becomes useful
-
     -   fRPC is 2-4x faster than gRPC, and especially in terms of
         throughput (insert graphics from
         https://frpc.io/performance/grpc-benchmarks)
-
     -   Because throughput and latency determine the maximum acceptable
         downtime of a migration/the initial latency for mounts, choosing
         the right RPC protocol is an important decision
-
     -   fRPC also uses the same proto3 DSL, which makes it an easy
         drop-in replacement, and it also supports multiplexing and
         connection polling
-
     -   Because of these similarities, the usage of fRPC in r3map is
         extremely similar to gRPC (code snippet from
         https://github.com/pojntfx/r3map/blob/main/pkg/services/seeder_frpc.go)
-
     -   A good way to test how well the RPC framework scales for
         concurrent requests is scaling the amount of pull workers, where
         dudirekta only gains marginally from increasing their number,
         whereas both gRPC and fRPC can increase throughput and decrease
         the initial latency by pulling more chunks pre-emptively
-
     -   Benchmark: Effect of tuning the amount of push/pull workers in
         high-latency for these three backends on latency till first n
         chunks and throughput
-
-    -   Analyzing the Redis backend
-
-    -   Analyzing the S3 backend (empty chunks etc.)
-
-    -   Analyzing the Cassandra backend (migrations etc.)
-
+    -   These backends provide a way to access a remote backend
+    -   This is useful, esp. if the remote resource should be protected
+        in some way or if it requires some kind of authorization
+    -   Depending on the use case however, esp. for the mount API,
+        having access to a remote backend without this level of
+        indirection can be useful
+    -   Fundamentally, a mount maps fairly well to a remote
+        random-access storage device
+    -   Many existing protocols and systems provide a way to access
+        essentially this concept over a network
+    -   One of these is Redis, an in-memory key-value store with network
+        access
+    -   Chunk offsets can be mapped to keys, and bytes are a valid key
+        type, so the chunk itself can be stored directly in the KV store
+        (code snippet from
+        https://github.com/pojntfx/r3map/blob/main/pkg/backend/redis.go#L36-L63)
+    -   Using Redis is particularly useful because it is able to handle
+        the locking server-side in a very efficient way, and is
+        well-tested for high-throughput etc. scenarious
+    -   Authentication can also be handled using the Redis protocol, so
+        can multi-tenancy by using multiple databases or a prefix
+    -   Redis also has very fast read/write speeds due to its bespoke
+        protocol and fast serialization
+    -   While the Redis backend is very useful for read-/write usage,
+        when deployment to the public internet is required, it might not
+        be the best one
+    -   The S3 backend is an good choice for mapping public information,
+        e.g. media assets, binaries, large read-only filesystems etc.
+        into memory
+    -   S3 used to be an object storage service from AWS, but has since
+        become a more or less standard way for accessing blobs thanks to
+        open-source S3 implementations such as Minio
+    -   Similarly to how files were used as individual files, one S3
+        object per chunk is used to store them
+    -   S3 is based on HTTP, and like the Redis backend requires
+        chunking due to it not supporting updates of part of a file
+    -   In order to prevent having to store empty data, the backend
+        interprets “not found” errors as empty chunks
+    -   Another backend option is a NoSQL server such as Cassandra
+    -   This is more of a proof of concept than a real usecase, but
+        shows the versitility and flexibility of how a database can be
+        mapped to a memory region, which can be interesting for
+        accessing e.g. a remote database’s content without having to use
+        a specific client
+    -   ReadAt and WriteAt are implemented using Cassandra’s query
+        language (code snippet from
+        https://github.com/pojntfx/r3map/blob/main/pkg/backend/cassandra.go#L36-L63)
+    -   Similarly to Redis, locking individual keys can be handled by
+        the DB server
+    -   But in the case of Cassandra, the DB server stores chunks on
+        disk, so it can be used for persistent data
+    -   In order to use Cassandra, migrations have to be applied for
+        creating the table etc. (code snippet from
+        https://github.com/pojntfx/r3map/blob/main/cmd/r3map-direct-mount-benchmark/main.go#L369-L396)
     -   Benchmark: These three backends on localhost and on remote
         hosts, where they could be of use
-
-    -   Effects of slow disks/memory on local backends, and why direct
-        mounts can outperform managed mounts in tests on localhosts
-
+    -   Another interesting aspect of optimization to look at is the
+        overhead of managed mounts
+    -   It is possible for managed mounts (and migrations) to deliver
+        signficantly lower performance compared to direct mounts
+    -   This is because using managed mounts come with the cost of
+        potential duplicate I/O operations
+    -   For example, if memory is being accessed linearly from the first
+        to the last offset immediately after it being mounted, then
+        using the background pulls will have no effect other than
+        causing a write operation (to the local caching backend)
+        compared to just directly reading from the remote backend
+    -   This however is only the case in scenarios with a very low
+        latency between the local and remote backends
+    -   If latency becomes higher, then the ability to pull the chunks
+        in the background and in parallel with the puller will offset
+        the cost of duplicate I/O
+    -   The same applies to slow local backends, e.g. if slow disks or
+        memory are being used, which can mean that offsetting the
+        duplicate I/O will need a significantly higher latency to be
+        worth it
     -   Benchmark: Latency and throughput of all benchmarks on localhost
-        and in a realistic latency and throughput scenario
-
-    -   Looking back at all options and comparing ease of
-        implementation, CPU load and network traffic between them
+        and in a realistic latency and throughput scenario (direct
+        mounts can outperform managed mounts in tests on localhosts)
