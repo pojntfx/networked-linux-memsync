@@ -1808,11 +1808,101 @@ mapping, too</p></li>
 <li><p>Tapisk also shows how minimal it is: While LTFS is 10s of
 thousands of SLOC, tapisk achieves the same and more in just under 350
 SLOC</p></li>
-<li><p>Migration app state (e.g. TODO list) between two hosts in a
-universal (underlying memory) manner</p></li>
+<li><p>Synchronization of app state is hard</p></li>
+<li><p>Even for hand-off scenarios a custom protocol is built most of
+the times</p></li>
+<li><p>It is possible to use a database sometimes (e.g. Firebase) to
+synchronize things</p></li>
+<li><p>But that can’t sync all data structures and requires using
+specific APIs to sync things</p></li>
+<li><p>What if you could mount and/or migrate any ressource?</p></li>
+<li><p>Usually these structures are marshalled, sent over a network,
+received on a second system, unmarshalled, and then are done being
+synced</p></li>
+<li><p>Requires a complex sync protocol, and when to sync, when to pull
+etc. is inefficient and usually happens over a third party (e.g. a
+database)</p></li>
+<li><p>Data structures can almost always be represented by am
+<code>[]byte</code></p></li>
+<li><p>If the data structures are allocated from on a
+<code>[]byte</code> from the block device, we can use the managed
+mount/direct mount/migration APIs to send/receive them or mount
+them</p></li>
+<li><p>This makes a few interesting usecases possible</p></li>
+<li><p>For example, one could imagine a TODO app</p></li>
+<li><p>By default, the app mounts the TODO list as a byte slice from a
+remote server</p></li>
+<li><p>Since authentication is pluggable and e.g. a database backend
+with a prefix for the user can be used, this could scaly fairly
+well</p></li>
+<li><p>Using the pre-emptive background pulls, when the user connects,
+they could stream the byte slice in from the remote server as the app is
+accessing it, and also pre-emptively pull the rest</p></li>
+<li><p>If the TODO list is modified by changing it in memory, these
+changes are automatically being written to the local backend</p></li>
+<li><p>The asynchronous push algorithm can then take these changes and
+sync them up to the remote backend when required</p></li>
+<li><p>If the local backend is persistent, such a setup can even survive
+network outages</p></li>
+<li><p>Locking is not handled by this, only one user is
+supported</p></li>
+<li><p>The in-memory representation would also need to be
+universal</p></li>
+<li><p>This is not the case with Go and for different CPU
+architectures</p></li>
+<li><p>But if e.g. Go is compiled to Wasm, and the Wasm VM’s linear
+memory is pointed to the NBD device, it is</p></li>
+<li><p>This would also allow storing in the entire app state in the Wasm
+remote, with no changes to the app itself</p></li>
+<li><p>More interesting possibly than this smart mount, where the remote
+struct is completely transparent to the user, could be the migration
+usecase</p></li>
+<li><p>If a user has the TODO app running on a phone, but wants to
+continue writing on their desktop, they can migrate the app’s state with
+r3map</p></li>
+<li><p>In this usecase, the migration API could be used</p></li>
+<li><p>The pre-copy phase could be automatically detected if the phone
+comes physically close to the computer</p></li>
+<li><p>Since this would be a LAN scenario, the migration would be very
+fast and allow for interesting hand-off usecases</p></li>
+<li><p>The migration API also provides hooks and the protocol that would
+ensure that the app would be closed on the phone before it would be
+resumed on the desktop, making state corruption during the migration
+much harder than with a third-party that changes are synced (where the
+remote state may not be up-to-date yet as it is resumed)</p></li>
+<li><p>Migrating an app’s TODO list or any internal data structure is
+one option</p></li>
+<li><p>Using a toolkit like Apache Arrow can provide a universal format
+for this memory, but many other things are possible if a layer of
+indirection is added</p></li>
+<li><p>As mentioned before, a Wasm VM’s memory could also be migrated
+this way, allowing for any Wasm app to be transfered between
+hosts</p></li>
+<li><p>Similarly so, the Wasm app’s binary, a mounted WASI filesystem
+etc. could all be synchronized this way, too</p></li>
+<li><p>Due to the flexible nature of remap, it is possible to bring the
+semantics of VM live migration - moving running VMs between hosts - to
+anything that has state</p></li>
+<li><p>r3map can also be used for actual VM migration, with any
+hypervisor that supports mapping a VM’s memory to a block
+device</p></li>
+<li><p>This could also be other VMs (like e.g. the JVM), a browser’s JS
+VM, or - if the processor architectures etc. match - an entire process’s
+memory space</p></li>
+<li><p>Using the mount API, it would also be possible to bring the
+concept of VM snapshots to almost any app</p></li>
+<li><p>Thanks to the preemptive pull mechanism, restoring e.g. a Wasm VM
+outside a migration would also be a very fast operation</p></li>
+<li><p>Essentially, its VM memory migration and snapshots, but for any
+kind of state</p></li>
+<li><p>Its particularly interesting because it can do so without any
+specific requirements for the data structures of the state other than
+them being ultimately a <code>[]byte</code>, which by definition every
+state is (def. a process level or VM level etc.)</p></li>
 <li><p>Mounting remote file systems as managed mounts and combining the
 benefits of traditional FUSE mounts (e.g. s3-fuse) with Google
-Drive-style synchronization</p></li>
+Drive-style synchronization (move this and the points below above the
+app migration usecase once elaborated on)</p></li>
 <li><p>Using manged mounts for remote SQLite databases without having to
 download it first</p></li>
 <li><p>Streaming video formats like e.g. MP4 that don’t support
