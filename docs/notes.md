@@ -755,6 +755,31 @@ lang: en-US
   - But is its own filesystem, while tapisk allows using any existing and tested filesystem on top of the generic block device
   - Doesn't support the caching, making it hard to use for memory mapping, too
   - Tapisk also shows how minimal it is: While LTFS is 10s of thousands of SLOC, tapisk achieves the same and more in just under 350 SLOC
+  - Another potential usecase is using r3map to create a unique mountable remote filesystem
+  - Currently there are two choices on how these can be implemented
+  - Google Drive, Nextcloud etc. listen to file changes on a folder and synchronize files when they change
+  - The big drawback is that everything needs to be stored locally
+  - If a lot of data is stored (e.g. terabytes), the locally available files would need to be manually selected
+  - There is no way to dynamically download files this way as they are required
+  - It is however very efficient, since the filesystem is completely transparent to the user (writes are being synced back asynchronously)
+  - It also supports an offline usecase easily
+  - The other option is to use a FUSE, e.g. `s3-fuse`
+  - This means that files can be fetched on demand
+  - But comes with a heavy performance penalty
+  - Writes are usually done (esp. for `s3-fuse`) when they are communicated to the FUSE by the kernel, which makes writes very slow
+  - Offline usage is also hard/usually impossible
+  - Also usually not a fully featured system (e.g. not `inotify` support, missing permissions etc.)
+  - This leaves the choice between two imperfect systems, all with their own downsides
+  - Using r3map can combine both approaches by both not having to download all files in advance and being able to write back changes asynchronously
+  - It is also a fully-featured filesystem
+  - Files can also be downloaded preemptively for offline access, just like with e.g. the Google Drive approach
+  - This can be achieved by using the managed mount API
+  - The block device is formatted using any valid filesystem (e.g. EXT4) and then mounted
+  - If files should be downloaded in the background, the amount of pull workers can be set to anything `>0`
+  - Reads to blocks/files that haven't been read yet can be resolved from the remote backend, giving a FUSE-like experience
+  - Since read block are then written to the local one, making subsequent reads almost as fast as native disk reads (unlike in FUSE/like in the Nextcloud approach)
+  - Writes are done to the local backend and can then be synced up in periodic intervals like with the Nextcloud approach, making them much faster than a FUSE, too
+  - This essentially creates a system that bridges the gap between FUSE and file syncrhonization, once again showing how the memory synchronization tooling can be used to solve essentially the synchronization of any state, including disks
   - Synchronization of app state is hard
   - Even for hand-off scenarios a custom protocol is built most of the times
   - It is possible to use a database sometimes (e.g. Firebase) to synchronize things
@@ -795,8 +820,7 @@ lang: en-US
   - Essentially, its VM memory migration and snapshots, but for any kind of state
   - Its particularly interesting because it can do so without any specific requirements for the data structures of the state other than them being ultimately a `[]byte`, which by definition every state is (def. a process level or VM level etc.)
 
-  - Mounting remote file systems as managed mounts and combining the benefits of traditional FUSE mounts (e.g. s3-fuse) with Google Drive-style synchronization (move this and the points below above the app migration usecase once elaborated on)
-  - Using manged mounts for remote SQLite databases without having to download it first
+  - Using managed mounts for remote SQLite databases without having to download it first (move this and the points below above the app migration usecase once elaborated on)
   - Streaming video formats like e.g. MP4 that don't support streaming due to indexes/compression
   - Improving game download speeds by mounting the remote assets with managed mounts, using a pull heuristic that defines typical access patterns (like which levels are accessed first), making any game immediately playable without changes
   - Executing remote binaries or scrips that don't need to be scanned first without having to fully download them
