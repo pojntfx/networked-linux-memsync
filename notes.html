@@ -1946,6 +1946,57 @@ mapping, too</p></li>
 <li><p>Tapisk also shows how minimal it is: While LTFS is 10s of
 thousands of SLOC, tapisk achieves the same and more in just under 350
 SLOC</p></li>
+<li><p>Another potential usecase is using r3map to create a unique
+mountable remote filesystem</p></li>
+<li><p>Currently there are two choices on how these can be
+implemented</p></li>
+<li><p>Google Drive, Nextcloud etc. listen to file changes on a folder
+and synchronize files when they change</p></li>
+<li><p>The big drawback is that everything needs to be stored
+locally</p></li>
+<li><p>If a lot of data is stored (e.g. terabytes), the locally
+available files would need to be manually selected</p></li>
+<li><p>There is no way to dynamically download files this way as they
+are required</p></li>
+<li><p>It is however very efficient, since the filesystem is completely
+transparent to the user (writes are being synced back
+asynchronously)</p></li>
+<li><p>It also supports an offline usecase easily</p></li>
+<li><p>The other option is to use a FUSE,
+e.g. <code>s3-fuse</code></p></li>
+<li><p>This means that files can be fetched on demand</p></li>
+<li><p>But comes with a heavy performance penalty</p></li>
+<li><p>Writes are usually done (esp. for <code>s3-fuse</code>) when they
+are communicated to the FUSE by the kernel, which makes writes very
+slow</p></li>
+<li><p>Offline usage is also hard/usually impossible</p></li>
+<li><p>Also usually not a fully featured system (e.g. not
+<code>inotify</code> support, missing permissions etc.)</p></li>
+<li><p>This leaves the choice between two imperfect systems, all with
+their own downsides</p></li>
+<li><p>Using r3map can combine both approaches by both not having to
+download all files in advance and being able to write back changes
+asynchronously</p></li>
+<li><p>It is also a fully-featured filesystem</p></li>
+<li><p>Files can also be downloaded preemptively for offline access,
+just like with e.g. the Google Drive approach</p></li>
+<li><p>This can be achieved by using the managed mount API</p></li>
+<li><p>The block device is formatted using any valid filesystem
+(e.g. EXT4) and then mounted</p></li>
+<li><p>If files should be downloaded in the background, the amount of
+pull workers can be set to anything <code>&gt;0</code></p></li>
+<li><p>Reads to blocks/files that haven’t been read yet can be resolved
+from the remote backend, giving a FUSE-like experience</p></li>
+<li><p>Since read block are then written to the local one, making
+subsequent reads almost as fast as native disk reads (unlike in
+FUSE/like in the Nextcloud approach)</p></li>
+<li><p>Writes are done to the local backend and can then be synced up in
+periodic intervals like with the Nextcloud approach, making them much
+faster than a FUSE, too</p></li>
+<li><p>This essentially creates a system that bridges the gap between
+FUSE and file syncrhonization, once again showing how the memory
+synchronization tooling can be used to solve essentially the
+synchronization of any state, including disks</p></li>
 <li><p>Synchronization of app state is hard</p></li>
 <li><p>Even for hand-off scenarios a custom protocol is built most of
 the times</p></li>
@@ -2037,12 +2088,9 @@ kind of state</p></li>
 specific requirements for the data structures of the state other than
 them being ultimately a <code>[]byte</code>, which by definition every
 state is (def. a process level or VM level etc.)</p></li>
-<li><p>Mounting remote file systems as managed mounts and combining the
-benefits of traditional FUSE mounts (e.g. s3-fuse) with Google
-Drive-style synchronization (move this and the points below above the
-app migration usecase once elaborated on)</p></li>
-<li><p>Using manged mounts for remote SQLite databases without having to
-download it first</p></li>
+<li><p>Using managed mounts for remote SQLite databases without having
+to download it first (move this and the points below above the app
+migration usecase once elaborated on)</p></li>
 <li><p>Streaming video formats like e.g. MP4 that don’t support
 streaming due to indexes/compression</p></li>
 <li><p>Improving game download speeds by mounting the remote assets with

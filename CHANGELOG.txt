@@ -1,3 +1,9 @@
+commit 00ef98b18cca99e99343557273d2b0361a3835b6
+Author: Felicitas Pojtinger <felicitas@pojtinger.com>
+Date:   Wed Jul 12 01:38:50 2023 +0200
+
+    docs: Add section on efficent filesystem mounts
+
 commit e4ea69a26af6790d4fe3502a4949216e5fbef769
 Author: Felicitas Pojtinger <felicitas@pojtinger.com>
 Date:   Wed Jul 12 01:00:51 2023 +0200
