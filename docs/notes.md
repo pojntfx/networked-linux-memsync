@@ -723,7 +723,6 @@ lang: en-US
   - `ram-dl` then does all of the above
   - Not really intended for real-world usecases, but does show that this can be used for interesting usecases such as real, remote RAM/Swap
   - Shows how easy it is to use the resulting library, as the entire project is just ~300 SLOC including backend configuration, flags and other boilerplate
-
   - tapisk is an interesting usecase because of how close it is to STFS, which provided the inspiration for the FUSE-based approach
   - Very high read/write backend latency (multiple seconds, up to 90s, due to seeking)
   - Linear access, no random reads
@@ -756,9 +755,47 @@ lang: en-US
   - But is its own filesystem, while tapisk allows using any existing and tested filesystem on top of the generic block device
   - Doesn't support the caching, making it hard to use for memory mapping, too
   - Tapisk also shows how minimal it is: While LTFS is 10s of thousands of SLOC, tapisk achieves the same and more in just under 350 SLOC
+  - Synchronization of app state is hard
+  - Even for hand-off scenarios a custom protocol is built most of the times
+  - It is possible to use a database sometimes (e.g. Firebase) to synchronize things
+  - But that can't sync all data structures and requires using specific APIs to sync things
+  - What if you could mount and/or migrate any ressource?
+  - Usually these structures are marshalled, sent over a network, received on a second system, unmarshalled, and then are done being synced
+  - Requires a complex sync protocol, and when to sync, when to pull etc. is inefficient and usually happens over a third party (e.g. a database)
+  - Data structures can almost always be represented by am `[]byte`
+  - If the data structures are allocated from on a `[]byte` from the block device, we can use the managed mount/direct mount/migration APIs to send/receive them or mount them
+  - This makes a few interesting usecases possible
+  - For example, one could imagine a TODO app
+  - By default, the app mounts the TODO list as a byte slice from a remote server
+  - Since authentication is pluggable and e.g. a database backend with a prefix for the user can be used, this could scaly fairly well
+  - Using the pre-emptive background pulls, when the user connects, they could stream the byte slice in from the remote server as the app is accessing it, and also pre-emptively pull the rest
+  - If the TODO list is modified by changing it in memory, these changes are automatically being written to the local backend
+  - The asynchronous push algorithm can then take these changes and sync them up to the remote backend when required
+  - If the local backend is persistent, such a setup can even survive network outages
+  - Locking is not handled by this, only one user is supported
+  - The in-memory representation would also need to be universal
+  - This is not the case with Go and for different CPU architectures
+  - But if e.g. Go is compiled to Wasm, and the Wasm VM's linear memory is pointed to the NBD device, it is
+  - This would also allow storing in the entire app state in the Wasm remote, with no changes to the app itself
+  - More interesting possibly than this smart mount, where the remote struct is completely transparent to the user, could be the migration usecase
+  - If a user has the TODO app running on a phone, but wants to continue writing on their desktop, they can migrate the app's state with r3map
+  - In this usecase, the migration API could be used
+  - The pre-copy phase could be automatically detected if the phone comes physically close to the computer
+  - Since this would be a LAN scenario, the migration would be very fast and allow for interesting hand-off usecases
+  - The migration API also provides hooks and the protocol that would ensure that the app would be closed on the phone before it would be resumed on the desktop, making state corruption during the migration much harder than with a third-party that changes are synced (where the remote state may not be up-to-date yet as it is resumed)
+  - Migrating an app's TODO list or any internal data structure is one option
+  - Using a toolkit like Apache Arrow can provide a universal format for this memory, but many other things are possible if a layer of indirection is added
+  - As mentioned before, a Wasm VM's memory could also be migrated this way, allowing for any Wasm app to be transfered between hosts
+  - Similarly so, the Wasm app's binary, a mounted WASI filesystem etc. could all be synchronized this way, too
+  - Due to the flexible nature of remap, it is possible to bring the semantics of VM live migration - moving running VMs between hosts - to anything that has state
+  - r3map can also be used for actual VM migration, with any hypervisor that supports mapping a VM's memory to a block device
+  - This could also be other VMs (like e.g. the JVM), a browser's JS VM, or - if the processor architectures etc. match - an entire process's memory space
+  - Using the mount API, it would also be possible to bring the concept of VM snapshots to almost any app
+  - Thanks to the preemptive pull mechanism, restoring e.g. a Wasm VM outside a migration would also be a very fast operation
+  - Essentially, its VM memory migration and snapshots, but for any kind of state
+  - Its particularly interesting because it can do so without any specific requirements for the data structures of the state other than them being ultimately a `[]byte`, which by definition every state is (def. a process level or VM level etc.)
 
-  - Migration app state (e.g. TODO list) between two hosts in a universal (underlying memory) manner
-  - Mounting remote file systems as managed mounts and combining the benefits of traditional FUSE mounts (e.g. s3-fuse) with Google Drive-style synchronization
+  - Mounting remote file systems as managed mounts and combining the benefits of traditional FUSE mounts (e.g. s3-fuse) with Google Drive-style synchronization (move this and the points below above the app migration usecase once elaborated on)
   - Using manged mounts for remote SQLite databases without having to download it first
   - Streaming video formats like e.g. MP4 that don't support streaming due to indexes/compression
   - Improving game download speeds by mounting the remote assets with managed mounts, using a pull heuristic that defines typical access patterns (like which levels are accessed first), making any game immediately playable without changes
