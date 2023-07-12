@@ -1,3 +1,9 @@
+commit 8e7f8e56272dd4dc2bfe28dd9b50f06b7e2e0c9d
+Author: Felicitas Pojtinger <felicitas@pojtinger.com>
+Date:   Wed Jul 12 02:38:47 2023 +0200
+
+    docs: Add section on game and program streaming use cases
+
 commit 9db260e8c28aac19b41562611dd154d76028c8f6
 Author: Felicitas Pojtinger <felicitas@pojtinger.com>
 Date:   Wed Jul 12 02:17:12 2023 +0200

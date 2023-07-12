@@ -1718,297 +1718,311 @@ outperform managed mounts in tests on localhosts)</li>
 </ul></li>
 <li><p>Case Studies</p>
 <ul>
-<li><p>ram-dl is a fun experiment</p></li>
-<li><p>Tech demo for r3map</p></li>
-<li><p>Uses the fRPC backend to expand local system memory</p></li>
-<li><p>Can allow mounting a remote system’s RAM locally</p></li>
-<li><p>Can be used to inspect a remote system’s memory contents</p></li>
-<li><p>Is based on the direct mount API</p></li>
-<li><p>Uses mkswap, swapon and swapoff (code snippet from
-https://github.com/pojntfx/ram-dl/blob/main/cmd/ram-dl/main.go#L170-L190)</p></li>
-<li><p>Enables paging out to the block device provided by the direct
-mount API</p></li>
-<li><p><code>ram-ul</code> “uploads” RAM by exposing a memory, file or
-directory-backed file over fRPC</p></li>
-<li><p><code>ram-dl</code> then does all of the above</p></li>
-<li><p>Not really intended for real-world usecases, but does show that
-this can be used for interesting usecases such as real, remote
-RAM/Swap</p></li>
-<li><p>Shows how easy it is to use the resulting library, as the entire
+<li>ram-dl is a fun experiment</li>
+<li>Tech demo for r3map</li>
+<li>Uses the fRPC backend to expand local system memory</li>
+<li>Can allow mounting a remote system’s RAM locally</li>
+<li>Can be used to inspect a remote system’s memory contents</li>
+<li>Is based on the direct mount API</li>
+<li>Uses mkswap, swapon and swapoff (code snippet from
+https://github.com/pojntfx/ram-dl/blob/main/cmd/ram-dl/main.go#L170-L190)</li>
+<li>Enables paging out to the block device provided by the direct mount
+API</li>
+<li><code>ram-ul</code> “uploads” RAM by exposing a memory, file or
+directory-backed file over fRPC</li>
+<li><code>ram-dl</code> then does all of the above</li>
+<li>Not really intended for real-world usecases, but does show that this
+can be used for interesting usecases such as real, remote RAM/Swap</li>
+<li>Shows how easy it is to use the resulting library, as the entire
 project is just ~300 SLOC including backend configuration, flags and
-other boilerplate</p></li>
-<li><p>tapisk is an interesting usecase because of how close it is to
-STFS, which provided the inspiration for the FUSE-based
-approach</p></li>
-<li><p>Very high read/write backend latency (multiple seconds, up to
-90s, due to seeking)</p></li>
-<li><p>Linear access, no random reads</p></li>
-<li><p>Can benefit a lot from asynchronous writes provided by managed
-mounts</p></li>
-<li><p>Fast storage acts as a caching layer</p></li>
-<li><p>Backend is linear, so only one read/write possible at a
-time</p></li>
-<li><p>With local backend, writes are de-duplicated automatically and
-both can be asynchronous/concurrent</p></li>
-<li><p>Writes go to fast (“local”) backend first, syncer then handles in
-both directions</p></li>
-<li><p>Chunking works on tape drive records and blocks</p></li>
-<li><p>Only one concurrent reader/writer makes sense</p></li>
-<li><p>Syncing intervals to/from can maybe be minutes or more to make it
+other boilerplate</li>
+<li>tapisk is an interesting usecase because of how close it is to STFS,
+which provided the inspiration for the FUSE-based approach</li>
+<li>Very high read/write backend latency (multiple seconds, up to 90s,
+due to seeking)</li>
+<li>Linear access, no random reads</li>
+<li>Can benefit a lot from asynchronous writes provided by managed
+mounts</li>
+<li>Fast storage acts as a caching layer</li>
+<li>Backend is linear, so only one read/write possible at a time</li>
+<li>With local backend, writes are de-duplicated automatically and both
+can be asynchronous/concurrent</li>
+<li>Writes go to fast (“local”) backend first, syncer then handles in
+both directions</li>
+<li>Chunking works on tape drive records and blocks</li>
+<li>Only one concurrent reader/writer makes sense</li>
+<li>Syncing intervals to/from can maybe be minutes or more to make it
 more efficient (since long, connected write intervals prevent having to
-seek to a different position on disk)</p></li>
-<li><p>Tape backends can also be used to access large amounts of linear
-data (terrabytes) from a tape as though it were in memory</p></li>
-<li><p>Makes it possible to access even large datasets or backups in a
-way that is comfortable</p></li>
-<li><p>If a file system (e.g. EXT4) is written to the tape, the tape can
-be mounted as a random-access device</p></li>
-<li><p>Tape-specific backend is implemented as the
-<code>backend.Backend</code> interface from go-nbd</p></li>
-<li><p>Backend can be re-used outside of tapisk, too (e.g. as a
-<code>ram-dl</code> backend)</p></li>
-<li><p><code>bbolt</code> DB is used as an index</p></li>
-<li><p>Index maps simulated offsets to real tape records (code snippet
-from
-https://github.com/pojntfx/tapisk/blob/main/pkg/index/bbolt.go#L43-L68)</p></li>
-<li><p>When reading, first the tape looks up the real tape record for
-the requested offset (code snippet from
-https://github.com/pojntfx/tapisk/blob/main/pkg/backend/tape.go#L71-L78)</p></li>
-<li><p>Seeking can then use the accelerated <code>MTSEEK</code> ioctl to
+seek to a different position on disk)</li>
+<li>Tape backends can also be used to access large amounts of linear
+data (terrabytes) from a tape as though it were in memory</li>
+<li>Makes it possible to access even large datasets or backups in a way
+that is comfortable</li>
+<li>If a file system (e.g. EXT4) is written to the tape, the tape can be
+mounted as a random-access device</li>
+<li>Tape-specific backend is implemented as the
+<code>backend.Backend</code> interface from go-nbd</li>
+<li>Backend can be re-used outside of tapisk, too (e.g. as a
+<code>ram-dl</code> backend)</li>
+<li><code>bbolt</code> DB is used as an index</li>
+<li>Index maps simulated offsets to real tape records (code snippet from
+https://github.com/pojntfx/tapisk/blob/main/pkg/index/bbolt.go#L43-L68)</li>
+<li>When reading, first the tape looks up the real tape record for the
+requested offset (code snippet from
+https://github.com/pojntfx/tapisk/blob/main/pkg/backend/tape.go#L71-L78)</li>
+<li>Seeking can then use the accelerated <code>MTSEEK</code> ioctl to
 fast-forward to a record on the tape (code snippet from
-https://github.com/pojntfx/tapisk/blob/main/pkg/mtio/tape.go#L25-L40)</p></li>
-<li><p>After seeking to the block, the chunk is read from the tape into
-memory</p></li>
-<li><p>When writing the drive seeks to the end of the tape (unless the
-last operation was a write already, in which case we’re already at the
-end) (code snippet from
-https://github.com/pojntfx/tapisk/blob/main/pkg/mtio/tape.go#L57-L72)</p></li>
-<li><p>After that, the current real tape block position is requested,
+https://github.com/pojntfx/tapisk/blob/main/pkg/mtio/tape.go#L25-L40)</li>
+<li>After seeking to the block, the chunk is read from the tape into
+memory</li>
+<li>When writing the drive seeks to the end of the tape (unless the last
+operation was a write already, in which case we’re already at the end)
+(code snippet from
+https://github.com/pojntfx/tapisk/blob/main/pkg/mtio/tape.go#L57-L72)</li>
+<li>After that, the current real tape block position is requested,
 stored in the index, and the offset is written to the tape (code snippet
 from
-https://github.com/pojntfx/tapisk/blob/main/pkg/backend/tape.go#L87-L119)</p></li>
-<li><p>This essentially makes the tape a chunked, reusable
-<code>ReadWriterAt</code>, in the same way as the directory
-backend</p></li>
-<li><p>By using a RPC backend, a remote tape can be accessed in the same
+https://github.com/pojntfx/tapisk/blob/main/pkg/backend/tape.go#L87-L119)</li>
+<li>This essentially makes the tape a chunked, reusable
+<code>ReadWriterAt</code>, in the same way as the directory backend</li>
+<li>By using a RPC backend, a remote tape can be accessed in the same
 way, making it possible to map e.g. a remote library’s tape robot to
-your local memory</p></li>
-<li><p><code>tapisk</code> is a unique usecase that shows the
-versitility of the approach chosen and how flexible it is</p></li>
-<li><p>E.g. the chunking system didn’t have to be reimplemented (like
-with STFS) - we could just use the managed mount API directly without
-changes</p></li>
-<li><p>Can actually be a real usecase to replace LTFS</p></li>
-<li><p>LTFS is a kernel module filesystem for tape drives that makes
-them a file system the same way as STFS</p></li>
-<li><p>But is its own filesystem, while tapisk allows using any existing
-and tested filesystem on top of the generic block device</p></li>
-<li><p>Doesn’t support the caching, making it hard to use for memory
-mapping, too</p></li>
-<li><p>Tapisk also shows how minimal it is: While LTFS is 10s of
-thousands of SLOC, tapisk achieves the same and more in just under 350
-SLOC</p></li>
-<li><p>Another potential usecase is using r3map to create a unique
-mountable remote filesystem</p></li>
-<li><p>Currently there are two choices on how these can be
-implemented</p></li>
-<li><p>Google Drive, Nextcloud etc. listen to file changes on a folder
-and synchronize files when they change</p></li>
-<li><p>The big drawback is that everything needs to be stored
-locally</p></li>
-<li><p>If a lot of data is stored (e.g. terabytes), the locally
-available files would need to be manually selected</p></li>
-<li><p>There is no way to dynamically download files this way as they
-are required</p></li>
-<li><p>It is however very efficient, since the filesystem is completely
+your local memory</li>
+<li><code>tapisk</code> is a unique usecase that shows the versitility
+of the approach chosen and how flexible it is</li>
+<li>E.g. the chunking system didn’t have to be reimplemented (like with
+STFS) - we could just use the managed mount API directly without
+changes</li>
+<li>Can actually be a real usecase to replace LTFS</li>
+<li>LTFS is a kernel module filesystem for tape drives that makes them a
+file system the same way as STFS</li>
+<li>But is its own filesystem, while tapisk allows using any existing
+and tested filesystem on top of the generic block device</li>
+<li>Doesn’t support the caching, making it hard to use for memory
+mapping, too</li>
+<li>Tapisk also shows how minimal it is: While LTFS is 10s of thousands
+of SLOC, tapisk achieves the same and more in just under 350 SLOC</li>
+<li>Another potential usecase is using r3map to create a unique
+mountable remote filesystem</li>
+<li>Currently there are two choices on how these can be implemented</li>
+<li>Google Drive, Nextcloud etc. listen to file changes on a folder and
+synchronize files when they change</li>
+<li>The big drawback is that everything needs to be stored locally</li>
+<li>If a lot of data is stored (e.g. terabytes), the locally available
+files would need to be manually selected</li>
+<li>There is no way to dynamically download files this way as they are
+required</li>
+<li>It is however very efficient, since the filesystem is completely
 transparent to the user (writes are being synced back
-asynchronously)</p></li>
-<li><p>It also supports an offline usecase easily</p></li>
-<li><p>The other option is to use a FUSE,
-e.g. <code>s3-fuse</code></p></li>
-<li><p>This means that files can be fetched on demand</p></li>
-<li><p>But comes with a heavy performance penalty</p></li>
-<li><p>Writes are usually done (esp. for <code>s3-fuse</code>) when they
+asynchronously)</li>
+<li>It also supports an offline usecase easily</li>
+<li>The other option is to use a FUSE, e.g. <code>s3-fuse</code></li>
+<li>This means that files can be fetched on demand</li>
+<li>But comes with a heavy performance penalty</li>
+<li>Writes are usually done (esp. for <code>s3-fuse</code>) when they
 are communicated to the FUSE by the kernel, which makes writes very
-slow</p></li>
-<li><p>Offline usage is also hard/usually impossible</p></li>
-<li><p>Also usually not a fully featured system (e.g. not
-<code>inotify</code> support, missing permissions etc.)</p></li>
-<li><p>This leaves the choice between two imperfect systems, all with
-their own downsides</p></li>
-<li><p>Using r3map can combine both approaches by both not having to
+slow</li>
+<li>Offline usage is also hard/usually impossible</li>
+<li>Also usually not a fully featured system (e.g. not
+<code>inotify</code> support, missing permissions etc.)</li>
+<li>This leaves the choice between two imperfect systems, all with their
+own downsides</li>
+<li>Using r3map can combine both approaches by both not having to
 download all files in advance and being able to write back changes
-asynchronously</p></li>
-<li><p>It is also a fully-featured filesystem</p></li>
-<li><p>Files can also be downloaded preemptively for offline access,
-just like with e.g. the Google Drive approach</p></li>
-<li><p>This can be achieved by using the managed mount API</p></li>
-<li><p>The block device is formatted using any valid filesystem
-(e.g. EXT4) and then mounted</p></li>
-<li><p>If files should be downloaded in the background, the amount of
-pull workers can be set to anything <code>&gt;0</code></p></li>
-<li><p>Reads to blocks/files that haven’t been read yet can be resolved
-from the remote backend, giving a FUSE-like experience</p></li>
-<li><p>Since read block are then written to the local one, making
+asynchronously</li>
+<li>It is also a fully-featured filesystem</li>
+<li>Files can also be downloaded preemptively for offline access, just
+like with e.g. the Google Drive approach</li>
+<li>This can be achieved by using the managed mount API</li>
+<li>The block device is formatted using any valid filesystem (e.g. EXT4)
+and then mounted</li>
+<li>If files should be downloaded in the background, the amount of pull
+workers can be set to anything <code>&gt;0</code></li>
+<li>Reads to blocks/files that haven’t been read yet can be resolved
+from the remote backend, giving a FUSE-like experience</li>
+<li>Since read block are then written to the local one, making
 subsequent reads almost as fast as native disk reads (unlike in
-FUSE/like in the Nextcloud approach)</p></li>
-<li><p>Writes are done to the local backend and can then be synced up in
+FUSE/like in the Nextcloud approach)</li>
+<li>Writes are done to the local backend and can then be synced up in
 periodic intervals like with the Nextcloud approach, making them much
-faster than a FUSE, too</p></li>
-<li><p>Similarly to how the mount API is used, the migration API could
-then be used to move the file system between two hosts in a highly
-efficient way and without a long downtime</p></li>
-<li><p>This essentially creates a system that bridges the gap between
-FUSE and file synchronization, once again showing how the memory
+faster than a FUSE, too</li>
+<li>Similarly to how the mount API is used, the migration API could then
+be used to move the file system between two hosts in a highly efficient
+way and without a long downtime</li>
+<li>This essentially creates a system that bridges the gap between FUSE
+and file synchronization, once again showing how the memory
 synchronization tooling can be used to solve essentially the
-synchronization of any state, including disks</p></li>
-<li><p>Another usecase is accessing a remote database locally</p></li>
-<li><p>While using a database backend is one option of storing chunks,
-an actual database can also be stored in a mount as well</p></li>
-<li><p>Particularly interesting for in-memory or on-disk databases like
-SQLite</p></li>
-<li><p>Instead of having to download the entire SQLite database before
+synchronization of any state, including disks</li>
+<li>Another usecase is accessing a remote database locally</li>
+<li>While using a database backend is one option of storing chunks, an
+actual database can also be stored in a mount as well</li>
+<li>Particularly interesting for in-memory or on-disk databases like
+SQLite</li>
+<li>Instead of having to download the entire SQLite database before
 using it, it can simply be mounted, and accessed as it is being
-used</p></li>
-<li><p>This allows very efficient network access, as only very rarely
-the entire database is needed</p></li>
-<li><p>Since reads are cached with the managed mount API, only the first
-read should potentially have a performance impact</p></li>
-<li><p>Similarly so writes to the database will be more or less the same
+used</li>
+<li>This allows very efficient network access, as only very rarely the
+entire database is needed</li>
+<li>Since reads are cached with the managed mount API, only the first
+read should potentially have a performance impact</li>
+<li>Similarly so writes to the database will be more or less the same
 throughput as to the local disk, since changes are written back
-asynchronously</p></li>
-<li><p>If the full database should eventually be accessible locally, the
-background pullers can be used</p></li>
-<li><p>If the location of e.g. indexes is known, then the pull heuristic
-can be specified to fetch these first to speed up initial
-queries</p></li>
-<li><p>SQLite itself doesn’t have to support a special interface or
-changes for this to work, since it can simply use the mount’s block
-device as it’s backend, which shows how universally the concept is
-usable</p></li>
-<li><p>This concept doesn’t just apply to SQLite however</p></li>
-<li><p>Other uses could for example be to make formats that are usually
-not streamable due to technical limitations</p></li>
-<li><p>One such format is famously MP4</p></li>
-<li><p>Usually, if someone downloads a MP4, they can’t start playing it
-before they have finished downloading</p></li>
-<li><p>This is because MP4s store metadata at the end of the file
-(graphic with metadata)</p></li>
-<li><p>The reason for storing this at the end is that generating the
-metadata requires encoding the video first</p></li>
-<li><p>Usually, if the file is downloaded from start to finish, then
-this metadata wouldn’t be accessible, and simply inverting the download
-order wouldn’t work since the stream would still be stored in different
-offsets of the file</p></li>
-<li><p>While there are ways of changing this (for example by storing the
+asynchronously</li>
+<li>If the full database should eventually be accessible locally, the
+background pullers can be used</li>
+<li>If the location of e.g. indexes is known, then the pull heuristic
+can be specified to fetch these first to speed up initial queries</li>
+<li>SQLite itself doesn’t have to support a special interface or changes
+for this to work, since it can simply use the mount’s block device as
+it’s backend, which shows how universally the concept is usable</li>
+<li>This concept doesn’t just apply to SQLite however</li>
+<li>Other uses could for example be to make formats that are usually not
+streamable due to technical limitations</li>
+<li>One such format is famously MP4</li>
+<li>Usually, if someone downloads a MP4, they can’t start playing it
+before they have finished downloading</li>
+<li>This is because MP4s store metadata at the end of the file (graphic
+with metadata)</li>
+<li>The reason for storing this at the end is that generating the
+metadata requires encoding the video first</li>
+<li>Usually, if the file is downloaded from start to finish, then this
+metadata wouldn’t be accessible, and simply inverting the download order
+wouldn’t work since the stream would still be stored in different
+offsets of the file</li>
+<li>While there are ways of changing this (for example by storing the
 metadata in the beginning after the entire MP4 has been transcoded),
-this is not possible for already existing files</p></li>
-<li><p>With r3map however, the pull heuristic function can be used to
+this is not possible for already existing files</li>
+<li>With r3map however, the pull heuristic function can be used to
 immediately pre-fetch the metadata, and the individual chunks of the MP4
 file are then being fetched in the background or as they are being
-accessed</p></li>
-<li><p>This allows making a format such as MP4 streamable before it has
+accessed</li>
+<li>This allows making a format such as MP4 streamable before it has
 been fully downloaded yet, or making almost any format streamable no
 matter the codec without any changes required to the video/audio player
-or the format</p></li>
-<li><p>Synchronization of app state is hard</p></li>
-<li><p>Even for hand-off scenarios a custom protocol is built most of
-the times</p></li>
-<li><p>It is possible to use a database sometimes (e.g. Firebase) to
-synchronize things</p></li>
-<li><p>But that can’t sync all data structures and requires using
-specific APIs to sync things</p></li>
-<li><p>What if you could mount and/or migrate any ressource?</p></li>
-<li><p>Usually these structures are marshalled, sent over a network,
+or the format</li>
+<li>Another use case of this in-place streaming approach could be in
+gaming</li>
+<li>Usually, all assets of a game are currently being downloaded before
+the game is playable</li>
+<li>For many new AAA games, this can be hundreds of gigabytes</li>
+<li>Many of these assets aren’t required to start the game however</li>
+<li>Only some of them (e.g. the launcher, UI libraries, first level
+etc.) are</li>
+<li>In theory, one could design a game engine in such a way that these
+things are only fetched from a remote as they are required</li>
+<li>This would however require changing the way new games work, and
+would not work for existing games</li>
+<li>Playing games of e.g. a network drive or FUSE is also unrealistic
+due to performance limitations</li>
+<li>Using the managed mount API, the performance limitations of such an
+approach can be reduced, without changes to the game</li>
+<li>By using the background pull system, reads from chunks that have
+already been pulled are almost as fast as native disk reads</li>
+<li>By analyzing the data access pattern of an existing game, a pull
+heuristic function can be created which will then preemptively pull the
+game assets that are required first, keeping latency spikes as low as
+possible</li>
+<li>Using the chunk availability hooks, the game could also be paused
+for a loading screen until a certain local availability percentage is
+reached to prevent latency spikes from missing assets, while also still
+allowing for faster startup times</li>
+<li>The same concept could also be applied to launching any
+application</li>
+<li>For many languages, completely loading a binary or script into
+memory isn’t required for it to start executing</li>
+<li>Without significant changes to most interpreters and language VMs
+however, loading a file from a file system is the only available
+interface for loading programs</li>
+<li>With the managed mount API, this interface can be re-used to add
+streaming execution support to any intepreter or VM, simply by using the
+managed mount either as a filesystem to stream multiple
+binaries/scripts/libraries from, or by using the block device as a file
+or <code>mmap</code>ing it directly to fetch it</li>
+<li>Synchronization of app state is hard</li>
+<li>Even for hand-off scenarios a custom protocol is built most of the
+times</li>
+<li>It is possible to use a database sometimes (e.g. Firebase) to
+synchronize things</li>
+<li>But that can’t sync all data structures and requires using specific
+APIs to sync things</li>
+<li>What if you could mount and/or migrate any ressource?</li>
+<li>Usually these structures are marshalled, sent over a network,
 received on a second system, unmarshalled, and then are done being
-synced</p></li>
-<li><p>Requires a complex sync protocol, and when to sync, when to pull
+synced</li>
+<li>Requires a complex sync protocol, and when to sync, when to pull
 etc. is inefficient and usually happens over a third party (e.g. a
-database)</p></li>
-<li><p>Data structures can almost always be represented by am
-<code>[]byte</code></p></li>
-<li><p>If the data structures are allocated from on a
-<code>[]byte</code> from the block device, we can use the managed
-mount/direct mount/migration APIs to send/receive them or mount
-them</p></li>
-<li><p>This makes a few interesting usecases possible</p></li>
-<li><p>For example, one could imagine a TODO app</p></li>
-<li><p>By default, the app mounts the TODO list as a byte slice from a
-remote server</p></li>
-<li><p>Since authentication is pluggable and e.g. a database backend
-with a prefix for the user can be used, this could scaly fairly
-well</p></li>
-<li><p>Using the pre-emptive background pulls, when the user connects,
-they could stream the byte slice in from the remote server as the app is
-accessing it, and also pre-emptively pull the rest</p></li>
-<li><p>If the TODO list is modified by changing it in memory, these
-changes are automatically being written to the local backend</p></li>
-<li><p>The asynchronous push algorithm can then take these changes and
-sync them up to the remote backend when required</p></li>
-<li><p>If the local backend is persistent, such a setup can even survive
-network outages</p></li>
-<li><p>Locking is not handled by this, only one user is
-supported</p></li>
-<li><p>The in-memory representation would also need to be
-universal</p></li>
-<li><p>This is not the case with Go and for different CPU
-architectures</p></li>
-<li><p>But if e.g. Go is compiled to Wasm, and the Wasm VM’s linear
-memory is pointed to the NBD device, it is</p></li>
-<li><p>This would also allow storing in the entire app state in the Wasm
-remote, with no changes to the app itself</p></li>
-<li><p>More interesting possibly than this smart mount, where the remote
+database)</li>
+<li>Data structures can almost always be represented by am
+<code>[]byte</code></li>
+<li>If the data structures are allocated from on a <code>[]byte</code>
+from the block device, we can use the managed mount/direct
+mount/migration APIs to send/receive them or mount them</li>
+<li>This makes a few interesting usecases possible</li>
+<li>For example, one could imagine a TODO app</li>
+<li>By default, the app mounts the TODO list as a byte slice from a
+remote server</li>
+<li>Since authentication is pluggable and e.g. a database backend with a
+prefix for the user can be used, this could scaly fairly well</li>
+<li>Using the pre-emptive background pulls, when the user connects, they
+could stream the byte slice in from the remote server as the app is
+accessing it, and also pre-emptively pull the rest</li>
+<li>If the TODO list is modified by changing it in memory, these changes
+are automatically being written to the local backend</li>
+<li>The asynchronous push algorithm can then take these changes and sync
+them up to the remote backend when required</li>
+<li>If the local backend is persistent, such a setup can even survive
+network outages</li>
+<li>Locking is not handled by this, only one user is supported</li>
+<li>The in-memory representation would also need to be universal</li>
+<li>This is not the case with Go and for different CPU
+architectures</li>
+<li>But if e.g. Go is compiled to Wasm, and the Wasm VM’s linear memory
+is pointed to the NBD device, it is</li>
+<li>This would also allow storing in the entire app state in the Wasm
+remote, with no changes to the app itself</li>
+<li>More interesting possibly than this smart mount, where the remote
 struct is completely transparent to the user, could be the migration
-usecase</p></li>
-<li><p>If a user has the TODO app running on a phone, but wants to
-continue writing on their desktop, they can migrate the app’s state with
-r3map</p></li>
-<li><p>In this usecase, the migration API could be used</p></li>
-<li><p>The pre-copy phase could be automatically detected if the phone
-comes physically close to the computer</p></li>
-<li><p>Since this would be a LAN scenario, the migration would be very
-fast and allow for interesting hand-off usecases</p></li>
-<li><p>The migration API also provides hooks and the protocol that would
+usecase</li>
+<li>If a user has the TODO app running on a phone, but wants to continue
+writing on their desktop, they can migrate the app’s state with
+r3map</li>
+<li>In this usecase, the migration API could be used</li>
+<li>The pre-copy phase could be automatically detected if the phone
+comes physically close to the computer</li>
+<li>Since this would be a LAN scenario, the migration would be very fast
+and allow for interesting hand-off usecases</li>
+<li>The migration API also provides hooks and the protocol that would
 ensure that the app would be closed on the phone before it would be
 resumed on the desktop, making state corruption during the migration
 much harder than with a third-party that changes are synced (where the
-remote state may not be up-to-date yet as it is resumed)</p></li>
-<li><p>Migrating an app’s TODO list or any internal data structure is
-one option</p></li>
-<li><p>Using a toolkit like Apache Arrow can provide a universal format
-for this memory, but many other things are possible if a layer of
-indirection is added</p></li>
-<li><p>As mentioned before, a Wasm VM’s memory could also be migrated
-this way, allowing for any Wasm app to be transfered between
-hosts</p></li>
-<li><p>Similarly so, the Wasm app’s binary, a mounted WASI filesystem
-etc. could all be synchronized this way, too</p></li>
-<li><p>Due to the flexible nature of remap, it is possible to bring the
+remote state may not be up-to-date yet as it is resumed)</li>
+<li>Migrating an app’s TODO list or any internal data structure is one
+option</li>
+<li>Using a toolkit like Apache Arrow can provide a universal format for
+this memory, but many other things are possible if a layer of
+indirection is added</li>
+<li>As mentioned before, a Wasm VM’s memory could also be migrated this
+way, allowing for any Wasm app to be transfered between hosts</li>
+<li>Similarly so, the Wasm app’s binary, a mounted WASI filesystem etc.
+could all be synchronized this way, too</li>
+<li>Due to the flexible nature of remap, it is possible to bring the
 semantics of VM live migration - moving running VMs between hosts - to
-anything that has state</p></li>
-<li><p>r3map can also be used for actual VM migration, with any
-hypervisor that supports mapping a VM’s memory to a block
-device</p></li>
-<li><p>This could also be other VMs (like e.g. the JVM), a browser’s JS
-VM, or - if the processor architectures etc. match - an entire process’s
-memory space</p></li>
-<li><p>Using the mount API, it would also be possible to bring the
-concept of VM snapshots to almost any app</p></li>
-<li><p>Thanks to the preemptive pull mechanism, restoring e.g. a Wasm VM
-outside a migration would also be a very fast operation</p></li>
-<li><p>Essentially, its VM memory migration and snapshots, but for any
-kind of state</p></li>
-<li><p>Its particularly interesting because it can do so without any
+anything that has state</li>
+<li>r3map can also be used for actual VM migration, with any hypervisor
+that supports mapping a VM’s memory to a block device</li>
+<li>This could also be other VMs (like e.g. the JVM), a browser’s JS VM,
+or - if the processor architectures etc. match - an entire process’s
+memory space</li>
+<li>Using the mount API, it would also be possible to bring the concept
+of VM snapshots to almost any app</li>
+<li>Thanks to the preemptive pull mechanism, restoring e.g. a Wasm VM
+outside a migration would also be a very fast operation</li>
+<li>Essentially, its VM memory migration and snapshots, but for any kind
+of state</li>
+<li>Its particularly interesting because it can do so without any
 specific requirements for the data structures of the state other than
 them being ultimately a <code>[]byte</code>, which by definition every
-state is (def. a process level or VM level etc.)</p></li>
-<li><p>Improving game download speeds by mounting the remote assets with
-managed mounts, using a pull heuristic that defines typical access
-patterns (like which levels are accessed first), making any game
-immediately playable without changes (move this and the points below
-above the app migration usecase once elaborated on)</p></li>
-<li><p>Executing remote binaries or scrips that don’t need to be scanned
-first without having to fully download them</p></li>
+state is (def. a process level or VM level etc.)</li>
 </ul></li>
 <li><p>Conclusion</p>
 <ul>
