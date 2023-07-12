@@ -1,3 +1,9 @@
+commit df3fc65b1830b6c79b8a07e1e2e665b2b73c7fd6
+Author: Felicitas Pojtinger <felicitas@pojtinger.com>
+Date:   Wed Jul 12 02:41:19 2023 +0200
+
+    refactor: Drop abstract structure now that all non-intro and non-conclusion points have been elaborated on
+
 commit 8e7f8e56272dd4dc2bfe28dd9b50f06b7e2e0c9d
 Author: Felicitas Pojtinger <felicitas@pojtinger.com>
 Date:   Wed Jul 12 02:38:47 2023 +0200

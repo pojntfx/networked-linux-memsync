@@ -173,10 +173,9 @@ state synchronization</p>
 <ul>
 <li><a href="#unsorted-research-questions"><span class="toc-section-number">1.1</span> Unsorted Research
 Questions</a></li>
-<li><a href="#uni-required-structure"><span class="toc-section-number">1.2</span> Uni Required Structure</a></li>
-<li><a href="#structure"><span class="toc-section-number">1.3</span>
+<li><a href="#structure"><span class="toc-section-number">1.2</span>
 Structure</a></li>
-<li><a href="#content"><span class="toc-section-number">1.4</span>
+<li><a href="#content"><span class="toc-section-number">1.3</span>
 Content</a></li>
 </ul>
 </nav>
@@ -184,9 +183,9 @@ Content</a></li>
 <h2 data-number="1.1"><span class="header-section-number">1.1</span>
 Unsorted Research Questions</h2>
 </section>
-<section id="uni-required-structure" data-number="0.2">
-<h2 data-number="1.2"><span class="header-section-number">1.2</span> Uni
-Required Structure</h2>
+<section id="structure" data-number="0.2">
+<h2 data-number="1.2"><span class="header-section-number">1.2</span>
+Structure</h2>
 <ul>
 <li>Abstract</li>
 <li>Introduction</li>
@@ -196,11 +195,11 @@ Required Structure</h2>
 <li>Conclusion</li>
 </ul>
 </section>
-<section id="structure" data-number="0.3">
+<section id="content" data-number="0.3">
 <h2 data-number="1.3"><span class="header-section-number">1.3</span>
-Structure</h2>
+Content</h2>
 <ul>
-<li>Introduction
+<li><p>Introduction</p>
 <ul>
 <li>Memory management in Linux</li>
 <li>Memory as the universal storage API</li>
@@ -211,255 +210,6 @@ component</li>
 <li>High-level use cases for memory synchronization in the industry
 today</li>
 </ul></li>
-<li>Pull-Based Memory Synchronization with <code>userfaultfd</code>
-<ul>
-<li>Plain language description of <code>userfaultfd</code> (what are
-page faults)</li>
-<li>Exploring an alternative method by handling page faults using
-signals</li>
-<li>Handlers and registration</li>
-<li>History of <code>userfaultfd</code></li>
-<li>Allocating the shared region</li>
-<li>Maximum shared region size is limited by available physical
-memory</li>
-<li>Transferring handler sockets between processes</li>
-<li>Implementing <code>userfaultfd</code> bindings in Go</li>
-<li>Example usages of <code>userfaultfd</code> in Go (byte slice, file,
-S3 object)</li>
-<li>Implications of not being able to catch writes to the region (its
-read-only)</li>
-<li>Design of a <code>userfaultfd</code> backend (io.ReaderAt)</li>
-<li>Limiations: ~50MB/s of throughput</li>
-<li>Limitations of only being able to catch the first page fault (no way
-of updating the region)</li>
-<li>Implications of not being able to pull chunks before they are being
-accessed</li>
-<li>Limitations of only being able to pull chunks synchronously</li>
-<li>Benefits of minimal registration and latency overhead</li>
-<li>Benchmark: Sensitivity of <code>userfaultfd</code> to network
-latency and throughput</li>
-</ul></li>
-<li>Push-Based Memory Synchronization with <code>mmap</code> and Hashing
-<ul>
-<li>Plain language description of this approach (mapping a file into
-memory, then syncing the file)</li>
-<li>Paging and swap in Linux</li>
-<li>Introduction to <code>mmap</code> to map a file into a memory
-region</li>
-<li><code>MAP_SHARED</code> for writing changes back from the memory
-region to a file</li>
-<li>Caching with <code>mmap</code>, why <code>O_DIRECT</code> doesn’t
-work and what the role of <code>msync</code> is</li>
-<li>Detecting writes to a file with <code>inotify</code> and why this
-does not work for <code>mmap</code></li>
-<li>Hashing (chunks of) the backing file in order to detect writes on a
-periodic basis</li>
-<li>Benchmark: Performance of different Go hashing algorithms for
-detecting writes</li>
-<li>Effects on maximum acceptable downtime due to CPU-bound limitations
-in having to calculate hashes and polling</li>
-<li>Introduction to delta synchronization protocols like rsync</li>
-<li>Implementation of a custom delta synchronization protocol with chunk
-support</li>
-<li>Multiplexing different synchronization streams in the protocol</li>
-<li>Benchmark: Throughput of this custom synchronization protocol
-vs. rsync (which hashes entire files)</li>
-<li>Using a central forwarding hub for star-based architectures with
-multiple destinations</li>
-<li>Limitations of only being able to catch writes, not reads to the
-region (its write-only, can’t add hosts later on)</li>
-</ul></li>
-<li>Push-Pull Memory Synchronization with a FUSE
-<ul>
-<li>Plain language description of this approach (mapping a file into
-memory, catching reads/writes to/from the file with a custom
-filesystem)</li>
-<li>Methods for creating a new, custom file system (FUSE vs. in the
-kernel)</li>
-<li>STFS shows that it is possible to create file systems backed by
-complex data stores, e.g. a tape/non-random access stores</li>
-<li>Is not the best option for implementing this due to significant
-overhead and us only needing a single file to map</li>
-</ul></li>
-<li>Pull-Based Memory Synchronization with NBD
-<ul>
-<li>Plain language description of this approach (mapping a block device
-into memory, catching reads/writes with a NBD server)</li>
-<li>Why NBD is the better choice compared to FUSE (much less complex
-interface)</li>
-<li>Overview of the NBD protocol</li>
-<li>Phases, actors and messages in the NBD protocol (negotiation,
-transmission)</li>
-<li>Minimal viable NBD protocol needs, and why only this minimal set is
-implemented</li>
-<li>Listing exports</li>
-<li>Limitations of NBD, esp. the kernel client and message sizes</li>
-<li>Reduced flexibility of NBD compared to FUSE (can still be used for
-e.g. linear media, but will offer fewer interfaces for
-optimization)</li>
-<li>Server backend interface design</li>
-<li>File backend example</li>
-<li>How the servers handling multiple users/connections</li>
-<li>Server handling in the NBD protocol implementation</li>
-<li>Using the kernel NBD client without CGO/with ioctls</li>
-<li>Finding an unused NBD device using <code>sysfs</code></li>
-<li>Benchmark: <code>nbd</code> kernel module quirks and how to detect
-whether a NBD device is open (polling <code>sysfs</code>
-vs. <code>udev</code>)</li>
-<li>Caching mechanisms and limitations (aligned reads) when opening the
-block device (<code>O_DIRECT</code>)</li>
-<li>Future outlook: Using <code>ublk</code> instead of NBD, allowing for
-potentially much faster concurrent access thanks to
-<code>io_uring</code></li>
-<li>Why using BUSE to implement a NBD server would be possible but
-unrealistic (library &amp; docs situation, CGo)</li>
-<li><code>go-buse</code> as a preview of how such a CGo implementation
-could still work</li>
-<li>Alternatively implementing a new file system entirely in the kernel,
-only exposing a single file/block device to <code>mmap</code> and
-optimizing the user space protocol for this</li>
-</ul></li>
-<li>Push-Pull Memory Synchronization with Mounts
-<ul>
-<li>Plain language description of this approach (like NBD, but starting
-the client and server locally, then connecting the <em>server</em>’s
-backend to a backend)</li>
-<li>Benefits: Can use a secure wire protocol and more complex/abstract
-backends</li>
-<li>Mounting the block device as a path vs. file vs. slice: Benefits of
-<code>mmap</code> (concurrent reads/writes)</li>
-<li>Alternative approach: Formatting the block device as e.g. EXT4, then
-mounting the filesystem, and <code>mmap</code>ing a file on the file
-system (allows syncing multiple regions with a single file system, but
-has FS overhead)</li>
-<li>Mount protocol actors, phases and state machine</li>
-<li>Chunking system for non-aligned reads/writes (arbitrary rwat and
-chunked rwat)</li>
-<li>Benchmark: Local vs. remote chunking</li>
-<li>Optimizing the mount process with the Managed Mount interface</li>
-<li>Pre- and post-copy systems and why we should combine them (see
-Optimizing Virtual Machine Live Migration without Shared Storage in
-Hybrid Clouds)</li>
-<li>Asynchronous background push system interface and how edge cases
-(like accessing dirty chunks as they are being pulled or being written
-to) are handled</li>
-<li>Preemptive background pulls interface</li>
-<li>Syncer interface</li>
-<li>Benchmark: Parallelizing startups and pulling n MBs as the device
-starts</li>
-<li>Using a pull heuristic function to optimize which chunks should be
-scheduled to be pulled first</li>
-<li>Internal rwat pipeline (create a graphic) for direct mounts
-vs. managed mounts</li>
-<li>Unit testing the rwats</li>
-<li>Comparing this mount API to other existing remote memory access
-APIs, e.g. “Remote Regions” (“Remote regions: a simple abstraction for
-remote memory”)</li>
-<li>Complexities when <code>mmap</code>ing a region in Go as the GC
-halts the entire world to collect garbage, but that also stops the NBD
-server in the same process that tries to satisfy the region being
-scanned</li>
-<li>Potentially using Rust for this component to cut down on memory
-complexities and GC latencies</li>
-</ul></li>
-<li>Pull-Based Memory Synchronization with Migrations
-<ul>
-<li>Plain language description of this approach (like NBD, but two
-phases to start the device and pull, then only flush the latest changes
-to minimize downtime)</li>
-<li>Inspired by live VM migration, where changes are continuously being
-pulled to the destination node until a % has been reached, after which
-the VM is migrated</li>
-<li>Migration protocol actors (seeders, leechers etc.), phases and state
-machine</li>
-<li>How the migration API is completely independent of a transport
-layer</li>
-<li>Switching from the seeder to the leecher state</li>
-<li>Using preemptive pulls and pull heuristics to optimize just like for
-the mounts</li>
-<li>Lifecycle of the migration API and why lockable rwats are
-required</li>
-<li>How a successful migration causes the <code>Seeder</code> to
-exit</li>
-<li>The role of maximum acceptable downtime</li>
-<li>The role of <code>Track()</code>, concurrent access and consistency
-guarantees vs. mounts (where the source must not change)</li>
-<li>When to best <code>Finalize()</code> a migration and how analyzing
-app usage patterns could help (A Framework for Task-Guided Virtual
-Machine Live Migration, Reducing Virtual Machine Live Migration Overhead
-via Workload Analysis)</li>
-<li>Benchmark: Maximum acceptable downtime for a migration scenario with
-the Managed Mount API vs the Migration API</li>
-</ul></li>
-<li>Optimizing Mounts and Migrations
-<ul>
-<li>Encryption of memory regions and the wire protocol</li>
-<li>Authentication of the protocol</li>
-<li>DoS vulnerabilities in the NBD protocol (large message sizes; not
-meant for the public internet) and why the indirection of client &amp;
-server on each node is needed</li>
-<li>Mitigating DoS vulnerabilities in the
-<code>ReadAt</code>/<code>WriteAt</code> RPCs with
-<code>maxChunkSize</code> and/or client-side chunking</li>
-<li>Critical <code>Finalizing</code> state in the migration API and how
-it could be remedied</li>
-<li>How network outages are handled in the mount and migration API</li>
-<li>Analyzing the file and memory backend implementations</li>
-<li>Analyzing the directory backend</li>
-<li>Analyzing the dudirekta, gRPC and fRPC backends</li>
-<li>Benchmark: Latency till first n chunks <em>and</em> throughput for
-dudirekta, gRPC and fRPC backends (how they are affected by having/not
-having connection pooling and/or concurrent RPCs)</li>
-<li>Benchmark: Effect of tuning the amount of push/pull workers in
-high-latency scenarios</li>
-<li>Analyzing the Redis backend</li>
-<li>Analyzing the S3 backend</li>
-<li>Analyzing the Cassandra backend</li>
-<li>Benchmark: Latency and throughput of all benchmarks on localhost and
-in a realistic latency and throughput scenario</li>
-<li>Effects of slow disks/memory on local backends, and why direct
-mounts can outperform managed mounts in tests on localhosts</li>
-<li>Using P2P vs. star architectures for mounts and migrations</li>
-<li>Looking back at all options and comparing ease of implementation,
-CPU load and network traffic between them</li>
-</ul></li>
-<li>Case Studies
-<ul>
-<li><code>ram-dl</code> as an example of using the direct mount API for
-extending system memory</li>
-<li><code>tapisk</code> as an example of using the managed mount API for
-a file system with very high latencies, linear access and asynchronous
-to/from fast local memory vs. STFS</li>
-<li>Migration app state (e.g. TODO list) between two hosts in a
-universal (underlying memory) manner</li>
-<li>Mounting remote file systems as managed mounts and combining the
-benefits of traditional FUSE mounts (e.g. s3-fuse) with Google
-Drive-style synchronization</li>
-<li>Using manged mounts for remote SQLite databases without having to
-download it first</li>
-<li>Streaming video formats like e.g. MP4 that don’t support streaming
-due to indexes/compression</li>
-<li>Improving game download speeds by mounting the remote assets with
-managed mounts, using a pull heuristic that defines typical access
-patterns (like which levels are accessed first), making any game
-immediately playable without changes</li>
-<li>Executing remote binaries or scrips that don’t need to be scanned
-first without having to fully download them</li>
-</ul></li>
-<li>Conclusion
-<ul>
-<li>Looking back at all synchronization options and comparing ease of
-implementation, CPU load and network traffic between them</li>
-<li>Summary of the different approaches, and how the new solutions might
-make it possible to use memory as the universal access format</li>
-<li>Further research recommendations (e.g. <code>ublk</code>)</li>
-</ul></li>
-</ul>
-</section>
-<section id="content" data-number="0.4">
-<h2 data-number="1.4"><span class="header-section-number">1.4</span>
-Content</h2>
-<ul>
 <li><p>Pull-Based Memory Synchronization with
 <code>userfaultfd</code></p>
 <ul>
