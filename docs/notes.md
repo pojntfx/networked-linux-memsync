@@ -801,6 +801,22 @@ lang: en-US
   - While there are ways of changing this (for example by storing the metadata in the beginning after the entire MP4 has been transcoded), this is not possible for already existing files
   - With r3map however, the pull heuristic function can be used to immediately pre-fetch the metadata, and the individual chunks of the MP4 file are then being fetched in the background or as they are being accessed
   - This allows making a format such as MP4 streamable before it has been fully downloaded yet, or making almost any format streamable no matter the codec without any changes required to the video/audio player or the format
+  - Another use case of this in-place streaming approach could be in gaming
+  - Usually, all assets of a game are currently being downloaded before the game is playable
+  - For many new AAA games, this can be hundreds of gigabytes
+  - Many of these assets aren't required to start the game however
+  - Only some of them (e.g. the launcher, UI libraries, first level etc.) are
+  - In theory, one could design a game engine in such a way that these things are only fetched from a remote as they are required
+  - This would however require changing the way new games work, and would not work for existing games
+  - Playing games of e.g. a network drive or FUSE is also unrealistic due to performance limitations
+  - Using the managed mount API, the performance limitations of such an approach can be reduced, without changes to the game
+  - By using the background pull system, reads from chunks that have already been pulled are almost as fast as native disk reads
+  - By analyzing the data access pattern of an existing game, a pull heuristic function can be created which will then preemptively pull the game assets that are required first, keeping latency spikes as low as possible
+  - Using the chunk availability hooks, the game could also be paused for a loading screen until a certain local availability percentage is reached to prevent latency spikes from missing assets, while also still allowing for faster startup times
+  - The same concept could also be applied to launching any application
+  - For many languages, completely loading a binary or script into memory isn't required for it to start executing
+  - Without significant changes to most interpreters and language VMs however, loading a file from a file system is the only available interface for loading programs
+  - With the managed mount API, this interface can be re-used to add streaming execution support to any intepreter or VM, simply by using the managed mount either as a filesystem to stream multiple binaries/scripts/libraries from, or by using the block device as a file or `mmap`ing it directly to fetch it
   - Synchronization of app state is hard
   - Even for hand-off scenarios a custom protocol is built most of the times
   - It is possible to use a database sometimes (e.g. Firebase) to synchronize things
@@ -840,9 +856,6 @@ lang: en-US
   - Thanks to the preemptive pull mechanism, restoring e.g. a Wasm VM outside a migration would also be a very fast operation
   - Essentially, its VM memory migration and snapshots, but for any kind of state
   - Its particularly interesting because it can do so without any specific requirements for the data structures of the state other than them being ultimately a `[]byte`, which by definition every state is (def. a process level or VM level etc.)
-
-  - Improving game download speeds by mounting the remote assets with managed mounts, using a pull heuristic that defines typical access patterns (like which levels are accessed first), making any game immediately playable without changes (move this and the points below above the app migration usecase once elaborated on)
-  - Executing remote binaries or scrips that don't need to be scanned first without having to fully download them
 
 - Conclusion
   - Looking back at all synchronization options and comparing ease of implementation, CPU load and network traffic between them
