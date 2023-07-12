@@ -1,3 +1,9 @@
+commit c1e8213a643806f8071cd2862c4a9e1f0fe6fefd
+Author: Felicitas Pojtinger <felicitas@pojtinger.com>
+Date:   Wed Jul 12 03:25:42 2023 +0200
+
+    feat: Add LLM-generated version to estimate approximate thesis length
+
 commit df3fc65b1830b6c79b8a07e1e2e665b2b73c7fd6
 Author: Felicitas Pojtinger <felicitas@pojtinger.com>
 Date:   Wed Jul 12 02:41:19 2023 +0200
