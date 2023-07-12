@@ -1,3 +1,9 @@
+commit 42780b4b28439596cadec91ffe043fbe7c1c9709
+Author: Felicitas Pojtinger <felicitas@pojtinger.com>
+Date:   Wed Jul 12 23:49:54 2023 +0200
+
+    feat: Start implementing high-fidelity IMRAD structure
+
 commit c1e8213a643806f8071cd2862c4a9e1f0fe6fefd
 Author: Felicitas Pojtinger <felicitas@pojtinger.com>
 Date:   Wed Jul 12 03:25:42 2023 +0200
