@@ -779,7 +779,28 @@ lang: en-US
   - Reads to blocks/files that haven't been read yet can be resolved from the remote backend, giving a FUSE-like experience
   - Since read block are then written to the local one, making subsequent reads almost as fast as native disk reads (unlike in FUSE/like in the Nextcloud approach)
   - Writes are done to the local backend and can then be synced up in periodic intervals like with the Nextcloud approach, making them much faster than a FUSE, too
-  - This essentially creates a system that bridges the gap between FUSE and file syncrhonization, once again showing how the memory synchronization tooling can be used to solve essentially the synchronization of any state, including disks
+  - Similarly to how the mount API is used, the migration API could then be used to move the file system between two hosts in a highly efficient way and without a long downtime
+  - This essentially creates a system that bridges the gap between FUSE and file synchronization, once again showing how the memory synchronization tooling can be used to solve essentially the synchronization of any state, including disks
+  - Another usecase is accessing a remote database locally
+  - While using a database backend is one option of storing chunks, an actual database can also be stored in a mount as well
+  - Particularly interesting for in-memory or on-disk databases like SQLite
+  - Instead of having to download the entire SQLite database before using it, it can simply be mounted, and accessed as it is being used
+  - This allows very efficient network access, as only very rarely the entire database is needed
+  - Since reads are cached with the managed mount API, only the first read should potentially have a performance impact
+  - Similarly so writes to the database will be more or less the same throughput as to the local disk, since changes are written back asynchronously
+  - If the full database should eventually be accessible locally, the background pullers can be used
+  - If the location of e.g. indexes is known, then the pull heuristic can be specified to fetch these first to speed up initial queries
+  - SQLite itself doesn't have to support a special interface or changes for this to work, since it can simply use the mount's block device as it's backend, which shows how universally the concept is usable
+  - This concept doesn't just apply to SQLite however
+  - Other uses could for example be to make formats that are usually not streamable due to technical limitations
+  - One such format is famously MP4
+  - Usually, if someone downloads a MP4, they can't start playing it before they have finished downloading
+  - This is because MP4s store metadata at the end of the file (graphic with metadata)
+  - The reason for storing this at the end is that generating the metadata requires encoding the video first
+  - Usually, if the file is downloaded from start to finish, then this metadata wouldn't be accessible, and simply inverting the download order wouldn't work since the stream would still be stored in different offsets of the file
+  - While there are ways of changing this (for example by storing the metadata in the beginning after the entire MP4 has been transcoded), this is not possible for already existing files
+  - With r3map however, the pull heuristic function can be used to immediately pre-fetch the metadata, and the individual chunks of the MP4 file are then being fetched in the background or as they are being accessed
+  - This allows making a format such as MP4 streamable before it has been fully downloaded yet, or making almost any format streamable no matter the codec without any changes required to the video/audio player or the format
   - Synchronization of app state is hard
   - Even for hand-off scenarios a custom protocol is built most of the times
   - It is possible to use a database sometimes (e.g. Firebase) to synchronize things
@@ -820,9 +841,7 @@ lang: en-US
   - Essentially, its VM memory migration and snapshots, but for any kind of state
   - Its particularly interesting because it can do so without any specific requirements for the data structures of the state other than them being ultimately a `[]byte`, which by definition every state is (def. a process level or VM level etc.)
 
-  - Using managed mounts for remote SQLite databases without having to download it first (move this and the points below above the app migration usecase once elaborated on)
-  - Streaming video formats like e.g. MP4 that don't support streaming due to indexes/compression
-  - Improving game download speeds by mounting the remote assets with managed mounts, using a pull heuristic that defines typical access patterns (like which levels are accessed first), making any game immediately playable without changes
+  - Improving game download speeds by mounting the remote assets with managed mounts, using a pull heuristic that defines typical access patterns (like which levels are accessed first), making any game immediately playable without changes (move this and the points below above the app migration usecase once elaborated on)
   - Executing remote binaries or scrips that don't need to be scanned first without having to fully download them
 
 - Conclusion
