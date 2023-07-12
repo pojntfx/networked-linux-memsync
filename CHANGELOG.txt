@@ -1,3 +1,9 @@
+commit 9db260e8c28aac19b41562611dd154d76028c8f6
+Author: Felicitas Pojtinger <felicitas@pojtinger.com>
+Date:   Wed Jul 12 02:17:12 2023 +0200
+
+    docs: Add sections on SQLite streaming and MP4 streaming use cases
+
 commit 00ef98b18cca99e99343557273d2b0361a3835b6
 Author: Felicitas Pojtinger <felicitas@pojtinger.com>
 Date:   Wed Jul 12 01:38:50 2023 +0200
