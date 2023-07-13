@@ -113,12 +113,6 @@ csl: static/ieee.csl
 - If the VM tries to access a chunk on the destination, a page fault is raised, and the missing page is fetched from the source, and the VM continues to execute
 - The benefit of post-copy migration is that it does not require re-transmitting dirty chunks to the destination before the maximum tolerable downtime is reached
 - The big drawback of post-copy migration is that it can result in longer migration times, because the chunks need to be fetched from the network on-demand, which is very latency/RTT-sensitive
-- RegionFS, An existing remote memory system
-  - A similar approach was made in RegionFS (reference atc18-aguilera)
-  - RegionFS is implemented as a kernel module, but it is functionally similar to how this API exposes a NBD device for memory interaction
-  - In RegionFS, the regions file system is mounted to a path, which then exposes regions as virtual files
-  - Instead of using a custom configuration (such as configuring the amount of pushers to make a mount read-only), such an approach makes it possible to use `chmod` on the virtual file for a memory region to set permissions
-  - By using standard utilities like `open` and `chmod`, this API usable from different programming languages with ease
 
 #### Workload Analysis
 
@@ -698,6 +692,12 @@ csl: static/ieee.csl
 - Comparing mount vs. migration API performance
   - It is interesting to look at how the migration API performs compared to the single-phase mount API
   - The mounts API should have a shorter total latency, but a higher "downtime" since it needs to initialize the device first
+- Comparing it to regionFS, An existing remote memory system
+  - A similar approach was made in RegionFS (reference atc18-aguilera)
+  - RegionFS is implemented as a kernel module, but it is functionally similar to how this API exposes a NBD device for memory interaction
+  - In RegionFS, the regions file system is mounted to a path, which then exposes regions as virtual files
+  - Instead of using a custom configuration (such as configuring the amount of pushers to make a mount read-only), such an approach makes it possible to use `chmod` on the virtual file for a memory region to set permissions
+  - By using standard utilities like `open` and `chmod`, this API usable from different programming languages with ease
 - Issues with the implementation
   - While the managed mounts API mostly works, there are some issues with it being implemented in Go
   - This is mostly due to deadlocking issues; if the GC tries to release memory, it has to stop the world
