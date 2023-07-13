@@ -36,47 +36,113 @@ lang: en-US
   - What would be possible if memory would be the universal way to access resources?
   - Why efficient memory synchronization is the missing key component
   - High-level use cases for memory synchronization in the industry today
-- Theory/Methods/Results
+- Theory
+  - Page faults
+    - Page faults occur when a process tries to access a memory region that has not yet been mapped into a process' address space
+    - By listening to these page faults, we know when a process wants to access a specific piece of memory
+    - We can use this to then pull the chunk of memory from a remote, map it to the address on which the page fault occured, thus
+      only fetching data when it is required
+    - Usually, handling page faults is something that the kernel does
+    - In the past, this used to be possible by handling the `SIGSEGV` signal in the process
+  - Introduction to `userfaultfd`
+    - In our case, we want to handle page faults in userspace
+    - In our case however, we can use a recent system called `userfaultfd` to do this in a more elegant way (available since kernel 4.11)
+    - `userfaultfd` allows handling these page faults in userspace
+    - The region that should be handled can be allocated with e.g. `mmap`
+    - Once we have the file descriptor for the `userfaultfd` API, we need to transfer this file descriptor to a process that should respond with the chunks of memory to be put into the faulting address
+    - Once we have received the socket we need to register the handler for the API to use
+    - If the handler receives an address that has faulted, it responds with the `UFFDIO_COPY` `ioctl` and a pointer to the chunk of memory that should be used on the file descriptor (code snippet from https://github.com/loopholelabs/userfaultfd-go/blob/master/pkg/mapper/handler.go)
+  - Delta synchronization
+    - The probably most popular tool for file synchronization like this is rsync
+    - When the delta-transfer algorithm for rsync is active, it computes the difference between the local and the remote file, and then synchronizes the changes
+    - The delta sync algorithm first does file block division
+    - The file on the destination is divided into fixed-size blocks
+    - For each block in the destination, a weak and fast checksum is calculated
+    - The checksums are sent over to the source
+    - On the source, the same checksum calculation process is run, and compared against the checksums that were sent over (matching block identification)
+    - Once the changed blocks are known, the source sends over the offset of each block and the changed block's data to the destination
+    - When a block is received, the destination writes the chunk to the specified offset, reconstructing the file
+    - Once one polling interval is done, the process begins again
+  - File systems in user space
+    - In order to implement file systems in user space, we can use the FUSE API
+    - Here, a user space program registers itself with the FUSE kernel module
+    - This program provides callbacks for the file system operations, e.g. for `open`, `read`, `write` etc.
+    - When the user performs a file system operation on a mounted FUSE file system, the kernel module will send a request for the operation to the user space program, which can then reply with a response, which the FUSE kernel module will then return to the user
+    - This makes it much easier to create a file system compared to writing it in the kernel, as it can run in user space
+    - It is also much safer as no custom kernel module is required and an error in the FUSE or the backend can't crash the entire kernel
+    - Unlike a file system implemented as a kernel module, this layer of indirection makes the file system portable, since it only needs to communicate with the FUSE module
+  - NBD and the NBD kernel module
+    - NBD uses a protocol to communicate between a server (provided by user space) and a client (provided by the NBD kernel module)
+    - The protocol can run over WAN, but is really mostly meant for LAN or localhost usage
+    - It has two phases: Handshake and transmission
+    - There are two actors in the protocol: One or multiple clients, the server and the virtual concept of an export
+    - When the client connects to the server, the server sends a greeting message with the server's flags
+    - The client responds with its own flags and an export name (a single NBD server can expose multiple devices) to use
+    - The server sends the export's size and other metadata, after which the client acknowledges the received data and the handshake is complete
+    - After the handshake, the client and server start exchanging commands and replies
+    - A command can be any of the basic operations needed to access a block device, e.g. read, write or flush
+    - Depending on the command, it can also contain data (such as the chunk to be written), offsets, lengths and more
+    - Replies can contain an error, success value or data depending on the reply's type
+    - NBD is however limited in some respects; the maximum message size is 32 MB, but the maximum block/chunk size supported by the kernel is just 4096 KB, making it a suboptimal protocol to run over WAN, esp. in high latency scenarios
+    - The protocol also allows for listing exports, making it possible to e.g. list multiple memory regions on a single server
+    - NBD is an older protocol with multiple different handshake versions and legacy features
+    - Since the purpose of NBD in this use case is minimal and both the server and the client are typically controlled, it makes sense to only implement the latest recommended versions and the baseline feature set
+    - The baseline feature set requires no TLS, the latest "fixed newstyle" handshake, the ability to list and choose an export, as well as the read, write and disc(onnect) commands and replies
+    - As such, the protocol is very simple to implement
+    - With this simplicity however also come some drawbacks: NBD is less suited for use cases where the backing device behaves very differently from a random-access store device, like for example a tape drive, since it is not possible to work with high-level abstractions such as files or directories
+    - This is, for the narrow memory synchronization use case, however more of a feature than a bug
+  - Pre- and post-copy VM live migration
+    - While these systems already allow for some optimizations over simply using the NBD protocol over WAN, they still mean that chunks will only be fetched as they are being needed, which means that there still is a guaranteed minimum downtime
+    - In order to improve on this, a more advanced API (the managed mount API) was created
+    - A field that tries to optimize for this use case is live migration of VMs
+    - Live migration refers to moving a virtual machine, its state and connected devices from one host to another with as little downtime as possible
+    - There are two types of such migration algorithms; pre-copy and post-copy migration
+    - Pre-copy migration works by copying data from the source to the destination as the VM continues to run (or in the case of a generic migration, app/other state continues being written to)
+    - First, the initial state of the VM's memory is copied to the destination
+    - If, during the push, chunks are being modified, they are being marked as dirty
+    - These dirty chunks are being copied over to the destination until the number of remaining chunks is small enough to satisfy a maximum downtime criteria
+    - Once this is the case, the VM is suspended on the source, and the remaining chunks are synced over to destination
+    - Once the transfer is complete, the VM is resumed on the destination
+    - This process is helpful since the VM is always available in full on either the source or the destination, and it is resilient to a network outage occurring during the synchronization
+    - If the VM (or app etc.) is however changing too many chunks on the source during the migration, the maximum acceptable downtime criteria might never get reached, and the maximum acceptable downtime is also somewhat limited by the available RTT
+    - An alternative to pre-copy migration
+    - In this approach, the VM is immediately suspended on the source, moved to the destination with only a minimal set of chunks
+    - After the VM has been moved to the destination, it is resumed
+    - If the VM tries to access a chunk on the destination, a page fault is raised, and the missing page is fetched from the source, and the VM continues to execute
+    - The benefit of post-copy migration is that it does not require re-transmitting dirty chunks to the destination before the maximum tolerable downtime is reached
+    - The big drawback of post-copy migration is that it can result in longer migration times, because the chunks need to be fetched from the network on-demand, which is very latency/RTT-sensitive
+  - RegionFS, An existing remote memory system
+    - A similar approach was made in RegionFS (reference atc18-aguilera)
+    - RegionFS is implemented as a kernel module, but it is functionally similar to how this API exposes a NBD device for memory interaction
+    - In RegionFS, the regions file system is mounted to a path, which then exposes regions as virtual files
+    - Instead of using a custom configuration (such as configuring the amount of pushers to make a mount read-only), such an approach makes it possible to use `chmod` on the virtual file for a memory region to set permissions
+    - By using standard utilities like `open` and `chmod`, this API usable from different programming languages with ease
+  - Live Migration Workload Analysis
+    - "Reducing Virtual Machine Live Migration Overhead via Workload Analysis" provides an interesting analysis of options on how this decision of when to migrate can be made
+    - While being designed mostly for use with virtual machines, it could serve as a basis for other applications or migration scenarios, too
+    - The proposed method identifies workload cycles of VMs and uses this information to postpone the migration if doing so is beneficial
+    - This works by analyzing cyclic patters that can unnecessarily delay a VM's migration, and identifies optimal cycles to migrate VMs in from this information
+    - For the VM use case, such cycles could for example be the GC of a large application triggering a lot of changes to the VMs memory etc.
+    - If a migration is proposed, the system checks for whether it is currently in a beneficial cycle to migrate in which case it lets the migration proceed; otherwise, it postpones it until the next cycle
+    - The algorithm uses a Bayesian classifier to identify a favorable or unfavorable cycle
+    - Compared to the alternative, which is usually waiting for a significant percentage of the chunks that were not changed before tracking started to be synced first, this can potentially yield a lot of improvements
+    - The paper has found an improvement of up to 74% in terms of live migration time/downtime and 43% in terms of the amount of data transferred over the network
+    - While such a system was not implemented for r3map, using r3map with such a system would certainly be possible
+- Methods
   - Pull-Based Memory Synchronization with `userfaultfd`
-    - Page faults
-      - Page faults occur when a process tries to access a memory region that has not yet been mapped into a process' address space
-      - By listening to these page faults, we know when a process wants to access a specific piece of memory
-      - We can use this to then pull the chunk of memory from a remote, map it to the address on which the page fault occured, thus
-        only fetching data when it is required
-      - Usually, handling page faults is something that the kernel does
-      - In the past, this used to be possible by handling the `SIGSEGV` signal in the process
-    - Introduction to `userfaultfd`
-      - In our case, we want to handle page faults in userspace
-      - In our case however, we can use a recent system called `userfaultfd` to do this in a more elegant way (available since kernel 4.11)
-      - `userfaultfd` allows handling these page faults in userspace
+    - API design for `userfault-go`
       - Implementing this in Go was quite tricky, and it involves using `unsafe`
       - We can use the `syscall` and `unix` packages to interact with `ioctl` etc.
       - We can use the `ioctl` syscall to get a file descriptor to the `userfaultfd` API, and then register the API to handle any faults on the region (code snippet from https://github.com/loopholelabs/userfaultfd-go/blob/master/pkg/mapper/register.go#L15)
-      - The region that should be handled can be allocated with e.g. `mmap`
-      - Once we have the file descriptor for the `userfaultfd` API, we need to transfer this file descriptor to a process that should respond with the chunks of memory to be put into the faulting address
       - Passing file descriptors between processes is possible by using a UNIX socket (code snippet from https://github.com/loopholelabs/userfaultfd-go/blob/master/pkg/transfer/unix.go)
-      - Once we have received the socket we need to register the handler for the API to use
-      - If the handler receives an address that has faulted, it responds with the `UFFDIO_COPY` `ioctl` and a pointer to the chunk of memory that should be used on the file descriptor (code snippet from https://github.com/loopholelabs/userfaultfd-go/blob/master/pkg/mapper/handler.go)
-    - API design for `userfault-go`
+    - Implementing `userfaultfd` backends
       - A big benefit of using `userfaultfd` and the pull method is that we are able to simplify the backend of the entire system down to a `io.ReaderAt` (code snippet from https://pkg.go.dev/io#ReaderAt)
       - That means we can use almost any `io.ReaderAt` as a backend for a `userfaultfd-go` registered object
       - We know that access will always be aligned to 4 KB chunks/the system page size, so we can assume a chunk size on the server based on that
       - For the first example, we can return a random pattern in the backend (code snippet from https://github.com/loopholelabs/userfaultfd-go/blob/master/cmd/userfaultfd-go-example-abc/main.go) - this shows a great way of exposing truly arbitrary information into a byte slice without having to pre-compute everything or changing the application
       - Since a file is a valid `io.ReaderAt`, we can also use a file as the backend directly, creating a system that essentially allows for mounting a (remote) file into memory (code snippet from https://github.com/loopholelabs/userfaultfd-go/blob/master/cmd/userfaultfd-go-example-file/main.go)
       - Similarly so, we can use it map a remote object from S3 into memory, and access only the chunks of it that we actually require (which in the case of S3 is achieved with HTTP range requests) (code snippet from https://github.com/loopholelabs/userfaultfd-go/blob/master/cmd/userfaultfd-go-example-s3/main.go)
-    - Discussion of `userfaultfd`
-      - As we can see, using `userfaultfd` we are able to map almost any object into memory
-      - This approach is very clean and has comparatively little overhead, but also has significant architecture-related problems that limit its uses
-      - The first big problem is only being able to catch page faults - that means we can only ever respond the first time a chunk of memory gets accessed, all future requests will return the memory directly from RAM on the destination host
-      - This prevents us from using this approach for remote resources that update over
-      - Also prevents us from using it for things that might have concurrent writers/shared resources, since there would be no way of updating the conflicting section
-      - Essentially makes this system only usable for a read-only "mount" of a remote resource, not really synchronization
-      - Also prevents pulling chunks before they are being accessed without layers of indirection
-      - The `userfaultfd` API socket is also synchronous, so each chunk needs to be sent one after the other, meaning that it is very vulnerable to long RTT values
-      - Also means that the initial latency will be at minimum the RTT to the remote source, and (without caching) so will be each future request
-      - The biggest problem however: All of these drawbacks mean that in real-life usecases, the maximum throughput, even if a local process handles page faults on a modern computer, is ~50MB/s
       - Benchmark: Sensitivity of `userfaultfd` to network latency and throughput
-      - In summary, while this approach is interesting and very idiomatic to Go, for most data, esp. larger datasets and in high-latency scenarios/in WAN, we need a better solution
   - Push-Based Memory Synchronization with `mmap` and Hashing
     - File-based synchronization
       - This approach tries to improve on `userfaultfd` by switching to push-based synchronization method
@@ -111,27 +177,9 @@ lang: en-US
       - Benchmark: Hashing the chunks individually vs. hashing the entire file
       - But this can not only increase the speed of each individual polling tick, it can also drastically decrease the amount of data that needs to be transferred since only the delta needs to be synchronized
       - Hashing and/or syncing individual chunks that have changed is a common practice
-    - Delta synchronization
-      - The probably most popular tool for file synchronization like this is rsync
-      - When the delta-transfer algorithm for rsync is active, it computes the difference between the local and the remote file, and then synchronizes the changes
-      - The delta sync algorithm first does file block division
-      - The file on the destination is divided into fixed-size blocks
-      - For each block in the destination, a weak and fast checksum is calculated
-      - The checksums are sent over to the source
-      - On the source, the same checksum calculation process is run, and compared against the checksums that were sent over (matching block identification)
-      - Once the changed blocks are known, the source sends over the offset of each block and the changed block's data to the destination
-      - When a block is received, the destination writes the chunk to the specified offset, reconstructing the file
-      - Once one polling interval is done, the process begins again
+    - Delta synchronization protocol
       - We have implemented a simple TCP-based protocol for this delta synchronization, just like rsync's delta synchronization algorithm (code snippet from https://github.com/loopholelabs/darkmagyk/blob/master/cmd/darkmagyk-orchestrator/main.go#L1337-L1411 etc.)
       - For this protocol specifically, we send the changed file's name as the first message when starting the synchronization, but a simple multiplexing system could easily be implemented by sending a file ID with each message
-    - Discussion of file-based synchronization
-      - Similarly to `userfaultfd`, this system also has limitations
-      - While `userfaultfd` was only able to catch reads, this system is only able to catch writes to the file
-      - Essentially this system is write-only, and it is very inefficient to add hosts to the network later on
-      - As a result, if there are many possible destinations to migrate state too, a star-based architecture with a central forwarding hub can be used
-      - The static topology of this approach can be used to only ever require hashing on one of the destinations and the source instead of all of them
-      - This way, we only need to push the changes to one component (the hub), instead of having to push them to each destination on their own
-      - The hub simply forwards the messages to all the other destinations
       - Benchmark: Throughput of this custom synchronization protocol vs. rsync (which hashes entire files)
   - Push-Pull Memory Synchronization with a FUSE
     - File system-based synchronization in the kernel
@@ -146,29 +194,14 @@ lang: en-US
       - Iterating on a kernel module is much harder than iterating on a program running in user space
       - If we want the user to be able to provide their own backends from/to which to pull/push, that will still require communication between user space and the kernel
       - So while adding this implementation in the kernel would be possible, it would also be very complex
-    - File systems in user space
-      - In order to implement file systems in user space, we can use the FUSE API
-      - Here, a user space program registers itself with the FUSE kernel module
-      - This program provides callbacks for the file system operations, e.g. for `open`, `read`, `write` etc.
-      - When the user performs a file system operation on a mounted FUSE file system, the kernel module will send a request for the operation to the user space program, which can then reply with a response, which the FUSE kernel module will then return to the user
-      - This makes it much easier to create a file system compared to writing it in the kernel, as it can run in user space
-      - It is also much safer as no custom kernel module is required and an error in the FUSE or the backend can't crash the entire kernel
-      - Unlike a file system implemented as a kernel module, this layer of indirection makes the file system portable, since it only needs to communicate with the FUSE module
     - Implementing a FUSE
       - It is possible to use even very complex and at first view non-compatible backends as a FUSE file system's backend
       - By using a file system abstraction API like `afero.Fs`, we can separate the FUSE implementation from the actual file system structure, making it unit testable and making it possible to add caching in user space (code snippet from https://github.com/pojntfx/stfs/blob/main/pkg/fs/file.go)
       - It is possible to map any `afero.Fs` to a FUSE backend, so it would be possible to switch between different file system backends without having to write FUSE-specific (code snippet from https://github.com/JakWai01/sile-fystem/blob/main/pkg/filesystem/fs.go)
       - For example, STFS used a tape drive as the backend, which is not random access, but instead append-only and linear (https://github.com/pojntfx/stfs/blob/main/pkg/operations/update.go)
       - By using an on-disk index and access optimizations, the resulting file system was still performant enough to be used, and supported almost all features required for the average user
-    - Discussion of FUSE
-      - FUSE does however also have downsides
-      - It operates in user space, which means that it needs to do context switching
-      - Some advanced features aren't available for a FUSE
-      - The overhead of FUSE (and implementing a completely custom file system) for synchronizing memory is still significant
-      - If possible, the optimal solution would be to not expose a full file system to track changes, but rather a single file
-      - As a result of this, the significant implementation overhead of such a file system led to it not being chosen
   - Pull-Based Memory Synchronization with NBD
-    - Block Device-based syncrhonization
+    - Block Device-based synchronization
       - As hinted at before, a better API would be able to catch reads/writes to a single `mmap`ed file instead of having to implement a complete file system
       - It does however not have to be an actual file, a block device also works
       - In Linux, block devices are (typically storage) devices that support reading/writing fixed chunks (blocks) of data
@@ -179,26 +212,6 @@ lang: en-US
       - The difference between a FUSE and NBD is that a NBD server doesn't provide a file system
       - A NBD server provides the storage device that (typically) hosts a file system, which means that the interface for it is much, much simpler
       - The implementation overhead of a NBD server's backend is much more similar to how `userfaultfd-go` works, rather than a FUSE
-    - NBD and the NBD kernel module
-      - NBD uses a protocol to communicate between a server (provided by user space) and a client (provided by the NBD kernel module)
-      - The protocol can run over WAN, but is really mostly meant for LAN or localhost usage
-      - It has two phases: Handshake and transmission
-      - There are two actors in the protocol: One or multiple clients, the server and the virtual concept of an export
-      - When the client connects to the server, the server sends a greeting message with the server's flags
-      - The client responds with its own flags and an export name (a single NBD server can expose multiple devices) to use
-      - The server sends the export's size and other metadata, after which the client acknowledges the received data and the handshake is complete
-      - After the handshake, the client and server start exchanging commands and replies
-      - A command can be any of the basic operations needed to access a block device, e.g. read, write or flush
-      - Depending on the command, it can also contain data (such as the chunk to be written), offsets, lengths and more
-      - Replies can contain an error, success value or data depending on the reply's type
-      - NBD is however limited in some respects; the maximum message size is 32 MB, but the maximum block/chunk size supported by the kernel is just 4096 KB, making it a suboptimal protocol to run over WAN, esp. in high latency scenarios
-      - The protocol also allows for listing exports, making it possible to e.g. list multiple memory regions on a single server
-      - NBD is an older protocol with multiple different handshake versions and legacy features
-      - Since the purpose of NBD in this use case is minimal and both the server and the client are typically controlled, it makes sense to only implement the latest recommended versions and the baseline feature set
-      - The baseline feature set requires no TLS, the latest "fixed newstyle" handshake, the ability to list and choose an export, as well as the read, write and disc(onnect) commands and replies
-      - As such, the protocol is very simple to implement
-      - With this simplicity however also come some drawbacks: NBD is less suited for use cases where the backing device behaves very differently from a random-access store device, like for example a tape drive, since it is not possible to work with high-level abstractions such as files or directories
-      - This is, for the narrow memory synchronization use case, however more of a feature than a bug
     - Implementing `go-nbd`
       - Due to the lack of pre-existing libraries, a new pure Go NBD library was implemented
       - This library does not rely on CGo/a pre-existing C library, meaning that a lot of context switching can be skipped
@@ -231,29 +244,6 @@ lang: en-US
       - By using `O_DIRECT` however, it is possible to skip the kernel caching layer and write all changes directly to the NBD client/server
       - This is particularly useful if both the client and server are on the local system, and if the amount of time spent on `sync`ing should be as small as possible
       - It does however require reads and writes on the device node to be aligned to the system's page size, which is possible to implement with a client-side chunking system but does require application-specific code
-    - Discussion of NBD and `ublk` as an alternative
-      - NBD is a battle-tested solution for this with fairly good performance, but in the future a more lean implemenation called `ublk` could also be used
-      - `ublk` uses `io_uring`, which means that it could potentially allow for much faster concurrent access
-      - It is similar to NBD; it also uses a user space server to provide the block device backend, and a kernel `ublk` driver that creates `/dev/ublkb*` devices
-      - Unlike as it is the case for the NBD kernel module, which uses a rather slow UNIX or TCP socket to communicate, `ublk` is able to use `io_uring` pass-through commands
-      - The `io_uring` architecture promises lower latency and better throughput
-      - Because it is however still experimental and docs are lacking, NBD was chosen
-    - `BUSE` and `CUSE` as alternatives
-      - Another option of implementing a block device is BUSE (block devices in user space)
-      - BUSE is similar to FUSE in nature, and similarly to it has a kernel and user space server component
-      - Similarly to `ublk` however, BUSE is experimental
-      - Client libraries in Go are also experimental, preventing it from being used as easily as NBD
-      - Similarly so, a CUSE could be implemented (char device in user space)
-      - CUSE is a very flexible way of defining a char (and thus block) device, but also lacks documentation
-      - The interface being exposed by CUSE is more complicated than that of e.g. NBD, but allows for interesting features such as custom `ioctl`s (code snippet from https://github.com/pojntfx/webpipe/blob/main/pkg/cuse/device.go#L3-L15)
-      - The only way of implementing it without too much overhead however is CGo, which comes with its own overhead
-      - It also requires calling Go closures from C code, which is complicated (code snippet from https://github.com/pojntfx/webpipe/blob/main/pkg/cuse/bindings.go#L79-L132)
-      - Implementing closures is possible by using the `userdata` parameter in the CUSE C API (code snippet from https://github.com/pojntfx/webpipe/blob/main/pkg/cuse/cuse.c#L20-L22)
-      - To fully use it, it needs to first resolve a Go callback in C, and then call it with a pointer to the method's struct in user data, effectively allowing for the use of closures (code snippet from https://github.com/pojntfx/webpipe/blob/main/pkg/cuse/bindings.go#L134-L162)
-      - Even with this however, it is hard to implement even a simple backend, and the CGo overhead is a significant drawback (code snippet from https://github.com/pojntfx/webpipe/blob/main/pkg/devices/trace_device.go)
-      - The last alternative to NBD devices would be to extend the kernel with a new construct that allows for essentially a virtual file to be `mmap`ed, not a block device
-      - This could use a custom protocol that is optimized for this use case instead of a full block device
-      - Because of the extensive setup required to implement such a system however, and the possibility of `ublk` providing a performant alternative in the future, going forward with NBD was chosen for now
   - Push-Pull Memory Synchronization with Mounts
     - Limitations of the NBD protocol in WAN
       - Usually, the NBD server and client don't run on the same system
@@ -303,26 +293,6 @@ lang: en-US
       - It is possible to do the chunking in two places; on the mount API's side, and on the (potentially remote) backend's side
       - Doing the chunking on the backend's side is usually much faster than on the mount API's side, as writes with lengths smaller than the chunk size will mean that the remote chunk needs to be fetched first, significantly increasing the latency esp. in scenarios with high RTT
       - Benchmark: Local vs. remote chunking
-    - Pre- and post-copy VM live migration
-      - While these systems already allow for some optimizations over simply using the NBD protocol over WAN, they still mean that chunks will only be fetched as they are being needed, which means that there still is a guaranteed minimum downtime
-      - In order to improve on this, a more advanced API (the managed mount API) was created
-      - A field that tries to optimize for this use case is live migration of VMs
-      - Live migration refers to moving a virtual machine, its state and connected devices from one host to another with as little downtime as possible
-      - There are two types of such migration algorithms; pre-copy and post-copy migration
-      - Pre-copy migration works by copying data from the source to the destination as the VM continues to run (or in the case of a generic migration, app/other state continues being written to)
-      - First, the initial state of the VM's memory is copied to the destination
-      - If, during the push, chunks are being modified, they are being marked as dirty
-      - These dirty chunks are being copied over to the destination until the number of remaining chunks is small enough to satisfy a maximum downtime criteria
-      - Once this is the case, the VM is suspended on the source, and the remaining chunks are synced over to destination
-      - Once the transfer is complete, the VM is resumed on the destination
-      - This process is helpful since the VM is always available in full on either the source or the destination, and it is resilient to a network outage occurring during the synchronization
-      - If the VM (or app etc.) is however changing too many chunks on the source during the migration, the maximum acceptable downtime criteria might never get reached, and the maximum acceptable downtime is also somewhat limited by the available RTT
-      - An alternative to pre-copy migration
-      - In this approach, the VM is immediately suspended on the source, moved to the destination with only a minimal set of chunks
-      - After the VM has been moved to the destination, it is resumed
-      - If the VM tries to access a chunk on the destination, a page fault is raised, and the missing page is fetched from the source, and the VM continues to execute
-      - The benefit of post-copy migration is that it does not require re-transmitting dirty chunks to the destination before the maximum tolerable downtime is reached
-      - The big drawback of post-copy migration is that it can result in longer migration times, because the chunks need to be fetched from the network on-demand, which is very latency/RTT-sensitive
     - Combining pre- and post-copy migration with managed mounts
       - For the managed mount API, both paradigms were implemented
       - The managed mount API is primarily intended as an API for reading from a remote resource and then syncing changes back to it however, not migrating a resource between two hosts
@@ -393,11 +363,6 @@ lang: en-US
       - In the future, using a language without a GC (such as Rust) could provide a good alternative
       - While the current API is Go-specific, it could also be exposed through a different interface to make it usable in Go
     - Comparing the managed mounts API to RegionFS
-      - A similar approach was made in RegionFS (reference atc18-aguilera)
-      - RegionFS is implemented as a kernel module, but it is functionally similar to how this API exposes a NBD device for memory interaction
-      - In RegionFS, the regions file system is mounted to a path, which then exposes regions as virtual files
-      - Instead of using a custom configuration (such as configuring the amount of pushers to make a mount read-only), such an approach makes it possible to use `chmod` on the virtual file for a memory region to set permissions
-      - By using standard utilities like `open` and `chmod`, this API usable from different programming languages with ease
       - Unlike the managed mounts API however, the system proposed in Remote Regions is mostly intended for private usecases with a limited amount of hosts and in LAN, with low-RTT connections
       - It is also not designed to be used for a potential migration scenarios, which the modular approach of r3map allows for
       - While Remote Regions' file system approach does allow for authorization based on permissions, it doesn't specify how authentication could work
@@ -459,163 +424,204 @@ lang: en-US
       - While for the memory sync on its own, one could just call `Finalize` multiple times to restart it
       - But since `Finalize` needs to return a list of dirty chunks, it requires the VM or app on the source device to be suspended before `Finalize` can return
       - While not necessarily the case, such a suspend operation is not idempotent (since it might not just be a suspension that is required, but also a shutdown of dependencies etc.)
-      - "Reducing Virtual Machine Live Migration Overhead via Workload Analysis" provides an interesting analysis of options on how this decision of when to migrate can be made
-      - While being designed mostly for use with virtual machines, it could serve as a basis for other applications or migration scenarios, too
-      - The proposed method identifies workload cycles of VMs and uses this information to postpone the migration if doing so is beneficial
-      - This works by analyzing cyclic patters that can unnecessarily delay a VM's migration, and identifies optimal cycles to migrate VMs in from this information
-      - For the VM use case, such cycles could for example be the GC of a large application triggering a lot of changes to the VMs memory etc.
-      - If a migration is proposed, the system checks for whether it is currently in a beneficial cycle to migrate in which case it lets the migration proceed; otherwise, it postpones it until the next cycle
-      - The algorithm uses a Bayesian classifier to identify a favorable or unfavorable cycle
-      - Compared to the alternative, which is usually waiting for a significant percentage of the chunks that were not changed before tracking started to be synced first, this can potentially yield a lot of improvements
-      - The paper has found an improvement of up to 74% in terms of live migration time/downtime and 43% in terms of the amount of data transferred over the network
-      - While such a system was not implemented for r3map, using r3map with such a system would certainly be possible
-    - Migration vs mount API performance
-      - With these results in mind, it is interesting to look at how the migration API performs compared to the single-phase mount API
-      - Benchmark: Maximum acceptable downtime for a migration scenario with the Managed Mount API vs the Migration API
-  - Optimizing Mounts and Migrations
-    - Live migration encryption and authorization in WAN
-      - Compared to existing remote mount and migration solutions, r3map is a bit special
-      - As mentioned before, most systems are designed for scenarios where such resources are accessible in a high-bandwidth, low-latency LAN
-      - This means that some assumptions concerning security, authentication, authorization and scalability were made that can not be made here
-      - For example encryption; while for a LAN deployment scenario it is probably assumed that there are no bad actors in the subnet, the same can not be said for WAN
-      - While depending on e.g. TLS etc. for the migration could have been an option, r3map should still be useful for LAN migration use cases, too, which is why it was made to be completely transport-agnostic
-      - This makes adding encryption very simple
-      - E.g. for LAN, the same assumptions that are being made in existing systems can be made, and fast latency-sensitive protocols like the SCSI RDMA protocol (SRP) or a bespoke protocol can be used
-      - For WAN, a standard internet protocol like TLS over TCP or QUIC can be used instead, which will allow for migration over the public internet, too
-      - For RPC frameworks with exchangeable transport layers such as dudirekta (will be explained later), this also allows for unique migration or mount scenarios in NATed environments over WebRTC data channels, which would be very hard to implement with more traditional setups
-      - Similarly so, authentication and authorization can be implemented in many ways
-      - While for migration in LAN, the typical approach of simply trusting the local subnet can be used, for public deployments mTLS certificates or even higher-level protocols such as OIDC can be used depending on the transport layer chosen
-      - For WAN specifically, new protocols such as QUIC allow tight integration with TLS for authentication and encryption
-      - While less relevant for the migration use case (since connections can be established ahead of time), for the mount use case the initial remote `ReadAt` requests' latency is an important metric since it strongly correlates with the total latency
-      - QUIC has a way to establish 0-RTT TLS, which can save one or multiple RTTs and thus signficantly reduce this overhead, and handle authentication in the same step
-    - Push-pull API design considerations in WAN
-      - Another optimization that has been made to support this WAN deployment scenario is the pull-only architecture
-      - Usually, a pre-copy system pushes changes to the destination in the migration API
-      - This however makes such a system hard to use in a scenario where NATs exist, or a scenario in which the network might have an outage during the migration
-      - With a pull-only system emulating the pre-copy setup, the client can simply keep track of which chunks it still needs to pull itself, so if there is a network outage, it can just resume pulling like before, which would be much harder to implement with a push system as the server would have to track this state for multiple clients and handle the lifecycle there
-      - The pull-only system also means that unlike the push system that was implemented for the hash-based synchronization, a central forwarding hub is not necessary
-      - In the push-based system for the hash-based solution, the topology had to be static/all destinations would have to have received the changes made to the remote app's memory since it was started
-      - In order to cut down on unnecessary duplicate data transmissions, a central forwarding hub was implemented
-      - This central forwarding hub does however add additional latency, which can be removed completely with the migration protocol's P2P, pull-only algorithm
-    - Optimizing backends for high RTT
-      - In WAN, where latency is high, the ability to fetch chunks concurrently is very important
-      - Without concurrent background pulls, latency adds up very quickly as every memory request would have at least the RTT as latency
-      - The first prerequisite for supporting this is that the remote backend has to be able to read from multiple regions without locking the backend globally
-      - For the file backend for example, this is not the case, as the lock needs to be acquired for the entire file before an offset can be accessed (code snippet from https://github.com/pojntfx/go-nbd/blob/main/pkg/backend/file.go#L17-L25)
-      - For high-latency scenarios, this can quickly become a bottleneck
-      - While there are many ways to solve this, one is to use the directory backend
-      - Instead of using just one backing file, the directory backend is a chunked backend that uses a directory with one file for each chunk instead of a global file
-      - This means that the directory backend can lock each file individually, speeding up concurrent access
-      - This also applies to writes, where even concurrent writes to different chunks can be done at the same time as they are all backed by a separate file
-      - The directory backend keeps track of these chunks by using an internal map of locks (code snippet from https://github.com/pojntfx/r3map/blob/main/pkg/backend/directory.go#L22-L24)
-      - When a chunk is first accessed, a new file is created for the chunk (code snipped from https://github.com/pojntfx/r3map/blob/main/pkg/backend/directory.go#L77-L94)
-      - If the chunk is being read, the file is also truncated to one chunk length
-      - Since this could easily exhaust the number of maximum allowed file descriptors for a process, a check is added (code snippet from https://github.com/pojntfx/r3map/blob/main/pkg/backend/directory.go#L55-L75)
-      - If the maximum allowed number of open files is exceeded, the first file is closed and removed from the map, causing it to be reopened on a subsequent read
-      - These optimizations add an initial overhead to operations, but can significantly improve the pull speed in scenarios where the backing disk is slow or the latency is high
-      - Benchmark: File vs. directory backend performance
-    - Bi-directional protocols with Dudirekta
-      - Another aspect that plays an important role in performance for real-life deployments is the choice of RPC framework and transport protocol
-      - As mentioned before, both the mount and the migration APIs are transport-independent
-      - A simple RPC framework to use is dudirekta
-      - Dudirekta is reflection-based, which makes it very simple to use to iterate on the protocol quickly
-      - To use it, a simple wrapper struct with the needed RPC methods is created (code snippet from https://github.com/pojntfx/r3map/blob/main/pkg/services/backend.go#L41-L61)
-      - This wrapper struct simply calls the backend (or seeder etc.) functions
-      - The wrapper struct is then passed as the local function struct into a registry, which creates the RPC server (code snippet from https://github.com/pojntfx/r3map/blob/main/cmd/r3map-mount-benchmark-server/main.go#L146-L166)
-      - When the transport protocol, in this case TCP, `accept`s a client it is linked to the registry (code snippet from https://github.com/pojntfx/r3map/blob/main/cmd/r3map-mount-benchmark-server/main.go#L198-L200)
-      - The used protocol is very simple (code snippet from https://github.com/pojntfx/dudirekta#protocol)
-      - If an RPC, such as `ReadAt`, is called, it is looked up via reflection and validated (code snippet from https://github.com/pojntfx/dudirekta/blob/main/pkg/rpc/registry.go#L323-L357)
-      - The arguments, which have been supplied as JSON, are then unmarshalled into their native types, and the local wrapper struct's method is called in a new goroutine (code snippet from https://github.com/pojntfx/dudirekta/blob/main/pkg/rpc/registry.go#L417-L521)
-      - This allows for one important feature: Concurrent RPC calls
-      - Many simple RPC frameworks only support one RPC call at a time, because no demuxing is implemented
-      - For example, when dRPC (https://github.com/storj/drpc) was used, drastic performance issues were noted compared to gRPC etc., because no support for concurrent RPCs was implemented
-      - To use a RPC backend on the destination side, the wrapper struct's remote representation is used (code snippet from https://github.com/pojntfx/r3map/blob/main/pkg/services/backend.go#L14-L19)
-      - For the destination site, the remote representation's fields are iterated over, and replaced by functions which marshal and unmarshal the function calls into the dudirekta JSON protocol (code snippet from https://github.com/pojntfx/dudirekta/blob/main/pkg/rpc/registry.go#L228-L269)
-      - To do this, the arguments are marshalled into JSON, and a unique call ID is generated (code snippet from https://github.com/pojntfx/dudirekta/blob/main/pkg/rpc/registry.go#L109-L130)
-      - Once the remote has responded with a message containing the unique call ID, it unmarshalls the arguments, and returns (code snippet from https://github.com/pojntfx/dudirekta/blob/main/pkg/rpc/registry.go#L145-L217)
-      - This makes both calling RPCs and defining them completely transparent to the user
-      - Since dudirekta has a few limitations (such as the fact that slices are passed as copies, not references, and that context needs to be provided), the resulting remote struct can't be used directly
-      - To work around this, the standard `go-nbd` backend interface is implemented for the remote representation, creating a universally reusable, generic RPC backend wrapper (code snippet from https://github.com/pojntfx/r3map/blob/main/pkg/backend/rpc.go)
-      - The same backend implementation is also done for the seeder protocol (code snippet from https://github.com/pojntfx/r3map/blob/main/pkg/services/seeder.go)
-      - While the dudirekta RPC serves as a good reference implementation of the basic RPC protocol, it does not scale particularly well
-      - This mostly stems from two aspects of how it is designed
-      - JSON(L) is used for the wire format, which while simple and easy to analyze, is slow to marshal and unmarshal
-      - Dudirekta supports defining functions on both the client and the server
-      - This is very useful for implementing e.g. a pre-copy protocol where the source pushes chunks to the destination by simply calling a RPC on the destination
-      - Usually, RPCs don't support exposing or calling RPCs on the client, too, only on the server
-      - This would mean that in order to implement a pre-copy protocol with pushes, the destination would have to be `dial`able from the source
-      - In a LAN scenario, this is easy to implement, but in WAN it is complicated and requires authentication of both the client and the server
-      - Dudirekta fixes this by making the protocol itself bi-directional (example and code snippet from https://github.com/pojntfx/dudirekta/tree/main#1-define-local-functions)
-      - In addition to this, dudirekta works over any `io.ReadWriter`
-    - Optimizing the transport protocol for high RTT with connection pooling
-      - This does however come at the cost of not being able to do connection pooling, since each client `dial`ing the server would mean that the server could not reference the multiple client connections as one composite client without changes to the protocol
-      - While implementing such a pooling mechanism in the future could be interesting, it turned out to not be necessary thanks to the pull-based pre-copy solution described earlier
-      - Instead, only calling RPCs exposed on the server from the client is the only requirement for an RPC framework, and other, more optimized RPC frameworks can already offer this
-      - Dudirekta uses reflection to make the RPCs essentially almost transparent to use
-      - By switching to a well-defined protocol with a DSL instead, we can gain further benefits from not having to use reflection and generating code instead
-      - One popular such framework is gRPC
-      - gRPC is a high-performance RPC framework based on Protocol Buffers
-      - Because it is based on Protobuf, we can define the protocol itself in the `proto3` DSL
-      - The DSL also allows to specify the order of each field in the resulting wire protocol, making it possible to evolve the protocol over time without having to break backwards compatibility
-      - This is very important given that r3map could be ported to a language with less overhead in the future, e.g. Rust, and being able to re-use the existing wire protocol would make this much easier
-      - While dudirekta is a simple protocol that is easy to adapt for other languages, currently it only supports Go and JS, while gRPC supports many more
-      - A fairly unique feature of gRPC are streaming RPCs, where a stream of requests can be sent to/from the server/client, which, while not used for the r3map protocol, could be very useful to implementing a pre-copy migration API with pushes similarly to how dudirekta does it by exposing RPCs from the client
-      - As mentioned before, for WAN migration or mount scenarios, things like authentication, authorization and encryption are important, which gRPC is well-suited for
-      - Protobuf being a proper byte-, not plaintext-based wire format is also very helpful, since it means that e.g. sending bytes back from `ReadAt` RPCs doesn't require any encoding (wereas JSON, used by dudirekta, `base64` encodes these chunks)
-      - gRPC is also based on HTTP/2, which means that it can benefit from existing load balancing tooling etc. that is popular in WAN for web uses even today
-      - This backend is implemented by first defining the protocol in the DSL (code snippet from https://github.com/pojntfx/r3map/blob/main/api/proto/migration/v1/seeder.proto)
-      - After generating the bindings, the generated backend interface is implemented by using the dudirekta wrapper struct as the abstraction layer (code snippet from https://github.com/pojntfx/r3map/blob/main/pkg/services/seeder_grpc.go)
-      - Unlike dudirekta, gRPC also implements concurrent RPCs and connection pooling
-      - Similarly to how having a backend that allows concurrent reads/writes can be useful to speed up the concurrent push/pull steps, having a protocol that allows for concurrent RPCs can do the same
-      - Connection pooling is another aspect that can help with this
-      - Instead of either using one single connection with a multiplexer (which is possible because it uses HTTP/2) to allow for multiple requests, or creating a new connection for every request, gRPC is able to intelligently re-use existing connections for RPCs or create new ones, speeding up parallel requests
-    - Optimizing the transport protocol for throughput
-      - Despite these benefits, gRPC is not perfect however
-      - Protobuf specifically, while being faster than JSON, is not the fastest serialization framework that could be used
-      - This is especially true for large chunks of data, and becomes a real bottleneck if the connection between source and destination would allow for a high throughput
-      - This is where fRPC, a RPC library that is easy to replace gRPC with, becomes useful
-      - fRPC is 2-4x faster than gRPC, and especially in terms of throughput (insert graphics from https://frpc.io/performance/grpc-benchmarks)
-      - Because throughput and latency determine the maximum acceptable downtime of a migration/the initial latency for mounts, choosing the right RPC protocol is an important decision
-      - fRPC also uses the same proto3 DSL, which makes it an easy drop-in replacement, and it also supports multiplexing and connection polling
-      - Because of these similarities, the usage of fRPC in r3map is extremely similar to gRPC (code snippet from https://github.com/pojntfx/r3map/blob/main/pkg/services/seeder_frpc.go)
-      - A good way to test how well the RPC framework scales for concurrent requests is scaling the amount of pull workers, where dudirekta only gains marginally from increasing their number, whereas both gRPC and fRPC can increase throughput and decrease the initial latency by pulling more chunks pre-emptively
-      - Benchmark: Effect of tuning the amount of push/pull workers in high-latency for these three backends on latency till first n chunks and throughput
-    - Using key-value stores as ephemeral mount/migration backends
-      - These backends provide a way to access a remote backend
-      - This is useful, esp. if the remote resource should be protected in some way or if it requires some kind of authorization
-      - Depending on the use case however, esp. for the mount API, having access to a remote backend without this level of indirection can be useful
-      - Fundamentally, a mount maps fairly well to a remote random-access storage device
-      - Many existing protocols and systems provide a way to access essentially this concept over a network
-      - One of these is Redis, an in-memory key-value store with network access
-      - Chunk offsets can be mapped to keys, and bytes are a valid key type, so the chunk itself can be stored directly in the KV store (code snippet from https://github.com/pojntfx/r3map/blob/main/pkg/backend/redis.go#L36-L63)
-      - Using Redis is particularly useful because it is able to handle the locking server-side in a very efficient way, and is well-tested for high-throughput etc. scenarious
-      - Authentication can also be handled using the Redis protocol, so can multi-tenancy by using multiple databases or a prefix
-      - Redis also has very fast read/write speeds due to its bespoke protocol and fast serialization
-    - Mapping large ressoures into memory with S3
-      - While the Redis backend is very useful for read-/write usage, when deployment to the public internet is required, it might not be the best one
-      - The S3 backend is an good choice for mapping public information, e.g. media assets, binaries, large read-only filesystems etc. into memory
-      - S3 used to be an object storage service from AWS, but has since become a more or less standard way for accessing blobs thanks to open-source S3 implementations such as Minio
-      - Similarly to how files were used as individual files, one S3 object per chunk is used to store them
-      - S3 is based on HTTP, and like the Redis backend requires chunking due to it not supporting updates of part of a file
-      - In order to prevent having to store empty data, the backend interprets "not found" errors as empty chunks
-    - Document databases as persistent mount remotes
-      - Another backend option is a NoSQL server such as Cassandra
-      - This is more of a proof of concept than a real usecase, but shows the versitility and flexibility of how a database can be mapped to a memory region, which can be interesting for accessing e.g. a remote database's content without having to use a specific client
-      - `ReadAt` and `WriteAt` are implemented using Cassandra's query language (code snippet from https://github.com/pojntfx/r3map/blob/main/pkg/backend/cassandra.go#L36-L63)
-      - Similarly to Redis, locking individual keys can be handled by the DB server
-      - But in the case of Cassandra, the DB server stores chunks on disk, so it can be used for persistent data
-      - In order to use Cassandra, migrations have to be applied for creating the table etc. (code snippet from https://github.com/pojntfx/r3map/blob/main/cmd/r3map-direct-mount-benchmark/main.go#L369-L396)
-      - Benchmark: These three backends on localhost and on remote hosts, where they could be of use
-    - Overhead of using managed mounts
-      - Another interesting aspect of optimization to look at is the overhead of managed mounts
-      - It is possible for managed mounts (and migrations) to deliver signficantly lower performance compared to direct mounts
-      - This is because using managed mounts come with the cost of potential duplicate I/O operations
-      - For example, if memory is being accessed linearly from the first to the last offset immediately after it being mounted, then using the background pulls will have no effect other than causing a write operation (to the local caching backend) compared to just directly reading from the remote backend
-      - This however is only the case in scenarios with a very low latency between the local and remote backends
-      - If latency becomes higher, then the ability to pull the chunks in the background and in parallel with the puller will offset the cost of duplicate I/O
-      - The same applies to slow local backends, e.g. if slow disks or memory are being used, which can mean that offsetting the duplicate I/O will need a significantly higher latency to be worth it
-      - Benchmark: Latency and throughput of all benchmarks on localhost and in a realistic latency and throughput scenario (direct mounts can outperform managed mounts in tests on localhosts)
+- Results
+  - Live migration encryption and authorization in WAN
+    - Compared to existing remote mount and migration solutions, r3map is a bit special
+    - As mentioned before, most systems are designed for scenarios where such resources are accessible in a high-bandwidth, low-latency LAN
+    - This means that some assumptions concerning security, authentication, authorization and scalability were made that can not be made here
+    - For example encryption; while for a LAN deployment scenario it is probably assumed that there are no bad actors in the subnet, the same can not be said for WAN
+    - While depending on e.g. TLS etc. for the migration could have been an option, r3map should still be useful for LAN migration use cases, too, which is why it was made to be completely transport-agnostic
+    - This makes adding encryption very simple
+    - E.g. for LAN, the same assumptions that are being made in existing systems can be made, and fast latency-sensitive protocols like the SCSI RDMA protocol (SRP) or a bespoke protocol can be used
+    - For WAN, a standard internet protocol like TLS over TCP or QUIC can be used instead, which will allow for migration over the public internet, too
+    - For RPC frameworks with exchangeable transport layers such as dudirekta (will be explained later), this also allows for unique migration or mount scenarios in NATed environments over WebRTC data channels, which would be very hard to implement with more traditional setups
+    - Similarly so, authentication and authorization can be implemented in many ways
+    - While for migration in LAN, the typical approach of simply trusting the local subnet can be used, for public deployments mTLS certificates or even higher-level protocols such as OIDC can be used depending on the transport layer chosen
+    - For WAN specifically, new protocols such as QUIC allow tight integration with TLS for authentication and encryption
+    - While less relevant for the migration use case (since connections can be established ahead of time), for the mount use case the initial remote `ReadAt` requests' latency is an important metric since it strongly correlates with the total latency
+    - QUIC has a way to establish 0-RTT TLS, which can save one or multiple RTTs and thus signficantly reduce this overhead, and handle authentication in the same step
+  - Push-pull API design considerations in WAN
+    - Another optimization that has been made to support this WAN deployment scenario is the pull-only architecture
+    - Usually, a pre-copy system pushes changes to the destination in the migration API
+    - This however makes such a system hard to use in a scenario where NATs exist, or a scenario in which the network might have an outage during the migration
+    - With a pull-only system emulating the pre-copy setup, the client can simply keep track of which chunks it still needs to pull itself, so if there is a network outage, it can just resume pulling like before, which would be much harder to implement with a push system as the server would have to track this state for multiple clients and handle the lifecycle there
+    - The pull-only system also means that unlike the push system that was implemented for the hash-based synchronization, a central forwarding hub is not necessary
+    - In the push-based system for the hash-based solution, the topology had to be static/all destinations would have to have received the changes made to the remote app's memory since it was started
+    - In order to cut down on unnecessary duplicate data transmissions, a central forwarding hub was implemented
+    - This central forwarding hub does however add additional latency, which can be removed completely with the migration protocol's P2P, pull-only algorithm
+  - Optimizing backends for high RTT
+    - In WAN, where latency is high, the ability to fetch chunks concurrently is very important
+    - Without concurrent background pulls, latency adds up very quickly as every memory request would have at least the RTT as latency
+    - The first prerequisite for supporting this is that the remote backend has to be able to read from multiple regions without locking the backend globally
+    - For the file backend for example, this is not the case, as the lock needs to be acquired for the entire file before an offset can be accessed (code snippet from https://github.com/pojntfx/go-nbd/blob/main/pkg/backend/file.go#L17-L25)
+    - For high-latency scenarios, this can quickly become a bottleneck
+    - While there are many ways to solve this, one is to use the directory backend
+    - Instead of using just one backing file, the directory backend is a chunked backend that uses a directory with one file for each chunk instead of a global file
+    - This means that the directory backend can lock each file individually, speeding up concurrent access
+    - This also applies to writes, where even concurrent writes to different chunks can be done at the same time as they are all backed by a separate file
+    - The directory backend keeps track of these chunks by using an internal map of locks (code snippet from https://github.com/pojntfx/r3map/blob/main/pkg/backend/directory.go#L22-L24)
+    - When a chunk is first accessed, a new file is created for the chunk (code snipped from https://github.com/pojntfx/r3map/blob/main/pkg/backend/directory.go#L77-L94)
+    - If the chunk is being read, the file is also truncated to one chunk length
+    - Since this could easily exhaust the number of maximum allowed file descriptors for a process, a check is added (code snippet from https://github.com/pojntfx/r3map/blob/main/pkg/backend/directory.go#L55-L75)
+    - If the maximum allowed number of open files is exceeded, the first file is closed and removed from the map, causing it to be reopened on a subsequent read
+    - These optimizations add an initial overhead to operations, but can significantly improve the pull speed in scenarios where the backing disk is slow or the latency is high
+    - Benchmark: File vs. directory backend performance
+  - Bi-directional protocols with Dudirekta
+    - Another aspect that plays an important role in performance for real-life deployments is the choice of RPC framework and transport protocol
+    - As mentioned before, both the mount and the migration APIs are transport-independent
+    - A simple RPC framework to use is dudirekta
+    - Dudirekta is reflection-based, which makes it very simple to use to iterate on the protocol quickly
+    - To use it, a simple wrapper struct with the needed RPC methods is created (code snippet from https://github.com/pojntfx/r3map/blob/main/pkg/services/backend.go#L41-L61)
+    - This wrapper struct simply calls the backend (or seeder etc.) functions
+    - The wrapper struct is then passed as the local function struct into a registry, which creates the RPC server (code snippet from https://github.com/pojntfx/r3map/blob/main/cmd/r3map-mount-benchmark-server/main.go#L146-L166)
+    - When the transport protocol, in this case TCP, `accept`s a client it is linked to the registry (code snippet from https://github.com/pojntfx/r3map/blob/main/cmd/r3map-mount-benchmark-server/main.go#L198-L200)
+    - The used protocol is very simple (code snippet from https://github.com/pojntfx/dudirekta#protocol)
+    - If an RPC, such as `ReadAt`, is called, it is looked up via reflection and validated (code snippet from https://github.com/pojntfx/dudirekta/blob/main/pkg/rpc/registry.go#L323-L357)
+    - The arguments, which have been supplied as JSON, are then unmarshalled into their native types, and the local wrapper struct's method is called in a new goroutine (code snippet from https://github.com/pojntfx/dudirekta/blob/main/pkg/rpc/registry.go#L417-L521)
+    - This allows for one important feature: Concurrent RPC calls
+    - Many simple RPC frameworks only support one RPC call at a time, because no demuxing is implemented
+    - For example, when dRPC (https://github.com/storj/drpc) was used, drastic performance issues were noted compared to gRPC etc., because no support for concurrent RPCs was implemented
+    - To use a RPC backend on the destination side, the wrapper struct's remote representation is used (code snippet from https://github.com/pojntfx/r3map/blob/main/pkg/services/backend.go#L14-L19)
+    - For the destination site, the remote representation's fields are iterated over, and replaced by functions which marshal and unmarshal the function calls into the dudirekta JSON protocol (code snippet from https://github.com/pojntfx/dudirekta/blob/main/pkg/rpc/registry.go#L228-L269)
+    - To do this, the arguments are marshalled into JSON, and a unique call ID is generated (code snippet from https://github.com/pojntfx/dudirekta/blob/main/pkg/rpc/registry.go#L109-L130)
+    - Once the remote has responded with a message containing the unique call ID, it unmarshalls the arguments, and returns (code snippet from https://github.com/pojntfx/dudirekta/blob/main/pkg/rpc/registry.go#L145-L217)
+    - This makes both calling RPCs and defining them completely transparent to the user
+    - Since dudirekta has a few limitations (such as the fact that slices are passed as copies, not references, and that context needs to be provided), the resulting remote struct can't be used directly
+    - To work around this, the standard `go-nbd` backend interface is implemented for the remote representation, creating a universally reusable, generic RPC backend wrapper (code snippet from https://github.com/pojntfx/r3map/blob/main/pkg/backend/rpc.go)
+    - The same backend implementation is also done for the seeder protocol (code snippet from https://github.com/pojntfx/r3map/blob/main/pkg/services/seeder.go)
+    - While the dudirekta RPC serves as a good reference implementation of the basic RPC protocol, it does not scale particularly well
+    - This mostly stems from two aspects of how it is designed
+    - JSON(L) is used for the wire format, which while simple and easy to analyze, is slow to marshal and unmarshal
+    - Dudirekta supports defining functions on both the client and the server
+    - This is very useful for implementing e.g. a pre-copy protocol where the source pushes chunks to the destination by simply calling a RPC on the destination
+    - Usually, RPCs don't support exposing or calling RPCs on the client, too, only on the server
+    - This would mean that in order to implement a pre-copy protocol with pushes, the destination would have to be `dial`able from the source
+    - In a LAN scenario, this is easy to implement, but in WAN it is complicated and requires authentication of both the client and the server
+    - Dudirekta fixes this by making the protocol itself bi-directional (example and code snippet from https://github.com/pojntfx/dudirekta/tree/main#1-define-local-functions)
+    - In addition to this, dudirekta works over any `io.ReadWriter`
+  - Optimizing the transport protocol for high RTT with connection pooling
+    - This does however come at the cost of not being able to do connection pooling, since each client `dial`ing the server would mean that the server could not reference the multiple client connections as one composite client without changes to the protocol
+    - While implementing such a pooling mechanism in the future could be interesting, it turned out to not be necessary thanks to the pull-based pre-copy solution described earlier
+    - Instead, only calling RPCs exposed on the server from the client is the only requirement for an RPC framework, and other, more optimized RPC frameworks can already offer this
+    - Dudirekta uses reflection to make the RPCs essentially almost transparent to use
+    - By switching to a well-defined protocol with a DSL instead, we can gain further benefits from not having to use reflection and generating code instead
+    - One popular such framework is gRPC
+    - gRPC is a high-performance RPC framework based on Protocol Buffers
+    - Because it is based on Protobuf, we can define the protocol itself in the `proto3` DSL
+    - The DSL also allows to specify the order of each field in the resulting wire protocol, making it possible to evolve the protocol over time without having to break backwards compatibility
+    - This is very important given that r3map could be ported to a language with less overhead in the future, e.g. Rust, and being able to re-use the existing wire protocol would make this much easier
+    - While dudirekta is a simple protocol that is easy to adapt for other languages, currently it only supports Go and JS, while gRPC supports many more
+    - A fairly unique feature of gRPC are streaming RPCs, where a stream of requests can be sent to/from the server/client, which, while not used for the r3map protocol, could be very useful to implementing a pre-copy migration API with pushes similarly to how dudirekta does it by exposing RPCs from the client
+    - As mentioned before, for WAN migration or mount scenarios, things like authentication, authorization and encryption are important, which gRPC is well-suited for
+    - Protobuf being a proper byte-, not plaintext-based wire format is also very helpful, since it means that e.g. sending bytes back from `ReadAt` RPCs doesn't require any encoding (wereas JSON, used by dudirekta, `base64` encodes these chunks)
+    - gRPC is also based on HTTP/2, which means that it can benefit from existing load balancing tooling etc. that is popular in WAN for web uses even today
+    - This backend is implemented by first defining the protocol in the DSL (code snippet from https://github.com/pojntfx/r3map/blob/main/api/proto/migration/v1/seeder.proto)
+    - After generating the bindings, the generated backend interface is implemented by using the dudirekta wrapper struct as the abstraction layer (code snippet from https://github.com/pojntfx/r3map/blob/main/pkg/services/seeder_grpc.go)
+    - Unlike dudirekta, gRPC also implements concurrent RPCs and connection pooling
+    - Similarly to how having a backend that allows concurrent reads/writes can be useful to speed up the concurrent push/pull steps, having a protocol that allows for concurrent RPCs can do the same
+    - Connection pooling is another aspect that can help with this
+    - Instead of either using one single connection with a multiplexer (which is possible because it uses HTTP/2) to allow for multiple requests, or creating a new connection for every request, gRPC is able to intelligently re-use existing connections for RPCs or create new ones, speeding up parallel requests
+  - Optimizing the transport protocol for throughput
+    - Despite these benefits, gRPC is not perfect however
+    - Protobuf specifically, while being faster than JSON, is not the fastest serialization framework that could be used
+    - This is especially true for large chunks of data, and becomes a real bottleneck if the connection between source and destination would allow for a high throughput
+    - This is where fRPC, a RPC library that is easy to replace gRPC with, becomes useful
+    - fRPC is 2-4x faster than gRPC, and especially in terms of throughput (insert graphics from https://frpc.io/performance/grpc-benchmarks)
+    - Because throughput and latency determine the maximum acceptable downtime of a migration/the initial latency for mounts, choosing the right RPC protocol is an important decision
+    - fRPC also uses the same proto3 DSL, which makes it an easy drop-in replacement, and it also supports multiplexing and connection polling
+    - Because of these similarities, the usage of fRPC in r3map is extremely similar to gRPC (code snippet from https://github.com/pojntfx/r3map/blob/main/pkg/services/seeder_frpc.go)
+    - A good way to test how well the RPC framework scales for concurrent requests is scaling the amount of pull workers, where dudirekta only gains marginally from increasing their number, whereas both gRPC and fRPC can increase throughput and decrease the initial latency by pulling more chunks pre-emptively
+    - Benchmark: Effect of tuning the amount of push/pull workers in high-latency for these three backends on latency till first n chunks and throughput
+  - Using key-value stores as ephemeral mount/migration backends
+    - These backends provide a way to access a remote backend
+    - This is useful, esp. if the remote resource should be protected in some way or if it requires some kind of authorization
+    - Depending on the use case however, esp. for the mount API, having access to a remote backend without this level of indirection can be useful
+    - Fundamentally, a mount maps fairly well to a remote random-access storage device
+    - Many existing protocols and systems provide a way to access essentially this concept over a network
+    - One of these is Redis, an in-memory key-value store with network access
+    - Chunk offsets can be mapped to keys, and bytes are a valid key type, so the chunk itself can be stored directly in the KV store (code snippet from https://github.com/pojntfx/r3map/blob/main/pkg/backend/redis.go#L36-L63)
+    - Using Redis is particularly useful because it is able to handle the locking server-side in a very efficient way, and is well-tested for high-throughput etc. scenarious
+    - Authentication can also be handled using the Redis protocol, so can multi-tenancy by using multiple databases or a prefix
+    - Redis also has very fast read/write speeds due to its bespoke protocol and fast serialization
+  - Mapping large ressoures into memory with S3
+    - While the Redis backend is very useful for read-/write usage, when deployment to the public internet is required, it might not be the best one
+    - The S3 backend is an good choice for mapping public information, e.g. media assets, binaries, large read-only filesystems etc. into memory
+    - S3 used to be an object storage service from AWS, but has since become a more or less standard way for accessing blobs thanks to open-source S3 implementations such as Minio
+    - Similarly to how files were used as individual files, one S3 object per chunk is used to store them
+    - S3 is based on HTTP, and like the Redis backend requires chunking due to it not supporting updates of part of a file
+    - In order to prevent having to store empty data, the backend interprets "not found" errors as empty chunks
+  - Document databases as persistent mount remotes
+    - Another backend option is a NoSQL server such as Cassandra
+    - This is more of a proof of concept than a real usecase, but shows the versitility and flexibility of how a database can be mapped to a memory region, which can be interesting for accessing e.g. a remote database's content without having to use a specific client
+    - `ReadAt` and `WriteAt` are implemented using Cassandra's query language (code snippet from https://github.com/pojntfx/r3map/blob/main/pkg/backend/cassandra.go#L36-L63)
+    - Similarly to Redis, locking individual keys can be handled by the DB server
+    - But in the case of Cassandra, the DB server stores chunks on disk, so it can be used for persistent data
+    - In order to use Cassandra, migrations have to be applied for creating the table etc. (code snippet from https://github.com/pojntfx/r3map/blob/main/cmd/r3map-direct-mount-benchmark/main.go#L369-L396)
+    - Benchmark: These three backends on localhost and on remote hosts, where they could be of use
+  - Overhead of using managed mounts
+    - Another interesting aspect of optimization to look at is the overhead of managed mounts
+    - It is possible for managed mounts (and migrations) to deliver signficantly lower performance compared to direct mounts
+    - This is because using managed mounts come with the cost of potential duplicate I/O operations
+    - For example, if memory is being accessed linearly from the first to the last offset immediately after it being mounted, then using the background pulls will have no effect other than causing a write operation (to the local caching backend) compared to just directly reading from the remote backend
+    - This however is only the case in scenarios with a very low latency between the local and remote backends
+    - If latency becomes higher, then the ability to pull the chunks in the background and in parallel with the puller will offset the cost of duplicate I/O
+    - The same applies to slow local backends, e.g. if slow disks or memory are being used, which can mean that offsetting the duplicate I/O will need a significantly higher latency to be worth it
+    - Benchmark: Latency and throughput of all benchmarks on localhost and in a realistic latency and throughput scenario (direct mounts can outperform managed mounts in tests on localhosts)
+  - Comparing mount vs. migration API performance
+    - It is interesting to look at how the migration API performs compared to the single-phase mount API
+    - The mounts API should have a shorter total latency, but a higher "downtime" since it needs to initialize the device first
+    - Benchmark: Maximum acceptable downtime for a migration scenario with the Managed Mount API vs the Migration API
 - Discussion
+  - Limitations of `userfaultfd`
+    - As we can see, using `userfaultfd` we are able to map almost any object into memory
+    - This approach is very clean and has comparatively little overhead, but also has significant architecture-related problems that limit its uses
+    - The first big problem is only being able to catch page faults - that means we can only ever respond the first time a chunk of memory gets accessed, all future requests will return the memory directly from RAM on the destination host
+    - This prevents us from using this approach for remote resources that update over
+    - Also prevents us from using it for things that might have concurrent writers/shared resources, since there would be no way of updating the conflicting section
+    - Essentially makes this system only usable for a read-only "mount" of a remote resource, not really synchronization
+    - Also prevents pulling chunks before they are being accessed without layers of indirection
+    - The `userfaultfd` API socket is also synchronous, so each chunk needs to be sent one after the other, meaning that it is very vulnerable to long RTT values
+    - Also means that the initial latency will be at minimum the RTT to the remote source, and (without caching) so will be each future request
+    - The biggest problem however: All of these drawbacks mean that in real-life usecases, the maximum throughput, even if a local process handles page faults on a modern computer, is ~50MB/s
+    - In summary, while this approach is interesting and very idiomatic to Go, for most data, esp. larger datasets and in high-latency scenarios/in WAN, we need a better solution
+  - Limitations of file-based synchronization
+    - Similarly to `userfaultfd`, this system also has limitations
+    - While `userfaultfd` was only able to catch reads, this system is only able to catch writes to the file
+    - Essentially this system is write-only, and it is very inefficient to add hosts to the network later on
+    - As a result, if there are many possible destinations to migrate state too, a star-based architecture with a central forwarding hub can be used
+    - The static topology of this approach can be used to only ever require hashing on one of the destinations and the source instead of all of them
+    - This way, we only need to push the changes to one component (the hub), instead of having to push them to each destination on their own
+    - The hub simply forwards the messages to all the other destinations
+  - Limitations of FUSE
+    - FUSE does however also have downsides
+    - It operates in user space, which means that it needs to do context switching
+    - Some advanced features aren't available for a FUSE
+    - The overhead of FUSE (and implementing a completely custom file system) for synchronizing memory is still significant
+    - If possible, the optimal solution would be to not expose a full file system to track changes, but rather a single file
+    - As a result of this, the significant implementation overhead of such a file system led to it not being chosen
+  - Limitations of NBD and `ublk` as an alternative
+    - NBD is a battle-tested solution for this with fairly good performance, but in the future a more lean implemenation called `ublk` could also be used
+    - `ublk` uses `io_uring`, which means that it could potentially allow for much faster concurrent access
+    - It is similar to NBD; it also uses a user space server to provide the block device backend, and a kernel `ublk` driver that creates `/dev/ublkb*` devices
+    - Unlike as it is the case for the NBD kernel module, which uses a rather slow UNIX or TCP socket to communicate, `ublk` is able to use `io_uring` pass-through commands
+    - The `io_uring` architecture promises lower latency and better throughput
+    - Because it is however still experimental and docs are lacking, NBD was chosen
+  - `BUSE` and `CUSE` as alternatives to NBD
+    - Another option of implementing a block device is BUSE (block devices in user space)
+    - BUSE is similar to FUSE in nature, and similarly to it has a kernel and user space server component
+    - Similarly to `ublk` however, BUSE is experimental
+    - Client libraries in Go are also experimental, preventing it from being used as easily as NBD
+    - Similarly so, a CUSE could be implemented (char device in user space)
+    - CUSE is a very flexible way of defining a char (and thus block) device, but also lacks documentation
+    - The interface being exposed by CUSE is more complicated than that of e.g. NBD, but allows for interesting features such as custom `ioctl`s (code snippet from https://github.com/pojntfx/webpipe/blob/main/pkg/cuse/device.go#L3-L15)
+    - The only way of implementing it without too much overhead however is CGo, which comes with its own overhead
+    - It also requires calling Go closures from C code, which is complicated (code snippet from https://github.com/pojntfx/webpipe/blob/main/pkg/cuse/bindings.go#L79-L132)
+    - Implementing closures is possible by using the `userdata` parameter in the CUSE C API (code snippet from https://github.com/pojntfx/webpipe/blob/main/pkg/cuse/cuse.c#L20-L22)
+    - To fully use it, it needs to first resolve a Go callback in C, and then call it with a pointer to the method's struct in user data, effectively allowing for the use of closures (code snippet from https://github.com/pojntfx/webpipe/blob/main/pkg/cuse/bindings.go#L134-L162)
+    - Even with this however, it is hard to implement even a simple backend, and the CGo overhead is a significant drawback (code snippet from https://github.com/pojntfx/webpipe/blob/main/pkg/devices/trace_device.go)
+    - The last alternative to NBD devices would be to extend the kernel with a new construct that allows for essentially a virtual file to be `mmap`ed, not a block device
+    - This could use a custom protocol that is optimized for this use case instead of a full block device
+    - Because of the extensive setup required to implement such a system however, and the possibility of `ublk` providing a performant alternative in the future, going forward with NBD was chosen for now
   - `ram-dl`
     - ram-dl is a fun experiment
     - Tech demo for r3map
