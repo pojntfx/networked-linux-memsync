@@ -27,9 +27,7 @@ csl: static/ieee.csl
 
 ## Introduction
 
-- Memory management in Linux
-- Memory as the universal storage API
-- What would be possible if memory would be the universal way to access resources?
+- Research question: Could memory be the universal way to access and migrate state?
 - Why efficient memory synchronization is the missing key component
 - High-level use cases for memory synchronization in the industry today
 
@@ -44,7 +42,7 @@ csl: static/ieee.csl
 - Usually, handling page faults is something that the kernel does
 - In the past, this used to be possible by handling the `SIGSEGV` signal in the process
 
-### Delta synchronization
+### Delta Synchronization
 
 - The probably most popular tool for file synchronization like this is rsync
 - When the delta-transfer algorithm for rsync is active, it computes the difference between the local and the remote file, and then synchronizes the changes
@@ -213,7 +211,7 @@ csl: static/ieee.csl
   - This API simply swaps out NBD for a transport-independent RPC framework, but does not do additional optimizations
   - It has two simple actors: A client and a server, with only the server providing methods to be called (code snippet from https://github.com/pojntfx/r3map/blob/main/pkg/services/backend.go#L14-L19)
   - The protocol as such is stateless, as there is only a simple remote read/write interface (add state machine and sequence diagram here)
-- Chunking and the `ReadWriterAt` pipeline
+- Chunking
   - One additional layer that needs to be implemented however is proper chunking support
   - While we can specify a chunk size for the NBD client in the form of a block size, we can only go up to 4 KB chunks
   - For scenarios where the RTT between the backend and server is large, it might make sense to use a much larger chunk size for the actual networked transfers
@@ -238,8 +236,163 @@ csl: static/ieee.csl
   - In order to also be able to write back however, it needs to have a push system as well
   - This push system is being started in parallel with the pull system
   - It also takes a local and a remote `ReadWriterAt`
-  - Chunks that have changed/are pushable are marked with `MarkOffsetPushable` (code snippet from https://github.com/pojntfx/r3map/blob/main/pkg/mount/path_managed.go#L171C24-L185)
   - This integrates with the callbacks supplied by the syncer, which ensures that we don't sync back changes that have been pulled but not modified, only the ones that have been changed locally
+- Comparing the managed mounts API to RegionFS
+  - Unlike the managed mounts API however, the system proposed in Remote Regions is mostly intended for private usecases with a limited amount of hosts and in LAN, with low-RTT connections
+  - It is also not designed to be used for a potential migration scenarios, which the modular approach of r3map allows for
+  - While Remote Regions' file system approach does allow for authorization based on permissions, it doesn't specify how authentication could work
+  - In terms of the wire protocol, Remote Regions also seems to target mostly LAN with protocols like RDMA comm modules, while r3map targets mostly WAN with a pluggable transport protocol interface
+
+### Pull-Based Synchronization with Migrations
+
+- Optimization mounts for migration scenarios
+  - We have now implemented a managed mounts API
+  - This API allows for efficient access to a remote resource through memory
+  - It is however not well suited for a migration scenario
+  - For migrations, more optimization is needed to minimize the maximum acceptable downtime
+  - For the migration, the process is split into two distinct phases
+  - The same preemptive background pulls and parallelized device/syncer startup can be used, but the push process is dropped
+  - The two phases allow pulling the majority of the data first, and only finalize the move later with the remaining data
+  - This is inspired by the pre-copy approach to VM live migration, but also allows for some of the benefits of the post-copy approach as we'll see later
+  - Why is this useful? A constraint for the mount-based API that we haven't mentioned before is that it doesn't allow safe concurrent access of a resource by two readers or writers at the same time
+  - This poses a problem for migration, where the downtime is what should be optimized for, as the VM or app that is writing to the source device would need to be suspended before the transfer could begin
+  - This adds very significant latency, which is a problem
+  - The mount API was also designed in such a way as to make it hard to share a resource this way
+  - The remote backend for example API doesn't itself provide a mount to access the underlying data, which further complicates migration by not implementing a migration lifecycle
+- The finalization phase
+  - A interesting question to ask with the two-step migration API is when to start the finalization step
+  - As is visible from the migration API protocol state machine showed beforehand, the finalization stage is critical and hard or impossible to recover from depending on the implementation
+  - While for the memory sync on its own, one could just call `Finalize` multiple times to restart it
+  - But since `Finalize` needs to return a list of dirty chunks, it requires the VM or app on the source device to be suspended before `Finalize` can return
+  - While not necessarily the case, such a suspend operation is not idempotent (since it might not just be a suspension that is required, but also a shutdown of dependencies etc.)
+
+## Implementation
+
+### Userfaults in Go with `userfaultfd`
+
+- API design for `userfault-go`
+  - Implementing this in Go was quite tricky, and it involves using `unsafe`
+  - We can use the `syscall` and `unix` packages to interact with `ioctl` etc.
+  - We can use the `ioctl` syscall to get a file descriptor to the `userfaultfd` API, and then register the API to handle any faults on the region (code snippet from https://github.com/loopholelabs/userfaultfd-go/blob/master/pkg/mapper/register.go#L15)
+  - Passing file descriptors between processes is possible by using a UNIX socket (code snippet from https://github.com/loopholelabs/userfaultfd-go/blob/master/pkg/transfer/unix.go)
+- Implementing `userfaultfd` backends
+  - A big benefit of using `userfaultfd` and the pull method is that we are able to simplify the backend of the entire system down to a `io.ReaderAt` (code snippet from https://pkg.go.dev/io#ReaderAt)
+  - That means we can use almost any `io.ReaderAt` as a backend for a `userfaultfd-go` registered object
+  - We know that access will always be aligned to 4 KB chunks/the system page size, so we can assume a chunk size on the server based on that
+  - For the first example, we can return a random pattern in the backend (code snippet from https://github.com/loopholelabs/userfaultfd-go/blob/master/cmd/userfaultfd-go-example-abc/main.go) - this shows a great way of exposing truly arbitrary information into a byte slice without having to pre-compute everything or changing the application
+  - Since a file is a valid `io.ReaderAt`, we can also use a file as the backend directly, creating a system that essentially allows for mounting a (remote) file into memory (code snippet from https://github.com/loopholelabs/userfaultfd-go/blob/master/cmd/userfaultfd-go-example-file/main.go)
+  - Similarly so, we can use it map a remote object from S3 into memory, and access only the chunks of it that we actually require (which in the case of S3 is achieved with HTTP range requests) (code snippet from https://github.com/loopholelabs/userfaultfd-go/blob/master/cmd/userfaultfd-go-example-s3/main.go)
+
+### File-Based Synchronization
+
+- File-based synchronization
+  - We can do this by using `mmap`, which allows us to map a file into memory
+  - By default, `mmap` doesn't write changes from a file back into memory, no matter if the file descriptor passed to it would allow it to or not
+  - We can however add the `MAP_SHARED` flag; this tells the kernel to write back changes to the memory region to the corresponding regions of the backing file
+  - Linux caches reads to such a backing file, so only the first page fault would be answered by fetching from disk, just like with `userfaultfd`
+  - The same applies to writes; similar to how files need to be `sync`ed in order for them to be written to disks, `mmap`ed regions need to be `msync`ed in order to flush changes to the backing file
+  - In order to synchronize changes to the region between hosts by syncing the underlying file, we need to have the changes actually be represented in the file, which is why `msync` is critical
+  - For files, you can use `O_DIRECT` to skip this kernel caching if your process already does caching on its own, but this flag is ignored by the `mmap`
+  - Usually, one would use `inotify` to watch changes to a file
+- Detecting file changes
+  - When picking algorithms for this hashing process, the most important metric to consider is the throughput with which it can compute hashes, as well as the change of collisions
+  - We can do this by opening up the file multiple times, then hashing individual offsets, and aggregating the chunks that have changed
+  - If the underlying hashing algorithm is CPU-bound, this also allows for better concurrent processing
+  - Increases the initial latency/overhead by having to open up multiple file descriptors
+  - But this can not only increase the speed of each individual polling tick, it can also drastically decrease the amount of data that needs to be transferred since only the delta needs to be synchronized
+  - Hashing and/or syncing individual chunks that have changed is a common practice
+- Delta synchronization protocol
+  - We have implemented a simple TCP-based protocol for this delta synchronization, just like rsync's delta synchronization algorithm (code snippet from https://github.com/loopholelabs/darkmagyk/blob/master/cmd/darkmagyk-orchestrator/main.go#L1337-L1411 etc.)
+  - For this protocol specifically, we send the changed file's name as the first message when starting the synchronization, but a simple multiplexing system could easily be implemented by sending a file ID with each message
+
+### FUSE Implementation in Go
+
+- It is possible to use even very complex and at first view non-compatible backends as a FUSE file system's backend
+- By using a file system abstraction API like `afero.Fs`, we can separate the FUSE implementation from the actual file system structure, making it unit testable and making it possible to add caching in user space (code snippet from https://github.com/pojntfx/stfs/blob/main/pkg/fs/file.go)
+- It is possible to map any `afero.Fs` to a FUSE backend, so it would be possible to switch between different file system backends without having to write FUSE-specific (code snippet from https://github.com/JakWai01/sile-fystem/blob/main/pkg/filesystem/fs.go)
+- For example, STFS used a tape drive as the backend, which is not random access, but instead append-only and linear (https://github.com/pojntfx/stfs/blob/main/pkg/operations/update.go)
+- By using an on-disk index and access optimizations, the resulting file system was still performant enough to be used, and supported almost all features required for the average user
+
+### NBD with `go-nbd`
+
+- Implementing `go-nbd`
+  - Due to the lack of pre-existing libraries, a new pure Go NBD library was implemented
+  - This library does not rely on CGo/a pre-existing C library, meaning that a lot of context switching can be skipped
+  - The backend interface for `go-nbd` is very simple and only requires four methods: `ReadAt`, `WriteAt`, `Size` and `Sync`
+  - A good example backend that maps well to a block device is the file backend (code snippet from https://github.com/pojntfx/go-nbd/blob/main/pkg/backend/file.go)
+  - The key difference here to the way backends were designed in `userfaultfd-go` is that they can also handle writes
+  - `go-nbd` exposes a `Handle` function to support multiple users without depending on a specific transport layer (code snippet from https://github.com/pojntfx/go-nbd/blob/main/pkg/server/nbd.go)
+  - This means that systems that are peer-to-peer (e.g. WebRTC), and thus don't provide a TCP-style `accept` syscall can still be used easily
+  - It also allows for easily hosting NBD and other services on the same TCP socket
+  - The server encodes/decodes messages with the `binary` package (code snippet from https://github.com/pojntfx/go-nbd/blob/main/pkg/server/nbd.go#L73-L76)
+  - To make it easier to parse, the headers and other structured messages are modeled as Go structs (code snippet from https://github.com/pojntfx/go-nbd/blob/main/pkg/protocol/negotiation.go)
+  - The handshake is implemented using a simple for loop, which either returns on error or breaks
+  - The actual transmission phase is done similarly, by reading in a header, switching on the message type and reading/sending the relevant data/reply
+  - The server is completely in user space, there are no kernel components involved here
+  - The NBD client however is implemented by using the kernel NBD client
+  - In order to use it, one needs to find a free NBD device first
+  - NBD devices are pre-created by the NBD kernel module and more can be specified with the `nbds_max` parameter
+  - In order to find a free one, we can either specify it directly, or check whether we can find a NBD device with zero size in `sysfs` (code snippet from https://github.com/pojntfx/r3map/blob/main/pkg/utils/unused.go)
+  - Relevant `ioctl` numbers depend on the kernel and are extracted using `CGo` (code snippet from https://github.com/pojntfx/go-nbd/blob/main/pkg/ioctl/negotiation_cgo.go)
+  - The handshake for the NBD client is negotiated in user space by the Go program
+  - Simple for loop, basically the same as for the server (code snippet from https://github.com/pojntfx/go-nbd/blob/main/pkg/client/nbd.go#L221-L288)
+  - After the metadata for the export has been fetched in the handshake, the kernel NBD client is configured using `ioctl`s (code snippet from https://github.com/pojntfx/go-nbd/blob/main/pkg/client/nbd.go#L290-L328)
+- Optimizations for the NBD implementation
+  - The `DO_IT` syscall never returns, meaning that an external system must be used to detect whether the device is actually ready
+  - Two ways of detecting whether the device is ready: By polling `sysfs` for the size parameter, or by using `udev`
+  - `udev` manages devices in Linux
+  - When a device becomes available, the kernel sends a `udev` event, which we can subscribe to and use as a reliable and idiomatic way of waiting for the ready state (code snippet from https://github.com/pojntfx/go-nbd/blob/main/pkg/client/nbd.go#L104C10-L138)
+  - In reality however, polling `sysfs` directly can be faster than subscribing to the `udev` event, so we give the user the option to switch between both options (code snippet from https://github.com/pojntfx/go-nbd/blob/main/pkg/client/nbd.go#L140-L178)
+  - When `open`ing the block device that the client has connected to, usually the kernel does provide a caching mechanism and thus requires `sync` to flush changes
+  - By using `O_DIRECT` however, it is possible to skip the kernel caching layer and write all changes directly to the NBD client/server
+  - This is particularly useful if both the client and server are on the local system, and if the amount of time spent on `sync`ing should be as small as possible
+  - It does however require reads and writes on the device node to be aligned to the system's page size, which is possible to implement with a client-side chunking system but does require application-specific code
+- Combining the NBD client and server
+  - The server and client are connected by creating a connected UNIX socket pair (code snippet from https://github.com/pojntfx/r3map/blob/main/pkg/mount/path_direct.go#L59-L62)
+  - By building on this basic direct mount, we can add a file (code snippet from https://github.com/pojntfx/r3map/blob/main/pkg/mount/file_direct.go) and slice (code snippet from https://github.com/pojntfx/r3map/blob/main/pkg/mount/slice_direct.go) mount API, which allows for easy usage and integration with `sync`/`msync` respectively
+  - Using the `mmap`/slice approach has a few benefits
+  - First, it makes it possible to use the byte slice directly as though it were a byte slice allocated by `make`, except its transparently mapped to the (remote) backend
+  - `mmap`/the byte slices also swaps out the syscall-based file interface with a random access one, which allows for faster concurrent reads from the underlying backend
+  - Alternatively, it would also be possible to format the server's backend or the block device using standard file system tools
+  - When the device then becomes ready, it can be mounted to a directory on the system
+  - This way it is possible to `mmap` one or multiple files on the mounted file system instead of `mmap`ing the block device directly
+  - This allows for handling multiple remote regions using a single server, and thus saving on initialization time and overhead
+  - Using a proper file system however does introduce both storage overhead and complexity, which is why e.g. the FUSE approach was not chosen
+
+### Chunking, Push/Pull Mechanisms and Lifecycle for Mounts
+
+- The `ReadWriterAt` pipeline
+  - In order to implement the chunking system, we can use a abstraction layer that allows us to create a pipeline of readers/writers - the `ReadWriterAt`, combining an `io.ReaderAt` and a `io.WriterAt`
+  - This way, we can forward the `Size` and `Sync` syscalls directly to the underlying backend, but wrap a backend's `ReadAt` and `WriteAt` methods in a pipeline of other `ReadWriterAt`s
+  - One such `ReadWriterAt` is the `ArbitraryReadWriterAt` (code snippet from https://github.com/pojntfx/r3map/blob/main/pkg/chunks/arbitrary_rwat.go)
+  - It allows breaking down a larger data stream into smaller chunks
+  - In `ReadAt`, it calculates the index of the chunk that the offset falls into and the position within the offsets
+  - It then reads the entire chunk from the backend into a buffer, copies the necessary portion of the buffer into the input slice, and repeats the process until all requested data is read
+  - Similarly for the writer, it calculates the chunk's index and offset
+  - If an entire chunk is being written to, it bypasses the chunking system, and writes it directly to not have to unnecessarily copy the data twice
+  - If only parts of a chunk need to be written, it first reads the complete chunk into a buffer, modifies the buffer with the data that has changed, and writes the entire chunk back, until all data has been written
+  - This simple implementation can be used to allow for writing data of arbitrary length at arbitrary offsets, even if the backend only supports a few chunks
+  - In addition to this chunking system, there is also a `ChunkedReadWriterAt`, which ensures that the limits concerning the maximum size supported by the backend and the actual chunks are being respected
+  - This is particularly useful when the client is expected to do the chunking, and the server simply checks that the chunking system's chunk size is respected
+  - In order to check if a read or write is valid, it checks whether a read is done to an offset multiple of the chunk size, and whether the length of the slice of data to read/write is the chunk size (code snippet from https://github.com/pojntfx/r3map/blob/main/pkg/chunks/chunked_rwat.go)
+- Background pull
+  - The `Puller` component asynchronously pulls chunks in the background (code snipped from https://github.com/pojntfx/r3map/blob/main/pkg/chunks/puller.go)
+  - After sorting the chunks, the puller starts a fixed number of worker threads in the background, each of which ask for a chunk to pull
+  - Note that the puller itself does not copy to/from a destination; this use case is handled by a separate component
+  - It simply reads from the provided `ReaderAt`, which is then expected to handle the actual copying on its own
+  - The actual copy logic is provided by the `SyncedReadWriterAt` instead
+  - This component takes both a remote reader and a local `ReadWriterAt`
+  - If a chunk is read, e.g. by the puller component calling `ReadAt`, it is tracked and market as remote by adding it to a local map
+  - The chunk is then read from the remote reader and written to the local `ReadWriterAt`, and is then marked as locally available, so that on the second read it is fetched locally directly
+  - A callback is then called which can be used to monitor the pull process
+  - Note that if it is used in a pipeline with the `Puller`, this also means that if a chunk which hasn't been fetched asynchronously yet will be scheduled to be pulled immediately
+  - WriteAt also starts by tracking a chunk, but then immediately marks the chunk as available locally no matter whether it has been pulled before
+  - The combination of the `SyncedReadWriterAt` and the `Puller` component implements the pull post-copy system in a modular and testable way
+  - Unlike the usual way of only fetching chunks when they are available however, this system also allows fetching them pre-emptively, gaining some benefits of pre-copy migration, too
+  - Using this `Puller` interface, it is possible to implement a read-only managed mount
+  - This is very similar the `rr+` prefetching mechanism from "Remote Regions" (reference atc18-aguilera)
+- Background push
+  - Chunks that have changed/are pushable are marked with `MarkOffsetPushable` (code snippet from https://github.com/pojntfx/r3map/blob/main/pkg/mount/path_managed.go#L171C24-L185)
   - Once opened, the pusher starts a new goroutine in the background which calls `Sync` in a set recurring interval (code snippet from https://github.com/pojntfx/r3map/blob/main/pkg/chunks/pusher.go)
   - Once sync is called by this background worker system or manually, it launches workers in the background
   - These workers all wait for a chunk to handle
@@ -265,39 +418,20 @@ csl: static/ieee.csl
   - For example, in order to allow for a `Sync()` API, e.g. the `msync` on the `mmap`ed file must happen before `Sync()` is called on the syncer
   - This is done through a hooks system (code snippet from https://github.com/pojntfx/r3map/blob/main/pkg/mount/file_managed.go#L34-L37)
   - The same hooks system is also used to implement the correct lifecycle when `Close`ing the mount
-- Issues with the implementation
-  - While the managed mounts API mostly works, there are some issues with it being implemented in Go
-  - This is mostly due to deadlocking issues; if the GC tries to release memory, it has to stop the world
-  - If the `mmap` API is used, it is possible that the GC tries to manage the underlying slice, or tries to release memory as data is being copied from the mount
-  - Because the NBD server that provides the byte slice is also running in the same process, this causes a deadlock as the server that provides the backend for the mount is also frozen (https://github.com/pojntfx/r3map/blob/main/pkg/mount/slice_managed.go#L70-L93)
-  - A workaround for this is to lock the `mmap`ed region into memory, but this will also cause all chunks to be fetched, which leads to a high `Open()` latency
-  - This is fixable by simply starting the server in separate thread, and then `mmap`ing
-  - Issues like this however are hard to fix, and point to Go potentially not being the correct language to use for this part of the system
-  - In the future, using a language without a GC (such as Rust) could provide a good alternative
-  - While the current API is Go-specific, it could also be exposed through a different interface to make it usable in Go
-- Comparing the managed mounts API to RegionFS
-  - Unlike the managed mounts API however, the system proposed in Remote Regions is mostly intended for private usecases with a limited amount of hosts and in LAN, with low-RTT connections
-  - It is also not designed to be used for a potential migration scenarios, which the modular approach of r3map allows for
-  - While Remote Regions' file system approach does allow for authorization based on permissions, it doesn't specify how authentication could work
-  - In terms of the wire protocol, Remote Regions also seems to target mostly LAN with protocols like RDMA comm modules, while r3map targets mostly WAN with a pluggable transport protocol interface
+- Optimization for WAN
+  - Another optimization that has been made to support this WAN deployment scenario is the pull-only architecture
+  - Usually, a pre-copy system pushes changes to the destination in the migration API
+  - This however makes such a system hard to use in a scenario where NATs exist, or a scenario in which the network might have an outage during the migration
+  - With a pull-only system emulating the pre-copy setup, the client can simply keep track of which chunks it still needs to pull itself, so if there is a network outage, it can just resume pulling like before, which would be much harder to implement with a push system as the server would have to track this state for multiple clients and handle the lifecycle there
+  - The pull-only system also means that unlike the push system that was implemented for the hash-based synchronization, a central forwarding hub is not necessary
+  - In the push-based system for the hash-based solution, the topology had to be static/all destinations would have to have received the changes made to the remote app's memory since it was started
+  - In order to cut down on unnecessary duplicate data transmissions, a central forwarding hub was implemented
+  - This central forwarding hub does however add additional latency, which can be removed completely with the migration protocol's P2P, pull-only algorithm
 
-### Pull-Based Synchronization with Migrations
+### Live Migration for Mounts
 
 - Optimization mounts for migration scenarios
-  - We have now implemented a managed mounts API
-  - This API allows for efficient access to a remote resource through memory
-  - It is however not well suited for a migration scenario
-  - For migrations, more optimization is needed to minimize the maximum acceptable downtime
   - The flexible architecture of the `ReadWriterAt` components allow the reuse of lots of code for both use cases
-  - For the migration, the process is split into two distinct phases
-  - The same preemptive background pulls and parallelized device/syncer startup can be used, but the push process is dropped
-  - The two phases allow pulling the majority of the data first, and only finalize the move later with the remaining data
-  - This is inspired by the pre-copy approach to VM live migration, but also allows for some of the benefits of the post-copy approach as we'll see later
-  - Why is this useful? A constraint for the mount-based API that we haven't mentioned before is that it doesn't allow safe concurrent access of a resource by two readers or writers at the same time
-  - This poses a problem for migration, where the downtime is what should be optimized for, as the VM or app that is writing to the source device would need to be suspended before the transfer could begin
-  - This adds very significant latency, which is a problem
-  - The mount API was also designed in such a way as to make it hard to share a resource this way
-  - The remote backend for example API doesn't itself provide a mount to access the underlying data, which further complicates migration by not implementing a migration lifecycle
 - The migration protocol
   - To fix this, the migration API defines two new actors: The seeder and the leecher
   - The seeder represents a resource that can be migrated from/a host that exposes a migratable resource
@@ -333,140 +467,8 @@ csl: static/ieee.csl
   - As an additional measure aside from the lockable `ReadWriterAt` to make accessing the path/file/slice too early harder, only `Finalize` returns the managed object, so that the happy path can less easily lead to deadlocks
   - After a leecher has successfully reached 100% local availability, it calls `Close` on the seeder and disconnects the leecher from the seeder, causing both to shut down (code snippet from https://github.com/pojntfx/r3map/blob/main/cmd/r3map-migration-benchmark-server/main.go#L137)
   - Once the leecher has exited, a seeder can be started, to allow for migrating from the destination to another destination again
-- The finalization phase
-  - A interesting question to ask with the two-step migration API is when to start the finalization step
-  - As is visible from the migration API protocol state machine showed beforehand, the finalization stage is critical and hard or impossible to recover from depending on the implementation
-  - While for the memory sync on its own, one could just call `Finalize` multiple times to restart it
-  - But since `Finalize` needs to return a list of dirty chunks, it requires the VM or app on the source device to be suspended before `Finalize` can return
-  - While not necessarily the case, such a suspend operation is not idempotent (since it might not just be a suspension that is required, but also a shutdown of dependencies etc.)
 
-## Implementation
-
-### Pull-Based Synchronization With `userfaultfd`
-
-- API design for `userfault-go`
-  - Implementing this in Go was quite tricky, and it involves using `unsafe`
-  - We can use the `syscall` and `unix` packages to interact with `ioctl` etc.
-  - We can use the `ioctl` syscall to get a file descriptor to the `userfaultfd` API, and then register the API to handle any faults on the region (code snippet from https://github.com/loopholelabs/userfaultfd-go/blob/master/pkg/mapper/register.go#L15)
-  - Passing file descriptors between processes is possible by using a UNIX socket (code snippet from https://github.com/loopholelabs/userfaultfd-go/blob/master/pkg/transfer/unix.go)
-- Implementing `userfaultfd` backends
-  - A big benefit of using `userfaultfd` and the pull method is that we are able to simplify the backend of the entire system down to a `io.ReaderAt` (code snippet from https://pkg.go.dev/io#ReaderAt)
-  - That means we can use almost any `io.ReaderAt` as a backend for a `userfaultfd-go` registered object
-  - We know that access will always be aligned to 4 KB chunks/the system page size, so we can assume a chunk size on the server based on that
-  - For the first example, we can return a random pattern in the backend (code snippet from https://github.com/loopholelabs/userfaultfd-go/blob/master/cmd/userfaultfd-go-example-abc/main.go) - this shows a great way of exposing truly arbitrary information into a byte slice without having to pre-compute everything or changing the application
-  - Since a file is a valid `io.ReaderAt`, we can also use a file as the backend directly, creating a system that essentially allows for mounting a (remote) file into memory (code snippet from https://github.com/loopholelabs/userfaultfd-go/blob/master/cmd/userfaultfd-go-example-file/main.go)
-  - Similarly so, we can use it map a remote object from S3 into memory, and access only the chunks of it that we actually require (which in the case of S3 is achieved with HTTP range requests) (code snippet from https://github.com/loopholelabs/userfaultfd-go/blob/master/cmd/userfaultfd-go-example-s3/main.go)
-
-### Push-Based Synchronization With `mmap` and Hashing
-
-- File-based synchronization
-  - We can do this by using `mmap`, which allows us to map a file into memory
-  - By default, `mmap` doesn't write changes from a file back into memory, no matter if the file descriptor passed to it would allow it to or not
-  - We can however add the `MAP_SHARED` flag; this tells the kernel to write back changes to the memory region to the corresponding regions of the backing file
-  - Linux caches reads to such a backing file, so only the first page fault would be answered by fetching from disk, just like with `userfaultfd`
-  - The same applies to writes; similar to how files need to be `sync`ed in order for them to be written to disks, `mmap`ed regions need to be `msync`ed in order to flush changes to the backing file
-  - In order to synchronize changes to the region between hosts by syncing the underlying file, we need to have the changes actually be represented in the file, which is why `msync` is critical
-  - For files, you can use `O_DIRECT` to skip this kernel caching if your process already does caching on its own, but this flag is ignored by the `mmap`
-  - Usually, one would use `inotify` to watch changes to a file
-- Detecting file changes
-  - When picking algorithms for this hashing process, the most important metric to consider is the throughput with which it can compute hashes, as well as the change of collisions
-  - We can do this by opening up the file multiple times, then hashing individual offsets, and aggregating the chunks that have changed
-  - If the underlying hashing algorithm is CPU-bound, this also allows for better concurrent processing
-  - Increases the initial latency/overhead by having to open up multiple file descriptors
-  - But this can not only increase the speed of each individual polling tick, it can also drastically decrease the amount of data that needs to be transferred since only the delta needs to be synchronized
-  - Hashing and/or syncing individual chunks that have changed is a common practice
-- Delta synchronization protocol
-  - We have implemented a simple TCP-based protocol for this delta synchronization, just like rsync's delta synchronization algorithm (code snippet from https://github.com/loopholelabs/darkmagyk/blob/master/cmd/darkmagyk-orchestrator/main.go#L1337-L1411 etc.)
-  - For this protocol specifically, we send the changed file's name as the first message when starting the synchronization, but a simple multiplexing system could easily be implemented by sending a file ID with each message
-
-### Push-Pull Synchronization with FUSE
-
-- It is possible to use even very complex and at first view non-compatible backends as a FUSE file system's backend
-- By using a file system abstraction API like `afero.Fs`, we can separate the FUSE implementation from the actual file system structure, making it unit testable and making it possible to add caching in user space (code snippet from https://github.com/pojntfx/stfs/blob/main/pkg/fs/file.go)
-- It is possible to map any `afero.Fs` to a FUSE backend, so it would be possible to switch between different file system backends without having to write FUSE-specific (code snippet from https://github.com/JakWai01/sile-fystem/blob/main/pkg/filesystem/fs.go)
-- For example, STFS used a tape drive as the backend, which is not random access, but instead append-only and linear (https://github.com/pojntfx/stfs/blob/main/pkg/operations/update.go)
-- By using an on-disk index and access optimizations, the resulting file system was still performant enough to be used, and supported almost all features required for the average user
-
-### Pull-Based Synchronization With NBD
-
-- Implementing `go-nbd`
-  - Due to the lack of pre-existing libraries, a new pure Go NBD library was implemented
-  - This library does not rely on CGo/a pre-existing C library, meaning that a lot of context switching can be skipped
-  - The backend interface for `go-nbd` is very simple and only requires four methods: `ReadAt`, `WriteAt`, `Size` and `Sync`
-  - A good example backend that maps well to a block device is the file backend (code snippet from https://github.com/pojntfx/go-nbd/blob/main/pkg/backend/file.go)
-  - The key difference here to the way backends were designed in `userfaultfd-go` is that they can also handle writes
-  - `go-nbd` exposes a `Handle` function to support multiple users without depending on a specific transport layer (code snippet from https://github.com/pojntfx/go-nbd/blob/main/pkg/server/nbd.go)
-  - This means that systems that are peer-to-peer (e.g. WebRTC), and thus don't provide a TCP-style `accept` syscall can still be used easily
-  - It also allows for easily hosting NBD and other services on the same TCP socket
-  - The server encodes/decodes messages with the `binary` package (code snippet from https://github.com/pojntfx/go-nbd/blob/main/pkg/server/nbd.go#L73-L76)
-  - To make it easier to parse, the headers and other structured messages are modeled as Go structs (code snippet from https://github.com/pojntfx/go-nbd/blob/main/pkg/protocol/negotiation.go)
-  - The handshake is implemented using a simple for loop, which either returns on error or breaks
-  - The actual transmission phase is done similarly, by reading in a header, switching on the message type and reading/sending the relevant data/reply
-  - The server is completely in user space, there are no kernel components involved here
-  - The NBD client however is implemented by using the kernel NBD client
-  - In order to use it, one needs to find a free NBD device first
-  - NBD devices are pre-created by the NBD kernel module and more can be specified with the `nbds_max` parameter
-  - In order to find a free one, we can either specify it directly, or check whether we can find a NBD device with zero size in `sysfs` (code snippet from https://github.com/pojntfx/r3map/blob/main/pkg/utils/unused.go)
-  - Relevant `ioctl` numbers depend on the kernel and are extracted using `CGo` (code snippet from https://github.com/pojntfx/go-nbd/blob/main/pkg/ioctl/negotiation_cgo.go)
-  - The handshake for the NBD client is negotiated in user space by the Go program
-  - Simple for loop, basically the same as for the server (code snippet from https://github.com/pojntfx/go-nbd/blob/main/pkg/client/nbd.go#L221-L288)
-  - After the metadata for the export has been fetched in the handshake, the kernel NBD client is configured using `ioctl`s (code snippet from https://github.com/pojntfx/go-nbd/blob/main/pkg/client/nbd.go#L290-L328)
-- Optimizations for the NBD implementation
-  - The `DO_IT` syscall never returns, meaning that an external system must be used to detect whether the device is actually ready
-  - Two ways of detecting whether the device is ready: By polling `sysfs` for the size parameter, or by using `udev`
-  - `udev` manages devices in Linux
-  - When a device becomes available, the kernel sends a `udev` event, which we can subscribe to and use as a reliable and idiomatic way of waiting for the ready state (code snippet from https://github.com/pojntfx/go-nbd/blob/main/pkg/client/nbd.go#L104C10-L138)
-  - In reality however, polling `sysfs` directly can be faster than subscribing to the `udev` event, so we give the user the option to switch between both options (code snippet from https://github.com/pojntfx/go-nbd/blob/main/pkg/client/nbd.go#L140-L178)
-  - When `open`ing the block device that the client has connected to, usually the kernel does provide a caching mechanism and thus requires `sync` to flush changes
-  - By using `O_DIRECT` however, it is possible to skip the kernel caching layer and write all changes directly to the NBD client/server
-  - This is particularly useful if both the client and server are on the local system, and if the amount of time spent on `sync`ing should be as small as possible
-  - It does however require reads and writes on the device node to be aligned to the system's page size, which is possible to implement with a client-side chunking system but does require application-specific code
-
-### Push-Pull Synchronization with Mounts
-
-- Combining the NBD server and client to a reusable unit
-  - The server and client are connected by creating a connected UNIX socket pair (code snippet from https://github.com/pojntfx/r3map/blob/main/pkg/mount/path_direct.go#L59-L62)
-  - By building on this basic direct mount, we can add a file (code snippet from https://github.com/pojntfx/r3map/blob/main/pkg/mount/file_direct.go) and slice (code snippet from https://github.com/pojntfx/r3map/blob/main/pkg/mount/slice_direct.go) mount API, which allows for easy usage and integration with `sync`/`msync` respectively
-  - Using the `mmap`/slice approach has a few benefits
-  - First, it makes it possible to use the byte slice directly as though it were a byte slice allocated by `make`, except its transparently mapped to the (remote) backend
-  - `mmap`/the byte slices also swaps out the syscall-based file interface with a random access one, which allows for faster concurrent reads from the underlying backend
-  - Alternatively, it would also be possible to format the server's backend or the block device using standard file system tools
-  - When the device then becomes ready, it can be mounted to a directory on the system
-  - This way it is possible to `mmap` one or multiple files on the mounted file system instead of `mmap`ing the block device directly
-  - This allows for handling multiple remote regions using a single server, and thus saving on initialization time and overhead
-  - Using a proper file system however does introduce both storage overhead and complexity, which is why e.g. the FUSE approach was not chosen
-- Chunking and the `ReadWriterAt` pipeline
-  - In order to implement the chunking system, we can use a abstraction layer that allows us to create a pipeline of readers/writers - the `ReadWriterAt`, combining an `io.ReaderAt` and a `io.WriterAt`
-  - This way, we can forward the `Size` and `Sync` syscalls directly to the underlying backend, but wrap a backend's `ReadAt` and `WriteAt` methods in a pipeline of other `ReadWriterAt`s
-  - One such `ReadWriterAt` is the `ArbitraryReadWriterAt` (code snippet from https://github.com/pojntfx/r3map/blob/main/pkg/chunks/arbitrary_rwat.go)
-  - It allows breaking down a larger data stream into smaller chunks
-  - In `ReadAt`, it calculates the index of the chunk that the offset falls into and the position within the offsets
-  - It then reads the entire chunk from the backend into a buffer, copies the necessary portion of the buffer into the input slice, and repeats the process until all requested data is read
-  - Similarly for the writer, it calculates the chunk's index and offset
-  - If an entire chunk is being written to, it bypasses the chunking system, and writes it directly to not have to unnecessarily copy the data twice
-  - If only parts of a chunk need to be written, it first reads the complete chunk into a buffer, modifies the buffer with the data that has changed, and writes the entire chunk back, until all data has been written
-  - This simple implementation can be used to allow for writing data of arbitrary length at arbitrary offsets, even if the backend only supports a few chunks
-  - In addition to this chunking system, there is also a `ChunkedReadWriterAt`, which ensures that the limits concerning the maximum size supported by the backend and the actual chunks are being respected
-  - This is particularly useful when the client is expected to do the chunking, and the server simply checks that the chunking system's chunk size is respected
-  - In order to check if a read or write is valid, it checks whether a read is done to an offset multiple of the chunk size, and whether the length of the slice of data to read/write is the chunk size (code snippet from https://github.com/pojntfx/r3map/blob/main/pkg/chunks/chunked_rwat.go)
-- Background pull
-  - The `Puller` component asynchronously pulls chunks in the background (code snipped from https://github.com/pojntfx/r3map/blob/main/pkg/chunks/puller.go)
-  - After sorting the chunks, the puller starts a fixed number of worker threads in the background, each of which ask for a chunk to pull
-  - Note that the puller itself does not copy to/from a destination; this use case is handled by a separate component
-  - It simply reads from the provided `ReaderAt`, which is then expected to handle the actual copying on its own
-  - The actual copy logic is provided by the `SyncedReadWriterAt` instead
-  - This component takes both a remote reader and a local `ReadWriterAt`
-  - If a chunk is read, e.g. by the puller component calling `ReadAt`, it is tracked and market as remote by adding it to a local map
-  - The chunk is then read from the remote reader and written to the local `ReadWriterAt`, and is then marked as locally available, so that on the second read it is fetched locally directly
-  - A callback is then called which can be used to monitor the pull process
-  - Note that if it is used in a pipeline with the `Puller`, this also means that if a chunk which hasn't been fetched asynchronously yet will be scheduled to be pulled immediately
-  - WriteAt also starts by tracking a chunk, but then immediately marks the chunk as available locally no matter whether it has been pulled before
-  - The combination of the `SyncedReadWriterAt` and the `Puller` component implements the pull post-copy system in a modular and testable way
-  - Unlike the usual way of only fetching chunks when they are available however, this system also allows fetching them pre-emptively, gaining some benefits of pre-copy migration, too
-  - Using this `Puller` interface, it is possible to implement a read-only managed mount
-  - This is very similar the `rr+` prefetching mechanism from "Remote Regions" (reference atc18-aguilera)
-
-### Live Migration Encryption and Authorization In WAN
+### Pluggable Encryption and Authentication
 
 - Compared to existing remote mount and migration solutions, r3map is a bit special
 - As mentioned before, most systems are designed for scenarios where such resources are accessible in a high-bandwidth, low-latency LAN
@@ -482,17 +484,6 @@ csl: static/ieee.csl
 - For WAN specifically, new protocols such as QUIC allow tight integration with TLS for authentication and encryption
 - While less relevant for the migration use case (since connections can be established ahead of time), for the mount use case the initial remote `ReadAt` requests' latency is an important metric since it strongly correlates with the total latency
 - QUIC has a way to establish 0-RTT TLS, which can save one or multiple RTTs and thus signficantly reduce this overhead, and handle authentication in the same step
-
-### Push-Pull API Design Considerations In WAN
-
-- Another optimization that has been made to support this WAN deployment scenario is the pull-only architecture
-- Usually, a pre-copy system pushes changes to the destination in the migration API
-- This however makes such a system hard to use in a scenario where NATs exist, or a scenario in which the network might have an outage during the migration
-- With a pull-only system emulating the pre-copy setup, the client can simply keep track of which chunks it still needs to pull itself, so if there is a network outage, it can just resume pulling like before, which would be much harder to implement with a push system as the server would have to track this state for multiple clients and handle the lifecycle there
-- The pull-only system also means that unlike the push system that was implemented for the hash-based synchronization, a central forwarding hub is not necessary
-- In the push-based system for the hash-based solution, the topology had to be static/all destinations would have to have received the changes made to the remote app's memory since it was started
-- In order to cut down on unnecessary duplicate data transmissions, a central forwarding hub was implemented
-- This central forwarding hub does however add additional latency, which can be removed completely with the migration protocol's P2P, pull-only algorithm
 
 ### Optimizing Backends For High RTT
 
@@ -550,19 +541,8 @@ csl: static/ieee.csl
   - Similarly to Redis, locking individual keys can be handled by the DB server
   - But in the case of Cassandra, the DB server stores chunks on disk, so it can be used for persistent data
   - In order to use Cassandra, migrations have to be applied for creating the table etc. (code snippet from https://github.com/pojntfx/r3map/blob/main/cmd/r3map-direct-mount-benchmark/main.go#L369-L396)
-- Overhead of using managed mounts
-  - Another interesting aspect of optimization to look at is the overhead of managed mounts
-  - It is possible for managed mounts (and migrations) to deliver signficantly lower performance compared to direct mounts
-  - This is because using managed mounts come with the cost of potential duplicate I/O operations
-  - For example, if memory is being accessed linearly from the first to the last offset immediately after it being mounted, then using the background pulls will have no effect other than causing a write operation (to the local caching backend) compared to just directly reading from the remote backend
-  - This however is only the case in scenarios with a very low latency between the local and remote backends
-  - If latency becomes higher, then the ability to pull the chunks in the background and in parallel with the puller will offset the cost of duplicate I/O
-  - The same applies to slow local backends, e.g. if slow disks or memory are being used, which can mean that offsetting the duplicate I/O will need a significantly higher latency to be worth it
-- Comparing mount vs. migration API performance
-  - It is interesting to look at how the migration API performs compared to the single-phase mount API
-  - The mounts API should have a shorter total latency, but a higher "downtime" since it needs to initialize the device first
 
-### Implementing Bi-Directional Protocols With Dudirekta
+### Bi-Directional Protocols With Dudirekta
 
 - Another aspect that plays an important role in performance for real-life deployments is the choice of RPC framework and transport protocol
 - As mentioned before, both the mount and the migration APIs are transport-independent
@@ -623,7 +603,7 @@ csl: static/ieee.csl
 
 ## Results
 
-### `userfaultfd`
+### Userfaults
 
 - Benchmark: Sensitivity of `userfaultfd` to network latency and throughput
 
@@ -633,7 +613,7 @@ csl: static/ieee.csl
 - Benchmark: Hashing the chunks individually vs. hashing the entire file
 - Benchmark: Throughput of this custom synchronization protocol vs. rsync (which hashes entire files)
 
-### Mount and Migration API
+### Mounts and Live Migration
 
 - Benchmark: Local vs. remote chunking
 - Benchmark: Parallelizing startups and pulling n MBs as the device starts
@@ -646,7 +626,7 @@ csl: static/ieee.csl
 
 ## Discussion
 
-### `userfaultfd`
+### Userfaults
 
 - As we can see, using `userfaultfd` we are able to map almost any object into memory
 - This approach is very clean and has comparatively little overhead, but also has significant architecture-related problems that limit its uses
@@ -704,6 +684,30 @@ csl: static/ieee.csl
   - The last alternative to NBD devices would be to extend the kernel with a new construct that allows for essentially a virtual file to be `mmap`ed, not a block device
   - This could use a custom protocol that is optimized for this use case instead of a full block device
   - Because of the extensive setup required to implement such a system however, and the possibility of `ublk` providing a performant alternative in the future, going forward with NBD was chosen for now
+
+### Mounts and Live Migration
+
+- Overhead of using managed mounts
+  - Another interesting aspect of optimization to look at is the overhead of managed mounts
+  - It is possible for managed mounts (and migrations) to deliver signficantly lower performance compared to direct mounts
+  - This is because using managed mounts come with the cost of potential duplicate I/O operations
+  - For example, if memory is being accessed linearly from the first to the last offset immediately after it being mounted, then using the background pulls will have no effect other than causing a write operation (to the local caching backend) compared to just directly reading from the remote backend
+  - This however is only the case in scenarios with a very low latency between the local and remote backends
+  - If latency becomes higher, then the ability to pull the chunks in the background and in parallel with the puller will offset the cost of duplicate I/O
+  - The same applies to slow local backends, e.g. if slow disks or memory are being used, which can mean that offsetting the duplicate I/O will need a significantly higher latency to be worth it
+- Comparing mount vs. migration API performance
+  - It is interesting to look at how the migration API performs compared to the single-phase mount API
+  - The mounts API should have a shorter total latency, but a higher "downtime" since it needs to initialize the device first
+- Issues with the implementation
+  - While the managed mounts API mostly works, there are some issues with it being implemented in Go
+  - This is mostly due to deadlocking issues; if the GC tries to release memory, it has to stop the world
+  - If the `mmap` API is used, it is possible that the GC tries to manage the underlying slice, or tries to release memory as data is being copied from the mount
+  - Because the NBD server that provides the byte slice is also running in the same process, this causes a deadlock as the server that provides the backend for the mount is also frozen (https://github.com/pojntfx/r3map/blob/main/pkg/mount/slice_managed.go#L70-L93)
+  - A workaround for this is to lock the `mmap`ed region into memory, but this will also cause all chunks to be fetched, which leads to a high `Open()` latency
+  - This is fixable by simply starting the server in separate thread, and then `mmap`ing
+  - Issues like this however are hard to fix, and point to Go potentially not being the correct language to use for this part of the system
+  - In the future, using a language without a GC (such as Rust) could provide a good alternative
+  - While the current API is Go-specific, it could also be exposed through a different interface to make it usable in Go
 
 ### Use Cases
 
@@ -874,7 +878,8 @@ csl: static/ieee.csl
 
 ## Conclusion
 
-- Answer to the research question
+- Answer to the research question (Could memory be the universal way to access and migrate state?)
+- What would be possible if memory became the universal way to access state?
 - Further research recommendations (e.g. `ublk`)
 
 ## References
