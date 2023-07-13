@@ -1,3 +1,9 @@
+commit 77cc66024530e2f55548997b9a591245a29a0f12
+Author: Felicitas Pojtinger <felicitas@pojtinger.com>
+Date:   Fri Jul 14 01:21:17 2023 +0200
+
+    refactor: Finish planning/implementation step separation, reimplement results and discussion sections
+
 commit 56e83698bdd9de39537dfc556731615ac8c8b30d
 Author: Felicitas Pojtinger <felicitas@pojtinger.com>
 Date:   Thu Jul 13 23:59:34 2023 +0200
