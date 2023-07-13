@@ -1,3 +1,9 @@
+commit 56e83698bdd9de39537dfc556731615ac8c8b30d
+Author: Felicitas Pojtinger <felicitas@pojtinger.com>
+Date:   Thu Jul 13 23:59:34 2023 +0200
+
+    refactor: Start splitting methods into planning and implementation, introduce theory and improve summary
+
 commit 45913fb795a7ab2861db30afd349200ddf89130e
 Author: Felicitas Pojtinger <felicitas@pojtinger.com>
 Date:   Thu Jul 13 03:15:01 2023 +0200
