@@ -1,3 +1,21 @@
+commit 45913fb795a7ab2861db30afd349200ddf89130e
+Author: Felicitas Pojtinger <felicitas@pojtinger.com>
+Date:   Thu Jul 13 03:15:01 2023 +0200
+
+    refactor: Use headings for paper structure
+
+commit a4dae62669fb0d3a032a01ac4a9dec2a5634b9cf
+Author: Felicitas Pojtinger <felicitas@pojtinger.com>
+Date:   Thu Jul 13 02:45:49 2023 +0200
+
+    refactor: Start splitting into theory, methods and results sections
+
+commit a03c2c51ab88e21139caf0b72eeb0168d9126af0
+Author: Felicitas Pojtinger <felicitas@pojtinger.com>
+Date:   Thu Jul 13 02:16:46 2023 +0200
+
+    docs: Start organizing theory/methods/results sections, add preliminary references section
+
 commit 42780b4b28439596cadec91ffe043fbe7c1c9709
 Author: Felicitas Pojtinger <felicitas@pojtinger.com>
 Date:   Wed Jul 12 23:49:54 2023 +0200
