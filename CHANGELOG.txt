@@ -1,3 +1,9 @@
+commit 52a0166df6ff00159a3a63226217a66ce40efbc0
+Author: Felicitas Pojtinger <felicitas@pojtinger.com>
+Date:   Fri Jul 14 23:54:50 2023 +0200
+
+    feat: Add theory sectionsfor memory hierarchy, Linux memory management, swap space and page faults
+
 commit 66221b84c01753ee1924ab544816ae6a98c05d55
 Author: Felicitas Pojtinger <felicitas@pojtinger.com>
 Date:   Fri Jul 14 01:41:39 2023 +0200
