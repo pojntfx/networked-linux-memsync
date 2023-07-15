@@ -42,26 +42,36 @@ Introduction</a></li>
 <li><a href="#technology"><span class="toc-section-number">3</span>
 Technology</a>
 <ul>
-<li><a href="#delta-synchronization"><span class="toc-section-number">3.1</span> Delta Synchronization</a></li>
-<li><a href="#file-systems-in-userspace-fuse"><span class="toc-section-number">3.2</span> File Systems In Userspace
-(FUSE)</a></li>
-<li><a href="#network-block-device-nbd"><span class="toc-section-number">3.3</span> Network Block Device
-(NBD)</a></li>
-<li><a href="#virtual-machine-live-migration"><span class="toc-section-number">3.4</span> Virtual Machine Live Migration</a>
-<ul>
-<li><a href="#pre-copy"><span class="toc-section-number">3.4.1</span>
-Pre-Copy</a></li>
-<li><a href="#post-copy"><span class="toc-section-number">3.4.2</span>
-Post-Copy</a></li>
-<li><a href="#workload-analysis"><span class="toc-section-number">3.4.3</span> Workload Analysis</a></li>
-</ul></li>
-<li><a href="#the-memory-hierarchy"><span class="toc-section-number">3.5</span> The Memory Hierarchy</a></li>
-<li><a href="#memory-management-in-linux"><span class="toc-section-number">3.6</span> Memory Management in
+<li><a href="#the-linux-kernel"><span class="toc-section-number">3.1</span> The Linux Kernel</a></li>
+<li><a href="#linux-kernel-modules"><span class="toc-section-number">3.2</span> Linux Kernel Modules</a></li>
+<li><a href="#unix-signals-and-handlers"><span class="toc-section-number">3.3</span> UNIX Signals and Handlers</a></li>
+<li><a href="#the-memory-hierarchy"><span class="toc-section-number">3.4</span> The Memory Hierarchy</a></li>
+<li><a href="#memory-management-in-linux"><span class="toc-section-number">3.5</span> Memory Management in
 Linux</a></li>
-<li><a href="#swap-space"><span class="toc-section-number">3.7</span>
+<li><a href="#swap-space"><span class="toc-section-number">3.6</span>
 Swap Space</a></li>
-<li><a href="#page-faults"><span class="toc-section-number">3.8</span>
+<li><a href="#page-faults"><span class="toc-section-number">3.7</span>
 Page Faults</a></li>
+<li><a href="#mmap"><span class="toc-section-number">3.8</span>
+<code>mmap</code></a></li>
+<li><a href="#inotify"><span class="toc-section-number">3.9</span>
+<code>inotify</code></a></li>
+<li><a href="#linux-kernel-disk-and-file-caching"><span class="toc-section-number">3.10</span> Linux Kernel Disk and File
+Caching</a></li>
+<li><a href="#delta-synchronization"><span class="toc-section-number">3.11</span> Delta Synchronization</a></li>
+<li><a href="#file-systems-in-userspace-fuse"><span class="toc-section-number">3.12</span> File Systems In Userspace
+(FUSE)</a></li>
+<li><a href="#network-block-device-nbd"><span class="toc-section-number">3.13</span> Network Block Device
+(NBD)</a></li>
+<li><a href="#virtual-machine-live-migration"><span class="toc-section-number">3.14</span> Virtual Machine Live
+Migration</a>
+<ul>
+<li><a href="#pre-copy"><span class="toc-section-number">3.14.1</span>
+Pre-Copy</a></li>
+<li><a href="#post-copy"><span class="toc-section-number">3.14.2</span>
+Post-Copy</a></li>
+<li><a href="#workload-analysis"><span class="toc-section-number">3.14.3</span> Workload Analysis</a></li>
+</ul></li>
 </ul></li>
 <li><a href="#planning"><span class="toc-section-number">4</span>
 Planning</a>
@@ -159,16 +169,14 @@ Sources</a></li>
 <h1><span class="header-section-number">1</span> Technologies to
 Introduce</h1>
 <ul>
-<li>The Linux kernel</li>
-<li><code>mmap</code></li>
-<li>UNIX signals and handlers</li>
-<li><code>inotify</code></li>
-<li>Kernel disk and file caching</li>
 <li>gRPC and fRPC</li>
 <li>Streams and pipelines</li>
 <li>Redis</li>
 <li>S3</li>
 <li>Cassandra</li>
+<li>Delta synchronization (redo)</li>
+<li>FUSE (redo)</li>
+<li>NBD (redo)</li>
 </ul>
 </div>
 <div id="introduction" class="slide section level1" number="2">
@@ -184,185 +192,60 @@ today</li>
 </div>
 <div id="technology" class="slide section level1" number="3">
 <h1><span class="header-section-number">3</span> Technology</h1>
-<h2 id="delta-synchronization"><span class="header-section-number">3.1</span> Delta Synchronization</h2>
+<h2 id="the-linux-kernel"><span class="header-section-number">3.1</span>
+The Linux Kernel</h2>
 <ul>
-<li>The probably most popular tool for file synchronization like this is
-rsync</li>
-<li>When the delta-transfer algorithm for rsync is active, it computes
-the difference between the local and the remote file, and then
-synchronizes the changes</li>
-<li>The delta sync algorithm first does file block division</li>
-<li>The file on the destination is divided into fixed-size blocks</li>
-<li>For each block in the destination, a weak and fast checksum is
-calculated</li>
-<li>The checksums are sent over to the source</li>
-<li>On the source, the same checksum calculation process is run, and
-compared against the checksums that were sent over (matching block
-identification)</li>
-<li>Once the changed blocks are known, the source sends over the offset
-of each block and the changed block’s data to the destination</li>
-<li>When a block is received, the destination writes the chunk to the
-specified offset, reconstructing the file</li>
-<li>Once one polling interval is done, the process begins again</li>
-</ul>
-<h2 id="file-systems-in-userspace-fuse"><span class="header-section-number">3.2</span> File Systems In Userspace
-(FUSE)</h2>
+<li>Open-Source kernel created by Linus Torvals in 1991</li>
+<li>Powers millions of devices worldwide (servers, desktops, phones,
+embedded devices)</li>
+<li>Is a bridge between applications and hardware
 <ul>
-<li>In order to implement file systems in user space, we can use the
-FUSE API</li>
-<li>Here, a user space program registers itself with the FUSE kernel
-module</li>
-<li>This program provides callbacks for the file system operations,
-e.g. for <code>open</code>, <code>read</code>, <code>write</code>
-etc.</li>
-<li>When the user performs a file system operation on a mounted FUSE
-file system, the kernel module will send a request for the operation to
-the user space program, which can then reply with a response, which the
-FUSE kernel module will then return to the user</li>
-<li>This makes it much easier to create a file system compared to
-writing it in the kernel, as it can run in user space</li>
-<li>It is also much safer as no custom kernel module is required and an
-error in the FUSE or the backend can’t crash the entire kernel</li>
-<li>Unlike a file system implemented as a kernel module, this layer of
-indirection makes the file system portable, since it only needs to
-communicate with the FUSE module</li>
+<li>Provides an abstraction layer</li>
+<li>Compatible with many architectures (ARM, x86, RISC-V etc.)</li>
+</ul></li>
+<li>Is a good fit for this thesis due to it’s open-source nature (allows
+anyone to view, modify and contribute to the source code)</li>
 </ul>
-<h2 id="network-block-device-nbd"><span class="header-section-number">3.3</span> Network Block Device (NBD)</h2>
+<h2 id="linux-kernel-modules"><span class="header-section-number">3.2</span> Linux Kernel Modules</h2>
 <ul>
-<li>NBD uses a protocol to communicate between a server (provided by
-user space) and a client (provided by the NBD kernel module)</li>
-<li>The protocol can run over WAN, but is really mostly meant for LAN or
-localhost usage</li>
-<li>It has two phases: Handshake and transmission</li>
-<li>There are two actors in the protocol: One or multiple clients, the
-server and the virtual concept of an export</li>
-<li>When the client connects to the server, the server sends a greeting
-message with the server’s flags</li>
-<li>The client responds with its own flags and an export name (a single
-NBD server can expose multiple devices) to use</li>
-<li>The server sends the export’s size and other metadata, after which
-the client acknowledges the received data and the handshake is
-complete</li>
-<li>After the handshake, the client and server start exchanging commands
-and replies</li>
-<li>A command can be any of the basic operations needed to access a
-block device, e.g. read, write or flush</li>
-<li>Depending on the command, it can also contain data (such as the
-chunk to be written), offsets, lengths and more</li>
-<li>Replies can contain an error, success value or data depending on the
-reply’s type</li>
-<li>NBD is however limited in some respects; the maximum message size is
-32 MB, but the maximum block/chunk size supported by the kernel is just
-4096 KB, making it a suboptimal protocol to run over WAN, esp. in high
-latency scenarios</li>
-<li>The protocol also allows for listing exports, making it possible to
-e.g. list multiple memory regions on a single server</li>
-<li>NBD is an older protocol with multiple different handshake versions
-and legacy features</li>
-<li>Since the purpose of NBD in this use case is minimal and both the
-server and the client are typically controlled, it makes sense to only
-implement the latest recommended versions and the baseline feature
-set</li>
-<li>The baseline feature set requires no TLS, the latest “fixed
-newstyle” handshake, the ability to list and choose an export, as well
-as the read, write and disc(onnect) commands and replies</li>
-<li>As such, the protocol is very simple to implement</li>
-<li>With this simplicity however also come some drawbacks: NBD is less
-suited for use cases where the backing device behaves very differently
-from a random-access store device, like for example a tape drive, since
-it is not possible to work with high-level abstractions such as files or
-directories</li>
-<li>This is, for the narrow memory synchronization use case, however
-more of a feature than a bug</li>
+<li>Linux kernel is monolithic, but extensible thanks to kernel
+modules</li>
+<li>Small pieces of kernel-level code that can be loaded and unloaded as
+kernel modules</li>
+<li>Can extend the kernel functionality without reboots</li>
+<li>Are dynamically linked into the running kernel</li>
+<li>Helps keep kernel size manageable and maintainable</li>
+<li>Kernel modules are written in C</li>
+<li>Interact with kernel through APIs</li>
+<li>Poorly written modules can cause signficant kernel instability</li>
+<li>Modules can be loaded at boot time or dynamically
+(<code>modprobe</code>, <code>rmmod</code> etc.)</li>
+<li>Module lifecycle can be implemented with initialization and cleanup
+functions</li>
 </ul>
-<h2 id="virtual-machine-live-migration"><span class="header-section-number">3.4</span> Virtual Machine Live
-Migration</h2>
-<h3 id="pre-copy"><span class="header-section-number">3.4.1</span>
-Pre-Copy</h3>
+<h2 id="unix-signals-and-handlers"><span class="header-section-number">3.3</span> UNIX Signals and Handlers</h2>
 <ul>
-<li>While these systems already allow for some optimizations over simply
-using the NBD protocol over WAN, they still mean that chunks will only
-be fetched as they are being needed, which means that there still is a
-guaranteed minimum downtime</li>
-<li>In order to improve on this, a more advanced API (the managed mount
-API) was created</li>
-<li>A field that tries to optimize for this use case is live migration
-of VMs</li>
-<li>Live migration refers to moving a virtual machine, its state and
-connected devices from one host to another with as little downtime as
-possible</li>
-<li>There are two types of such migration algorithms; pre-copy and
-post-copy migration</li>
-<li>Pre-copy migration works by copying data from the source to the
-destination as the VM continues to run (or in the case of a generic
-migration, app/other state continues being written to)</li>
-<li>First, the initial state of the VM’s memory is copied to the
-destination</li>
-<li>If, during the push, chunks are being modified, they are being
-marked as dirty</li>
-<li>These dirty chunks are being copied over to the destination until
-the number of remaining chunks is small enough to satisfy a maximum
-downtime criteria</li>
-<li>Once this is the case, the VM is suspended on the source, and the
-remaining chunks are synced over to destination</li>
-<li>Once the transfer is complete, the VM is resumed on the
-destination</li>
-<li>This process is helpful since the VM is always available in full on
-either the source or the destination, and it is resilient to a network
-outage occurring during the synchronization</li>
-<li>If the VM (or app etc.) is however changing too many chunks on the
-source during the migration, the maximum acceptable downtime criteria
-might never get reached, and the maximum acceptable downtime is also
-somewhat limited by the available RTT</li>
-</ul>
-<h3 id="post-copy"><span class="header-section-number">3.4.2</span>
-Post-Copy</h3>
+<li>Signals
 <ul>
-<li>An alternative to pre-copy migration is post-copy migration</li>
-<li>In this approach, the VM is immediately suspended on the source,
-moved to the destination with only a minimal set of chunks</li>
-<li>After the VM has been moved to the destination, it is resumed</li>
-<li>If the VM tries to access a chunk on the destination, a page fault
-is raised, and the missing page is fetched from the source, and the VM
-continues to execute</li>
-<li>The benefit of post-copy migration is that it does not require
-re-transmitting dirty chunks to the destination before the maximum
-tolerable downtime is reached</li>
-<li>The big drawback of post-copy migration is that it can result in
-longer migration times, because the chunks need to be fetched from the
-network on-demand, which is very latency/RTT-sensitive</li>
-</ul>
-<h3 id="workload-analysis"><span class="header-section-number">3.4.3</span> Workload Analysis</h3>
+<li>Are software interrups that notify a process of important events
+(exceptions etc.)</li>
+<li>Can originate from the kernel, user input or different
+processes</li>
+<li>Function as an asynchronous communication mechanism between
+processes or the kernel and a process</li>
+<li>Have default actions, i.e. terminating the process or ignoring a
+signal</li>
+</ul></li>
+<li>Handlers
 <ul>
-<li>“Reducing Virtual Machine Live Migration Overhead via Workload
-Analysis” provides an interesting analysis of options on how this
-decision of when to migrate can be made</li>
-<li>While being designed mostly for use with virtual machines, it could
-serve as a basis for other applications or migration scenarios, too</li>
-<li>The proposed method identifies workload cycles of VMs and uses this
-information to postpone the migration if doing so is beneficial</li>
-<li>This works by analyzing cyclic patters that can unnecessarily delay
-a VM’s migration, and identifies optimal cycles to migrate VMs in from
-this information</li>
-<li>For the VM use case, such cycles could for example be the GC of a
-large application triggering a lot of changes to the VMs memory
-etc.</li>
-<li>If a migration is proposed, the system checks for whether it is
-currently in a beneficial cycle to migrate in which case it lets the
-migration proceed; otherwise, it postpones it until the next cycle</li>
-<li>The algorithm uses a Bayesian classifier to identify a favorable or
-unfavorable cycle</li>
-<li>Compared to the alternative, which is usually waiting for a
-significant percentage of the chunks that were not changed before
-tracking started to be synced first, this can potentially yield a lot of
-improvements</li>
-<li>The paper has found an improvement of up to 74% in terms of live
-migration time/downtime and 43% in terms of the amount of data
-transferred over the network</li>
-<li>While such a system was not implemented for r3map, using r3map with
-such a system would certainly be possible</li>
+<li>Can be used to customize how a process should respond to a
+signal</li>
+<li>Can be installed with <code>sigaction()</code></li>
+</ul></li>
+<li>Signals are not designed as an IPC mechanism, since they can only
+alert of an event, but not of any additional data for it</li>
 </ul>
-<h2 id="the-memory-hierarchy"><span class="header-section-number">3.5</span> The Memory Hierarchy</h2>
+<h2 id="the-memory-hierarchy"><span class="header-section-number">3.4</span> The Memory Hierarchy</h2>
 <ul>
 <li>Memory in computers can be classified based on size, speed, cost and
 proximity to the CPU</li>
@@ -411,7 +294,7 @@ data</li>
 secondary storage with the same interfae as main memory</li>
 </ul></li>
 </ul>
-<h2 id="memory-management-in-linux"><span class="header-section-number">3.6</span> Memory Management in Linux</h2>
+<h2 id="memory-management-in-linux"><span class="header-section-number">3.5</span> Memory Management in Linux</h2>
 <ul>
 <li>Memory management is a crucial part of every operation system -
 maybe even the whole point of an operating system</li>
@@ -434,7 +317,7 @@ speeds up memory allocation, reduces fragmentation of the memory)</li>
 <li>Pages can be mapped to any “real” location in physical memory</li>
 </ul></li>
 </ul>
-<h2 id="swap-space"><span class="header-section-number">3.7</span> Swap
+<h2 id="swap-space"><span class="header-section-number">3.6</span> Swap
 Space</h2>
 <ul>
 <li>A portion of the secondary storage is for virtual memory</li>
@@ -464,7 +347,7 @@ slower than primary memory, it can lead to signficant slowdowns</li>
 system is to swap memory pages</li>
 </ul></li>
 </ul>
-<h2 id="page-faults"><span class="header-section-number">3.8</span> Page
+<h2 id="page-faults"><span class="header-section-number">3.7</span> Page
 Faults</h2>
 <ul>
 <li>Page faults occur when the process tries to access a page not
@@ -492,6 +375,256 @@ data when it is required</li>
 <li>Usually, handling page faults is something that the kernel does</li>
 <li>In the past, this used to be possible from userspace by handling the
 <code>SIGSEGV</code> signal in the process</li>
+</ul>
+<h2 id="mmap"><span class="header-section-number">3.8</span>
+<code>mmap</code></h2>
+<ul>
+<li>Overview
+<ul>
+<li>UNIX system call for mapping files or devices into memory</li>
+<li>Multiple possible usecases: Shared memory, file I/O, fine-grained
+memory allocation</li>
+<li>Commonly used in applications like databases</li>
+<li>Is a “power tool”, needs to be used carefully and intentionally</li>
+</ul></li>
+<li>Functionality
+<ul>
+<li>Establishes direct link (memory mapping) between a file and a memory
+region</li>
+<li>When the system reads from the mapped memory region, it reads from
+the file directly and vice versa</li>
+<li>Reduces overhead since no or less context switches are needed</li>
+</ul></li>
+<li>Benefits:
+<ul>
+<li>Enables zero-copy operations: Data can be accessed directly as
+though it were in memory, without having to copy it from disk first</li>
+<li>Can be used to share memory between processes without having to go
+through the kernel with syscalls</li>
+</ul></li>
+<li>Drawback: Bypasses the file system cache, which can lead to stale
+data if multiple processes read/write at the same time</li>
+</ul>
+<h2 id="inotify"><span class="header-section-number">3.9</span>
+<code>inotify</code></h2>
+<ul>
+<li>Event-driven notification system of the Linux kernel</li>
+<li>Monitors file system for events (i.e. modifications, access
+etc.)</li>
+<li>Uses a watch feature for monitoring specific events, e.g. only
+watching writes</li>
+<li>Reduces overhead and ressource use compared to polling</li>
+<li>Widely used in many applications, e.g. Dropbox for file
+synchronization</li>
+<li>Has limitations like the limit on how many watches can be
+established</li>
+</ul>
+<h2 id="linux-kernel-disk-and-file-caching"><span class="header-section-number">3.10</span> Linux Kernel Disk and File
+Caching</h2>
+<ul>
+<li>Disk caching
+<ul>
+<li>Temporarely stores frequently accessed data in RAM</li>
+<li>Uses principle of locality (see Memory Hierarchy)</li>
+<li>Implemented using the page cache subsystem in Linux</li>
+<li>Uses the LRU algorithm to manage cache contents</li>
+</ul></li>
+<li>File caching
+<ul>
+<li>Linux caches file system metadata in the <code>dentry</code> and
+<code>inode</code> caches</li>
+<li>Metadata includes i.e. file names, attributes and locations</li>
+<li>This caching accelerates the resoluton of path names and file
+attributes (i.e. the last change data for polling)</li>
+<li>File reads/writes pass through the disk cache</li>
+</ul></li>
+<li>Complexities
+<ul>
+<li>Data consistency: Between the disk and cache via writebacks.
+Aggressive writebacks lead to reduced performance, delays risk data
+loss</li>
+<li>Release of cached data under memory pressure: Cache eviction
+requires intelligent algorithms, i.e. LRU</li>
+</ul></li>
+</ul>
+<h2 id="delta-synchronization"><span class="header-section-number">3.11</span> Delta Synchronization</h2>
+<ul>
+<li>The probably most popular tool for file synchronization like this is
+rsync</li>
+<li>When the delta-transfer algorithm for rsync is active, it computes
+the difference between the local and the remote file, and then
+synchronizes the changes</li>
+<li>The delta sync algorithm first does file block division</li>
+<li>The file on the destination is divided into fixed-size blocks</li>
+<li>For each block in the destination, a weak and fast checksum is
+calculated</li>
+<li>The checksums are sent over to the source</li>
+<li>On the source, the same checksum calculation process is run, and
+compared against the checksums that were sent over (matching block
+identification)</li>
+<li>Once the changed blocks are known, the source sends over the offset
+of each block and the changed block’s data to the destination</li>
+<li>When a block is received, the destination writes the chunk to the
+specified offset, reconstructing the file</li>
+<li>Once one polling interval is done, the process begins again</li>
+</ul>
+<h2 id="file-systems-in-userspace-fuse"><span class="header-section-number">3.12</span> File Systems In Userspace
+(FUSE)</h2>
+<ul>
+<li>In order to implement file systems in user space, we can use the
+FUSE API</li>
+<li>Here, a user space program registers itself with the FUSE kernel
+module</li>
+<li>This program provides callbacks for the file system operations,
+e.g. for <code>open</code>, <code>read</code>, <code>write</code>
+etc.</li>
+<li>When the user performs a file system operation on a mounted FUSE
+file system, the kernel module will send a request for the operation to
+the user space program, which can then reply with a response, which the
+FUSE kernel module will then return to the user</li>
+<li>This makes it much easier to create a file system compared to
+writing it in the kernel, as it can run in user space</li>
+<li>It is also much safer as no custom kernel module is required and an
+error in the FUSE or the backend can’t crash the entire kernel</li>
+<li>Unlike a file system implemented as a kernel module, this layer of
+indirection makes the file system portable, since it only needs to
+communicate with the FUSE module</li>
+</ul>
+<h2 id="network-block-device-nbd"><span class="header-section-number">3.13</span> Network Block Device
+(NBD)</h2>
+<ul>
+<li>NBD uses a protocol to communicate between a server (provided by
+user space) and a client (provided by the NBD kernel module)</li>
+<li>The protocol can run over WAN, but is really mostly meant for LAN or
+localhost usage</li>
+<li>It has two phases: Handshake and transmission</li>
+<li>There are two actors in the protocol: One or multiple clients, the
+server and the virtual concept of an export</li>
+<li>When the client connects to the server, the server sends a greeting
+message with the server’s flags</li>
+<li>The client responds with its own flags and an export name (a single
+NBD server can expose multiple devices) to use</li>
+<li>The server sends the export’s size and other metadata, after which
+the client acknowledges the received data and the handshake is
+complete</li>
+<li>After the handshake, the client and server start exchanging commands
+and replies</li>
+<li>A command can be any of the basic operations needed to access a
+block device, e.g. read, write or flush</li>
+<li>Depending on the command, it can also contain data (such as the
+chunk to be written), offsets, lengths and more</li>
+<li>Replies can contain an error, success value or data depending on the
+reply’s type</li>
+<li>NBD is however limited in some respects; the maximum message size is
+32 MB, but the maximum block/chunk size supported by the kernel is just
+4096 KB, making it a suboptimal protocol to run over WAN, esp. in high
+latency scenarios</li>
+<li>The protocol also allows for listing exports, making it possible to
+e.g. list multiple memory regions on a single server</li>
+<li>NBD is an older protocol with multiple different handshake versions
+and legacy features</li>
+<li>Since the purpose of NBD in this use case is minimal and both the
+server and the client are typically controlled, it makes sense to only
+implement the latest recommended versions and the baseline feature
+set</li>
+<li>The baseline feature set requires no TLS, the latest “fixed
+newstyle” handshake, the ability to list and choose an export, as well
+as the read, write and disc(onnect) commands and replies</li>
+<li>As such, the protocol is very simple to implement</li>
+<li>With this simplicity however also come some drawbacks: NBD is less
+suited for use cases where the backing device behaves very differently
+from a random-access store device, like for example a tape drive, since
+it is not possible to work with high-level abstractions such as files or
+directories</li>
+<li>This is, for the narrow memory synchronization use case, however
+more of a feature than a bug</li>
+</ul>
+<h2 id="virtual-machine-live-migration"><span class="header-section-number">3.14</span> Virtual Machine Live
+Migration</h2>
+<h3 id="pre-copy"><span class="header-section-number">3.14.1</span>
+Pre-Copy</h3>
+<ul>
+<li>While these systems already allow for some optimizations over simply
+using the NBD protocol over WAN, they still mean that chunks will only
+be fetched as they are being needed, which means that there still is a
+guaranteed minimum downtime</li>
+<li>In order to improve on this, a more advanced API (the managed mount
+API) was created</li>
+<li>A field that tries to optimize for this use case is live migration
+of VMs</li>
+<li>Live migration refers to moving a virtual machine, its state and
+connected devices from one host to another with as little downtime as
+possible</li>
+<li>There are two types of such migration algorithms; pre-copy and
+post-copy migration</li>
+<li>Pre-copy migration works by copying data from the source to the
+destination as the VM continues to run (or in the case of a generic
+migration, app/other state continues being written to)</li>
+<li>First, the initial state of the VM’s memory is copied to the
+destination</li>
+<li>If, during the push, chunks are being modified, they are being
+marked as dirty</li>
+<li>These dirty chunks are being copied over to the destination until
+the number of remaining chunks is small enough to satisfy a maximum
+downtime criteria</li>
+<li>Once this is the case, the VM is suspended on the source, and the
+remaining chunks are synced over to destination</li>
+<li>Once the transfer is complete, the VM is resumed on the
+destination</li>
+<li>This process is helpful since the VM is always available in full on
+either the source or the destination, and it is resilient to a network
+outage occurring during the synchronization</li>
+<li>If the VM (or app etc.) is however changing too many chunks on the
+source during the migration, the maximum acceptable downtime criteria
+might never get reached, and the maximum acceptable downtime is also
+somewhat limited by the available RTT</li>
+</ul>
+<h3 id="post-copy"><span class="header-section-number">3.14.2</span>
+Post-Copy</h3>
+<ul>
+<li>An alternative to pre-copy migration is post-copy migration</li>
+<li>In this approach, the VM is immediately suspended on the source,
+moved to the destination with only a minimal set of chunks</li>
+<li>After the VM has been moved to the destination, it is resumed</li>
+<li>If the VM tries to access a chunk on the destination, a page fault
+is raised, and the missing page is fetched from the source, and the VM
+continues to execute</li>
+<li>The benefit of post-copy migration is that it does not require
+re-transmitting dirty chunks to the destination before the maximum
+tolerable downtime is reached</li>
+<li>The big drawback of post-copy migration is that it can result in
+longer migration times, because the chunks need to be fetched from the
+network on-demand, which is very latency/RTT-sensitive</li>
+</ul>
+<h3 id="workload-analysis"><span class="header-section-number">3.14.3</span> Workload Analysis</h3>
+<ul>
+<li>“Reducing Virtual Machine Live Migration Overhead via Workload
+Analysis” provides an interesting analysis of options on how this
+decision of when to migrate can be made</li>
+<li>While being designed mostly for use with virtual machines, it could
+serve as a basis for other applications or migration scenarios, too</li>
+<li>The proposed method identifies workload cycles of VMs and uses this
+information to postpone the migration if doing so is beneficial</li>
+<li>This works by analyzing cyclic patters that can unnecessarily delay
+a VM’s migration, and identifies optimal cycles to migrate VMs in from
+this information</li>
+<li>For the VM use case, such cycles could for example be the GC of a
+large application triggering a lot of changes to the VMs memory
+etc.</li>
+<li>If a migration is proposed, the system checks for whether it is
+currently in a beneficial cycle to migrate in which case it lets the
+migration proceed; otherwise, it postpones it until the next cycle</li>
+<li>The algorithm uses a Bayesian classifier to identify a favorable or
+unfavorable cycle</li>
+<li>Compared to the alternative, which is usually waiting for a
+significant percentage of the chunks that were not changed before
+tracking started to be synced first, this can potentially yield a lot of
+improvements</li>
+<li>The paper has found an improvement of up to 74% in terms of live
+migration time/downtime and 43% in terms of the amount of data
+transferred over the network</li>
+<li>While such a system was not implemented for r3map, using r3map with
+such a system would certainly be possible</li>
 </ul>
 </div>
 <div id="planning" class="slide section level1" number="4">
@@ -2336,6 +2469,17 @@ kernel memory management)</li>
 Implementation (Tanenbaum, Woodhull) (Page faults)</li>
 <li>Operating System Concepts (Silberschatz, A., Galvin, P. B., &amp;
 Gagne, G. 2018) (memory compression)</li>
+<li>Efficient Memory Mapped File I/O for In-Memory File Systems (Jungsik
+Choi) (<code>mmap</code>)</li>
+<li>Advanced Programming in the UNIX Environment (W. Stevens)
+(<code>mmap</code>, signals)</li>
+<li>Professional Linux Kernel Architecture (Wolfgang Mauerer) (kernel
+modules)</li>
+<li>Linux Kernel Development (Robert Love) (kernel modules)</li>
+<li>UNIX systems programming: communication, concurrency, and threads
+(Robbins, Kay A) (signals)</li>
+<li>Modeling the Linux page cache for accurate simulation of
+data-intensive applications (Hoang-Dung Do) (Linux page cache)</li>
 </ul>
 </div>
 </body>

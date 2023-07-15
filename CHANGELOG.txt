@@ -1,3 +1,9 @@
+commit aea4e4559248ac7e82990764da039115d0ef2bac
+Author: Felicitas Pojtinger <felicitas@pojtinger.com>
+Date:   Sat Jul 15 22:02:07 2023 +0200
+
+    feat: Add sections on kernel modules, signals and handlers, memory, `map`, inotify and caching
+
 commit 52a0166df6ff00159a3a63226217a66ce40efbc0
 Author: Felicitas Pojtinger <felicitas@pojtinger.com>
 Date:   Fri Jul 14 23:54:50 2023 +0200
