@@ -27,16 +27,14 @@ csl: static/ieee.csl
 
 ## Technologies to Introduce
 
-- The Linux kernel
-- `mmap`
-- UNIX signals and handlers
-- `inotify`
-- Kernel disk and file caching
 - gRPC and fRPC
 - Streams and pipelines
 - Redis
 - S3
 - Cassandra
+- Delta synchronization (redo)
+- FUSE (redo)
+- NBD (redo)
 
 ## Introduction
 
@@ -45,6 +43,160 @@ csl: static/ieee.csl
 - High-level use cases for memory synchronization in the industry today
 
 ## Technology
+
+### The Linux Kernel
+
+- Open-Source kernel created by Linus Torvals in 1991
+- Powers millions of devices worldwide (servers, desktops, phones, embedded devices)
+- Is a bridge between applications and hardware
+  - Provides an abstraction layer
+  - Compatible with many architectures (ARM, x86, RISC-V etc.)
+- Is a good fit for this thesis due to it's open-source nature (allows anyone to view, modify and contribute to the source code)
+
+### Linux Kernel Modules
+
+- Linux kernel is monolithic, but extensible thanks to kernel modules
+- Small pieces of kernel-level code that can be loaded and unloaded as kernel modules
+- Can extend the kernel functionality without reboots
+- Are dynamically linked into the running kernel
+- Helps keep kernel size manageable and maintainable
+- Kernel modules are written in C
+- Interact with kernel through APIs
+- Poorly written modules can cause signficant kernel instability
+- Modules can be loaded at boot time or dynamically (`modprobe`, `rmmod` etc.)
+- Module lifecycle can be implemented with initialization and cleanup functions
+
+### UNIX Signals and Handlers
+
+- Signals
+  - Are software interrups that notify a process of important events (exceptions etc.)
+  - Can originate from the kernel, user input or different processes
+  - Function as an asynchronous communication mechanism between processes or the kernel and a process
+  - Have default actions, i.e. terminating the process or ignoring a signal
+- Handlers
+  - Can be used to customize how a process should respond to a signal
+  - Can be installed with `sigaction()`
+- Signals are not designed as an IPC mechanism, since they can only alert of an event, but not of any additional data for it
+
+### The Memory Hierarchy
+
+- Memory in computers can be classified based on size, speed, cost and proximity to the CPU
+- Principle of locality: The most frequently accessed data and instructions should be in the closest memory
+- Registers
+  - Closest to the CPU
+  - Very small amount of storage (32-64 bits of data)
+  - Used by the CPU to perform operations
+  - Very high speed, but limited in storage size
+- Cache Memory
+  - Divided into L1, L2 and L3
+  - The higher the level, the larger and less expensive a layer
+  - Buffer for frequently accessed data
+  - Predictive algorithms optimize data usage
+- Main Memory (RAM)
+  - Offers larger capacity than cache but is slower
+  - Stores programs and open files
+- Secondary Storage (SSD/HDD)
+  - Slower but RAM but can store larger amounts of memory
+  - Typically stores the OS etc.
+  - Is persistent (keeps data after power is cut)
+- Tertiary Storage (optical disks, tape)
+  - Slow, but very cheap
+  - Tape: Can store very large amounts of data for relatively long amounts of time
+  - Typically used for archives or physical data transport (e.g. import from personal infrastructure to AWS)
+- Evolution of the hierarchy
+  - Technological advancements continue to blur this clear hierarchy
+  - E.g. NVMe rivals RAM speeds but can store larger amounts of data
+  - This thesis also blurs the hierarchy by exposing e.g. tertiary or secondary storage with the same interfae as main memory
+
+### Memory Management in Linux
+
+- Memory management is a crucial part of every operation system - maybe even the whole point of an operating system
+- Creates buffer between applications and physical memory
+- Can provide security guarantees (e.g. only one process can access it's memory)
+- Kernel space
+  - Runs the kernel, kernel extensions, device drivers
+  - Managed by the kernel memory module
+  - Uses slab allocation (groups objects of the same size into caches, speeds up memory allocation, reduces fragmentation of the memory)
+- User space
+  - Applications (and some drivers) store their memory here
+  - Managed through a paging system
+  - Each application has it's own private virtual address space
+  - Virtual address space divided into pages of 4 KB
+  - Pages can be mapped to any "real" location in physical memory
+
+### Swap Space
+
+- A portion of the secondary storage is for virtual memory
+- Essential for systems running multiple applications
+- Moves inactive parts of ram to secondary storage to free up space for other processes
+- Implementation in Linux
+  - Linux uses a demand paging system: Memory is only allocated when it is needed
+  - Can be either a swap partition (separate area of the secondary storage) or file (regular file that can be expanded/trucnated)
+  - Swap paritions and files are transparent to use
+  - Kernel uses a LRU algoruithm for deciding which pages
+- Role in hiberation
+  - Before hibernating, the system saves the content of RAM into swap (where it is persistent)
+  - When resuming, memory is read back from swap
+- Role on performance
+  - If swap is used too heavily, since the secondary storage is usually slower than primary memory, it can lead to signficant slowdowns
+  - "Swapiness" can be set for the kernel, which controls how likely the system is to swap memory pages
+
+### Page Faults
+
+- Page faults occur when the process tries to access a page not available in primary memory, which ause the OS to swap the required page from secondary storage into primary memory
+- Types
+  - Minor page faults: Page is already in memory, but not linked to the process that needs it
+  - Major page fault: Needs to be loaded from secondary storage
+- The LRU (and simpler clock algorithm) can minimize page faults
+- Techniques for handling page faults
+  - Prefetching: Anticipating future page requests and loading them into memory in advance
+  - Page compression: Compressing inactive pages and storing them in memory pre-emptively (so that less major faults happen)
+- By listening to these page faults, we know when a process wants to access a specific piece of memory
+- We can use this to then pull the chunk of memory from a remote, map it to the address on which the page fault occured, thus
+  only fetching data when it is required
+- Usually, handling page faults is something that the kernel does
+- In the past, this used to be possible from userspace by handling the `SIGSEGV` signal in the process
+
+### `mmap`
+
+- Overview
+  - UNIX system call for mapping files or devices into memory
+  - Multiple possible usecases: Shared memory, file I/O, fine-grained memory allocation
+  - Commonly used in applications like databases
+  - Is a "power tool", needs to be used carefully and intentionally
+- Functionality
+  - Establishes direct link (memory mapping) between a file and a memory region
+  - When the system reads from the mapped memory region, it reads from the file directly and vice versa
+  - Reduces overhead since no or less context switches are needed
+- Benefits:
+  - Enables zero-copy operations: Data can be accessed directly as though it were in memory, without having to copy it from disk first
+  - Can be used to share memory between processes without having to go through the kernel with syscalls
+- Drawback: Bypasses the file system cache, which can lead to stale data if multiple processes read/write at the same time
+
+### `inotify`
+
+- Event-driven notification system of the Linux kernel
+- Monitors file system for events (i.e. modifications, access etc.)
+- Uses a watch feature for monitoring specific events, e.g. only watching writes
+- Reduces overhead and ressource use compared to polling
+- Widely used in many applications, e.g. Dropbox for file synchronization
+- Has limitations like the limit on how many watches can be established
+
+### Linux Kernel Disk and File Caching
+
+- Disk caching
+  - Temporarely stores frequently accessed data in RAM
+  - Uses principle of locality (see Memory Hierarchy)
+  - Implemented using the page cache subsystem in Linux
+  - Uses the LRU algorithm to manage cache contents
+- File caching
+  - Linux caches file system metadata in the `dentry` and `inode` caches
+  - Metadata includes i.e. file names, attributes and locations
+  - This caching accelerates the resoluton of path names and file attributes (i.e. the last change data for polling)
+  - File reads/writes pass through the disk cache
+- Complexities
+  - Data consistency: Between the disk and cache via writebacks. Aggressive writebacks lead to reduced performance, delays risk data loss
+  - Release of cached data under memory pressure: Cache eviction requires intelligent algorithms, i.e. LRU
 
 ### Delta Synchronization
 
@@ -130,85 +282,6 @@ csl: static/ieee.csl
 - Compared to the alternative, which is usually waiting for a significant percentage of the chunks that were not changed before tracking started to be synced first, this can potentially yield a lot of improvements
 - The paper has found an improvement of up to 74% in terms of live migration time/downtime and 43% in terms of the amount of data transferred over the network
 - While such a system was not implemented for r3map, using r3map with such a system would certainly be possible
-
-### The Memory Hierarchy
-
-- Memory in computers can be classified based on size, speed, cost and proximity to the CPU
-- Principle of locality: The most frequently accessed data and instructions should be in the closest memory
-- Registers
-  - Closest to the CPU
-  - Very small amount of storage (32-64 bits of data)
-  - Used by the CPU to perform operations
-  - Very high speed, but limited in storage size
-- Cache Memory
-  - Divided into L1, L2 and L3
-  - The higher the level, the larger and less expensive a layer
-  - Buffer for frequently accessed data
-  - Predictive algorithms optimize data usage
-- Main Memory (RAM)
-  - Offers larger capacity than cache but is slower
-  - Stores programs and open files
-- Secondary Storage (SSD/HDD)
-  - Slower but RAM but can store larger amounts of memory
-  - Typically stores the OS etc.
-  - Is persistent (keeps data after power is cut)
-- Tertiary Storage (optical disks, tape)
-  - Slow, but very cheap
-  - Tape: Can store very large amounts of data for relatively long amounts of time
-  - Typically used for archives or physical data transport (e.g. import from personal infrastructure to AWS)
-- Evolution of the hierarchy
-  - Technological advancements continue to blur this clear hierarchy
-  - E.g. NVMe rivals RAM speeds but can store larger amounts of data
-  - This thesis also blurs the hierarchy by exposing e.g. tertiary or secondary storage with the same interfae as main memory
-
-### Memory Management in Linux
-
-- Memory management is a crucial part of every operation system - maybe even the whole point of an operating system
-- Creates buffer between applications and physical memory
-- Can provide security guarantees (e.g. only one process can access it's memory)
-- Kernel space
-  - Runs the kernel, kernel extensions, device drivers
-  - Managed by the kernel memory module
-  - Uses slab allocation (groups objects of the same size into caches, speeds up memory allocation, reduces fragmentation of the memory)
-- User space
-  - Applications (and some drivers) store their memory here
-  - Managed through a paging system
-  - Each application has it's own private virtual address space
-  - Virtual address space divided into pages of 4 KB
-  - Pages can be mapped to any "real" location in physical memory
-
-### Swap Space
-
-- A portion of the secondary storage is for virtual memory
-- Essential for systems running multiple applications
-- Moves inactive parts of ram to secondary storage to free up space for other processes
-- Implementation in Linux
-  - Linux uses a demand paging system: Memory is only allocated when it is needed
-  - Can be either a swap partition (separate area of the secondary storage) or file (regular file that can be expanded/trucnated)
-  - Swap paritions and files are transparent to use
-  - Kernel uses a LRU algoruithm for deciding which pages
-- Role in hiberation
-  - Before hibernating, the system saves the content of RAM into swap (where it is persistent)
-  - When resuming, memory is read back from swap
-- Role on performance
-  - If swap is used too heavily, since the secondary storage is usually slower than primary memory, it can lead to signficant slowdowns
-  - "Swapiness" can be set for the kernel, which controls how likely the system is to swap memory pages
-
-### Page Faults
-
-- Page faults occur when the process tries to access a page not available in primary memory, which ause the OS to swap the required page from secondary storage into primary memory
-- Types
-  - Minor page faults: Page is already in memory, but not linked to the process that needs it
-  - Major page fault: Needs to be loaded from secondary storage
-- The LRU (and simpler clock algorithm) can minimize page faults
-- Techniques for handling page faults
-  - Prefetching: Anticipating future page requests and loading them into memory in advance
-  - Page compression: Compressing inactive pages and storing them in memory pre-emptively (so that less major faults happen)
-- By listening to these page faults, we know when a process wants to access a specific piece of memory
-- We can use this to then pull the chunk of memory from a remote, map it to the address on which the page fault occured, thus
-  only fetching data when it is required
-- Usually, handling page faults is something that the kernel does
-- In the past, this used to be possible from userspace by handling the `SIGSEGV` signal in the process
 
 ## Planning
 
@@ -999,3 +1072,10 @@ csl: static/ieee.csl
 - Understanding the Linux Virtual Memory Manager (Mel Gorman)
 - Operating Systems Design And Implementation: Design and Implementation (Tanenbaum, Woodhull) (Page faults)
 - Operating System Concepts (Silberschatz, A., Galvin, P. B., & Gagne, G. 2018) (memory compression)
+- Efficient Memory Mapped File I/O for In-Memory File Systems (Jungsik Choi) (`mmap`)
+- Advanced Programming in the UNIX Environment (W. Stevens) (`mmap`, signals)
+- Professional Linux Kernel Architecture (Wolfgang Mauerer) (kernel modules)
+- Linux Kernel Development (Robert Love) (kernel modules)
+- UNIX systems programming: communication, concurrency, and threads (Robbins, Kay A) (signals)
+- Modeling the Linux page cache for accurate
+  simulation of data-intensive applications (Hoang-Dung Do) (Linux page cache)
