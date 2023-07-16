@@ -1,3 +1,9 @@
+commit cb0b3b3d4bf900256fb8b008ff55eb26579ca3d1
+Author: Felicitas Pojtinger <felicitas@pojtinger.com>
+Date:   Sun Jul 16 23:23:27 2023 +0200
+
+    docs: Add technology sections on TCP, UDP, QUIC, streams & pipelines, gRPC, Redis, S3 and Cassandra
+
 commit aea4e4559248ac7e82990764da039115d0ef2bac
 Author: Felicitas Pojtinger <felicitas@pojtinger.com>
 Date:   Sat Jul 15 22:02:07 2023 +0200

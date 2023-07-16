@@ -207,7 +207,7 @@ Technology</a>
 <li><a href="#linux-kernel-modules"><span class="toc-section-number">1.3.2</span> Linux Kernel Modules</a></li>
 <li><a href="#unix-signals-and-handlers"><span class="toc-section-number">1.3.3</span> UNIX Signals and
 Handlers</a></li>
-<li><a href="#the-memory-hierarchy"><span class="toc-section-number">1.3.4</span> The Memory Hierarchy</a></li>
+<li><a href="#memory-hierarchy"><span class="toc-section-number">1.3.4</span> Memory Hierarchy</a></li>
 <li><a href="#memory-management-in-linux"><span class="toc-section-number">1.3.5</span> Memory Management in
 Linux</a></li>
 <li><a href="#swap-space"><span class="toc-section-number">1.3.6</span>
@@ -220,13 +220,22 @@ Page Faults</a></li>
 <code>inotify</code></a></li>
 <li><a href="#linux-kernel-disk-and-file-caching"><span class="toc-section-number">1.3.10</span> Linux Kernel Disk and File
 Caching</a></li>
-<li><a href="#delta-synchronization"><span class="toc-section-number">1.3.11</span> Delta Synchronization</a></li>
-<li><a href="#file-systems-in-userspace-fuse"><span class="toc-section-number">1.3.12</span> File Systems In Userspace
+<li><a href="#tcp-udp-and-quic"><span class="toc-section-number">1.3.11</span> TCP, UDP and QUIC</a></li>
+<li><a href="#delta-synchronization"><span class="toc-section-number">1.3.12</span> Delta Synchronization</a></li>
+<li><a href="#file-systems-in-userspace-fuse"><span class="toc-section-number">1.3.13</span> File Systems In Userspace
 (FUSE)</a></li>
-<li><a href="#network-block-device-nbd"><span class="toc-section-number">1.3.13</span> Network Block Device
+<li><a href="#network-block-device-nbd"><span class="toc-section-number">1.3.14</span> Network Block Device
 (NBD)</a></li>
-<li><a href="#virtual-machine-live-migration"><span class="toc-section-number">1.3.14</span> Virtual Machine Live
+<li><a href="#virtual-machine-live-migration"><span class="toc-section-number">1.3.15</span> Virtual Machine Live
 Migration</a></li>
+<li><a href="#streams-and-pipelines"><span class="toc-section-number">1.3.16</span> Streams and Pipelines</a></li>
+<li><a href="#grpc"><span class="toc-section-number">1.3.17</span>
+gRPC</a></li>
+<li><a href="#redis"><span class="toc-section-number">1.3.18</span>
+Redis</a></li>
+<li><a href="#s3-and-minio"><span class="toc-section-number">1.3.19</span> S3 and Minio</a></li>
+<li><a href="#cassandra-and-scyllladb"><span class="toc-section-number">1.3.20</span> Cassandra and
+ScylllaDB</a></li>
 </ul></li>
 <li><a href="#planning"><span class="toc-section-number">1.4</span>
 Planning</a>
@@ -314,11 +323,6 @@ Sources</a></li>
 <h2 data-number="1.1"><span class="header-section-number">1.1</span>
 Technologies to Introduce</h2>
 <ul>
-<li>gRPC and fRPC</li>
-<li>Streams and pipelines</li>
-<li>Redis</li>
-<li>S3</li>
-<li>Cassandra</li>
 <li>Delta synchronization (redo)</li>
 <li>FUSE (redo)</li>
 <li>NBD (redo)</li>
@@ -400,14 +404,17 @@ signal</li>
 alert of an event, but not of any additional data for it</li>
 </ul>
 </section>
-<section id="the-memory-hierarchy" data-number="0.3.4">
+<section id="memory-hierarchy" data-number="0.3.4">
 <h3 data-number="1.3.4"><span class="header-section-number">1.3.4</span>
-The Memory Hierarchy</h3>
+Memory Hierarchy</h3>
 <ul>
 <li>Memory in computers can be classified based on size, speed, cost and
 proximity to the CPU</li>
 <li>Principle of locality: The most frequently accessed data and
 instructions should be in the closest memory</li>
+<li>Locality is important mostly due to the “speed of the cable” -
+throughput (due to dampening) and latency (due to being limited by the
+speed of light) decreases as distance increases</li>
 <li>Registers
 <ul>
 <li>Closest to the CPU</li>
@@ -618,8 +625,41 @@ requires intelligent algorithms, i.e. LRU</li>
 </ul></li>
 </ul>
 </section>
-<section id="delta-synchronization" data-number="0.3.11">
-<h3 data-number="1.3.11"><span class="header-section-number">1.3.11</span> Delta Synchronization</h3>
+<section id="tcp-udp-and-quic" data-number="0.3.11">
+<h3 data-number="1.3.11"><span class="header-section-number">1.3.11</span> TCP, UDP and QUIC</h3>
+<ul>
+<li>TCP
+<ul>
+<li>Connection-oriented</li>
+<li>Has been the reliable backbone of internet commmunication</li>
+<li>Guaranteed delivery and maintained data order</li>
+<li>Includes error checking, lost packet retransmission, and congestion
+control mechanisms</li>
+<li>Powers the majority of the web</li>
+</ul></li>
+<li>UDP
+<ul>
+<li>Connectionless</li>
+<li>No reliability or ordered packet delivery guarantees</li>
+<li>Faster than TCP due to less guarantees</li>
+<li>Suitable for applications that require speed over reliability
+(i.e. online gaming, video calls etc.)</li>
+</ul></li>
+<li>QUIC
+<ul>
+<li>Modern transport layer protocol developed by Google and standardized
+by the IETF in 2020</li>
+<li>Intents to combine the best aspects of TCP and UDP</li>
+<li>Provides reliability and ordered delivery guarantees</li>
+<li>Reduces connection establishment times/initial latency by combining
+connection and security handshakes</li>
+<li>Avoids head-of-line blocking by allowing independent delivery of
+separate streams</li>
+</ul></li>
+</ul>
+</section>
+<section id="delta-synchronization" data-number="0.3.12">
+<h3 data-number="1.3.12"><span class="header-section-number">1.3.12</span> Delta Synchronization</h3>
 <ul>
 <li>The probably most popular tool for file synchronization like this is
 rsync</li>
@@ -641,8 +681,8 @@ specified offset, reconstructing the file</li>
 <li>Once one polling interval is done, the process begins again</li>
 </ul>
 </section>
-<section id="file-systems-in-userspace-fuse" data-number="0.3.12">
-<h3 data-number="1.3.12"><span class="header-section-number">1.3.12</span> File Systems In Userspace
+<section id="file-systems-in-userspace-fuse" data-number="0.3.13">
+<h3 data-number="1.3.13"><span class="header-section-number">1.3.13</span> File Systems In Userspace
 (FUSE)</h3>
 <ul>
 <li>In order to implement file systems in user space, we can use the
@@ -665,8 +705,8 @@ indirection makes the file system portable, since it only needs to
 communicate with the FUSE module</li>
 </ul>
 </section>
-<section id="network-block-device-nbd" data-number="0.3.13">
-<h3 data-number="1.3.13"><span class="header-section-number">1.3.13</span> Network Block Device
+<section id="network-block-device-nbd" data-number="0.3.14">
+<h3 data-number="1.3.14"><span class="header-section-number">1.3.14</span> Network Block Device
 (NBD)</h3>
 <ul>
 <li>NBD uses a protocol to communicate between a server (provided by
@@ -716,11 +756,11 @@ directories</li>
 more of a feature than a bug</li>
 </ul>
 </section>
-<section id="virtual-machine-live-migration" data-number="0.3.14">
-<h3 data-number="1.3.14"><span class="header-section-number">1.3.14</span> Virtual Machine Live
+<section id="virtual-machine-live-migration" data-number="0.3.15">
+<h3 data-number="1.3.15"><span class="header-section-number">1.3.15</span> Virtual Machine Live
 Migration</h3>
-<section id="pre-copy" data-number="0.3.14.1">
-<h4 data-number="1.3.14.1"><span class="header-section-number">1.3.14.1</span> Pre-Copy</h4>
+<section id="pre-copy" data-number="0.3.15.1">
+<h4 data-number="1.3.15.1"><span class="header-section-number">1.3.15.1</span> Pre-Copy</h4>
 <ul>
 <li>While these systems already allow for some optimizations over simply
 using the NBD protocol over WAN, they still mean that chunks will only
@@ -758,8 +798,8 @@ might never get reached, and the maximum acceptable downtime is also
 somewhat limited by the available RTT</li>
 </ul>
 </section>
-<section id="post-copy" data-number="0.3.14.2">
-<h4 data-number="1.3.14.2"><span class="header-section-number">1.3.14.2</span> Post-Copy</h4>
+<section id="post-copy" data-number="0.3.15.2">
+<h4 data-number="1.3.15.2"><span class="header-section-number">1.3.15.2</span> Post-Copy</h4>
 <ul>
 <li>An alternative to pre-copy migration is post-copy migration</li>
 <li>In this approach, the VM is immediately suspended on the source,
@@ -776,8 +816,8 @@ longer migration times, because the chunks need to be fetched from the
 network on-demand, which is very latency/RTT-sensitive</li>
 </ul>
 </section>
-<section id="workload-analysis" data-number="0.3.14.3">
-<h4 data-number="1.3.14.3"><span class="header-section-number">1.3.14.3</span> Workload Analysis</h4>
+<section id="workload-analysis" data-number="0.3.15.3">
+<h4 data-number="1.3.15.3"><span class="header-section-number">1.3.15.3</span> Workload Analysis</h4>
 <ul>
 <li>“Reducing Virtual Machine Live Migration Overhead via Workload
 Analysis” provides an interesting analysis of options on how this
@@ -808,6 +848,131 @@ transferred over the network</li>
 such a system would certainly be possible</li>
 </ul>
 </section>
+</section>
+<section id="streams-and-pipelines" data-number="0.3.16">
+<h3 data-number="1.3.16"><span class="header-section-number">1.3.16</span> Streams and Pipelines</h3>
+<ul>
+<li>Fundamental concepts in computer science</li>
+<li>Sequentually process elements</li>
+<li>Allow for the efficient processing of large amounts of data, without
+having to load everything into memory</li>
+<li>Form the backbone of efficient, modular data processing</li>
+<li>Streams
+<ul>
+<li>Represent a continous sequence of data</li>
+<li>Can be a source or destination of data (i.e. files, network
+connections, stdin/stdout etc.)</li>
+<li>Allow processing of data as it becomes available</li>
+<li>Minimized memory consumption</li>
+<li>Especially well suited for long-running processes (where data gets
+streamed in for a extended time)</li>
+</ul></li>
+<li>Pipelines
+<ul>
+<li>Series of data processing stages: Output of one stage serves as
+input to the next</li>
+<li>Stages can often be run in parallel, improving performance due to a
+higher degree of concurrency</li>
+<li>Example: Instruction pipeline in CPU, were the stages of instruction
+execution can be performend in parallel</li>
+<li>Example: UNIX pipes, where the output of a command
+(e.g. <code>curl</code>) can be piped into another command
+(e.g. <code>jq</code>) to achieve a larger goal</li>
+</ul></li>
+</ul>
+</section>
+<section id="grpc" data-number="0.3.17">
+<h3 data-number="1.3.17"><span class="header-section-number">1.3.17</span> gRPC</h3>
+<ul>
+<li>Open-Source and high-performance RPC framework</li>
+<li>Developed by Google in 2015</li>
+<li>Features
+<ul>
+<li>Uses HTTP/2 as the transport protocol to benefit from header
+compression and request multiplexing</li>
+<li>Uses protobuf as the IDL and wire format, a high-performance,
+polyglot mechanism for data serialization (instead of the slower and
+more verbose JSON of REST APIs)</li>
+<li>Supports unary RPCs, server-streaming RPCs, client-streaming RPCs
+and bidirectional RPCs</li>
+<li>Has pluggable support for load balancing, tracing, health checking
+and authentication</li>
+</ul></li>
+<li>Supports many languages (Go, Rust, JS etc.)</li>
+<li>Developed by the CNCF</li>
+</ul>
+</section>
+<section id="redis" data-number="0.3.18">
+<h3 data-number="1.3.18"><span class="header-section-number">1.3.18</span> Redis</h3>
+<ul>
+<li>In-memory data structure store</li>
+<li>Used as a database, cache and/or message broker</li>
+<li>Created by S. Sanfilippo in 2009</li>
+<li>Different from other NoSQL databases by supporting various data
+structures like lists, sets, hashes or bitmaps</li>
+<li>Uses in-memory data storage for maximum speed and efficiency</li>
+<li>Allows for low-latency reads/writes</li>
+<li>While not intended for persistance, it is possible to store data on
+disk</li>
+<li>Has a non-blocking I/O model and offers near real-time data
+processing capabilities</li>
+<li>Includes a pub-sub system to be able to function as a message
+broker</li>
+</ul>
+</section>
+<section id="s3-and-minio" data-number="0.3.19">
+<h3 data-number="1.3.19"><span class="header-section-number">1.3.19</span> S3 and Minio</h3>
+<ul>
+<li>S3
+<ul>
+<li>Object storage service for data-intensive workloads</li>
+<li>Offered by AWS</li>
+<li>Can be globally distributed to allow for fast access times from
+anywhere on the globe</li>
+<li>Range of storage classes with different requirements</li>
+<li>Includes authentication and authorization</li>
+<li>Exposes HTTP API for accessing the stored folders and files</li>
+</ul></li>
+<li>Minio
+<ul>
+<li>Open-source storage server compatible wiht S3</li>
+<li>Lightweight and simple, written in Go</li>
+<li>Can be hosted on-prem and is open source</li>
+<li>Allows horizontal scalability to storage large amounts of data
+across nodes</li>
+</ul></li>
+</ul>
+</section>
+<section id="cassandra-and-scyllladb" data-number="0.3.20">
+<h3 data-number="1.3.20"><span class="header-section-number">1.3.20</span> Cassandra and ScylllaDB</h3>
+<ul>
+<li>Popular wide-column NoSQL databases</li>
+<li>Combines Amazon’s Dynamo model and Google’s Bigtable model to create
+a highly available database</li>
+<li>Apache Cassandra
+<ul>
+<li>Highly scalable, eventually consistent</li>
+<li>Can handle large amounts of data across many servers with no single
+point of failure</li>
+<li>Consistency can be tuned according to needs (eventual to
+strong)</li>
+<li>Doesn’t use master nodes due to it’s use of a P2P protocol and
+distributed hash ring design</li>
+<li>Does have high latency under heavy load and requires fairly complex
+configuration</li>
+</ul></li>
+<li>ScyllaDB
+<ul>
+<li>Launched in 2015</li>
+<li>Written in C++ and has a shared-nothing architecture, unlike
+Cassandra which is written in Java</li>
+<li>Compatible with Cassandra’s API and data model</li>
+<li>Designed to overcome Cassandra’s limitations esp. around latency,
+esp. P99 latency</li>
+<li>Performance improvements were confirmed with various benchmarking
+studies</li>
+</ul></li>
+</ul>
 </section>
 </section>
 <section id="planning" data-number="0.4">
@@ -1873,6 +2038,8 @@ interprets “not found” errors as empty chunks</li>
 <li>Document databases as persistent mount remotes
 <ul>
 <li>Another backend option is a NoSQL server such as Cassandra</li>
+<li>Specifically, as noted earlier, ScyllaDB - which improves upon
+Cassandra’s latency, which is important for the mount API</li>
 <li>This is more of a proof of concept than a real usecase, but shows
 the versitility and flexibility of how a database can be mapped to a
 memory region, which can be interesting for accessing e.g. a remote
@@ -2744,6 +2911,25 @@ modules)</li>
 (Robbins, Kay A) (signals)</li>
 <li>Modeling the Linux page cache for accurate simulation of
 data-intensive applications (Hoang-Dung Do) (Linux page cache)</li>
+<li>Transmission Control Protocol (Postel, J) (TCP)</li>
+<li>User Datagram Protocol (Postel, J) (UDP)</li>
+<li>The QUIC Transport Protocol: Design and Internet-Scale Deployment
+(Langley) (QUIC)</li>
+<li>Streaming Systems - The What, Where, When, and How of Large-Scale
+Data Processing (Akidau) (Streams)</li>
+<li>UNIX Power Tools (Peek) (Pipelines, UNIX pipes)</li>
+<li>grpc.io/docs/what-is-grpc/introduction/ (gRPC)</li>
+<li>protobuf.dev (Protobuf)</li>
+<li>redis.io/docs/about/ (Redis)</li>
+<li>redis.io/docs/interact/pubsub/ (Redis)</li>
+<li>aws.amazon.com/s3/ (S3)</li>
+<li>min.io/ (Minio)</li>
+<li>Cassandra - A Decentralized Structured Storage System (Lakshman)
+(Cassandra)</li>
+<li>Apache Cassandra 4.0 Performance Benchmark Whitepaper
+(ScyllaDB)</li>
+<li>opensource.docs.scylladb.com/stable/architecture/index.html
+(ScyllaDB)</li>
 </ul>
 </section>
 </section>
