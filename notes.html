@@ -197,139 +197,129 @@ case, such as data change frequency and kernel/OS compatibility.</p>
 </header>
 <nav id="TOC" role="doc-toc">
 <ul>
-<li><a href="#technologies-to-introduce"><span class="toc-section-number">1.1</span> Technologies to Introduce</a></li>
-<li><a href="#introduction"><span class="toc-section-number">1.2</span>
+<li><a href="#introduction"><span class="toc-section-number">1.1</span>
 Introduction</a></li>
-<li><a href="#technology"><span class="toc-section-number">1.3</span>
+<li><a href="#technology"><span class="toc-section-number">1.2</span>
 Technology</a>
 <ul>
-<li><a href="#the-linux-kernel"><span class="toc-section-number">1.3.1</span> The Linux Kernel</a></li>
-<li><a href="#linux-kernel-modules"><span class="toc-section-number">1.3.2</span> Linux Kernel Modules</a></li>
-<li><a href="#unix-signals-and-handlers"><span class="toc-section-number">1.3.3</span> UNIX Signals and
+<li><a href="#the-linux-kernel"><span class="toc-section-number">1.2.1</span> The Linux Kernel</a></li>
+<li><a href="#linux-kernel-modules"><span class="toc-section-number">1.2.2</span> Linux Kernel Modules</a></li>
+<li><a href="#unix-signals-and-handlers"><span class="toc-section-number">1.2.3</span> UNIX Signals and
 Handlers</a></li>
-<li><a href="#memory-hierarchy"><span class="toc-section-number">1.3.4</span> Memory Hierarchy</a></li>
-<li><a href="#memory-management-in-linux"><span class="toc-section-number">1.3.5</span> Memory Management in
+<li><a href="#memory-hierarchy"><span class="toc-section-number">1.2.4</span> Memory Hierarchy</a></li>
+<li><a href="#memory-management-in-linux"><span class="toc-section-number">1.2.5</span> Memory Management in
 Linux</a></li>
-<li><a href="#swap-space"><span class="toc-section-number">1.3.6</span>
+<li><a href="#swap-space"><span class="toc-section-number">1.2.6</span>
 Swap Space</a></li>
-<li><a href="#page-faults"><span class="toc-section-number">1.3.7</span>
+<li><a href="#page-faults"><span class="toc-section-number">1.2.7</span>
 Page Faults</a></li>
-<li><a href="#mmap"><span class="toc-section-number">1.3.8</span>
+<li><a href="#mmap"><span class="toc-section-number">1.2.8</span>
 <code>mmap</code></a></li>
-<li><a href="#inotify"><span class="toc-section-number">1.3.9</span>
+<li><a href="#inotify"><span class="toc-section-number">1.2.9</span>
 <code>inotify</code></a></li>
-<li><a href="#linux-kernel-disk-and-file-caching"><span class="toc-section-number">1.3.10</span> Linux Kernel Disk and File
+<li><a href="#linux-kernel-disk-and-file-caching"><span class="toc-section-number">1.2.10</span> Linux Kernel Disk and File
 Caching</a></li>
-<li><a href="#tcp-udp-and-quic"><span class="toc-section-number">1.3.11</span> TCP, UDP and QUIC</a></li>
-<li><a href="#delta-synchronization"><span class="toc-section-number">1.3.12</span> Delta Synchronization</a></li>
-<li><a href="#file-systems-in-userspace-fuse"><span class="toc-section-number">1.3.13</span> File Systems In Userspace
+<li><a href="#tcp-udp-and-quic"><span class="toc-section-number">1.2.11</span> TCP, UDP and QUIC</a></li>
+<li><a href="#delta-synchronization"><span class="toc-section-number">1.2.12</span> Delta Synchronization</a></li>
+<li><a href="#file-systems-in-userspace-fuse"><span class="toc-section-number">1.2.13</span> File Systems In Userspace
 (FUSE)</a></li>
-<li><a href="#network-block-device-nbd"><span class="toc-section-number">1.3.14</span> Network Block Device
+<li><a href="#network-block-device-nbd"><span class="toc-section-number">1.2.14</span> Network Block Device
 (NBD)</a></li>
-<li><a href="#virtual-machine-live-migration"><span class="toc-section-number">1.3.15</span> Virtual Machine Live
+<li><a href="#virtual-machine-live-migration"><span class="toc-section-number">1.2.15</span> Virtual Machine Live
 Migration</a></li>
-<li><a href="#streams-and-pipelines"><span class="toc-section-number">1.3.16</span> Streams and Pipelines</a></li>
-<li><a href="#grpc"><span class="toc-section-number">1.3.17</span>
+<li><a href="#streams-and-pipelines"><span class="toc-section-number">1.2.16</span> Streams and Pipelines</a></li>
+<li><a href="#grpc"><span class="toc-section-number">1.2.17</span>
 gRPC</a></li>
-<li><a href="#redis"><span class="toc-section-number">1.3.18</span>
+<li><a href="#redis"><span class="toc-section-number">1.2.18</span>
 Redis</a></li>
-<li><a href="#s3-and-minio"><span class="toc-section-number">1.3.19</span> S3 and Minio</a></li>
-<li><a href="#cassandra-and-scyllladb"><span class="toc-section-number">1.3.20</span> Cassandra and
+<li><a href="#s3-and-minio"><span class="toc-section-number">1.2.19</span> S3 and Minio</a></li>
+<li><a href="#cassandra-and-scyllladb"><span class="toc-section-number">1.2.20</span> Cassandra and
 ScylllaDB</a></li>
 </ul></li>
-<li><a href="#planning"><span class="toc-section-number">1.4</span>
+<li><a href="#planning"><span class="toc-section-number">1.3</span>
 Planning</a>
 <ul>
-<li><a href="#pull-based-synchronization-with-userfaultfd"><span class="toc-section-number">1.4.1</span> Pull-Based Synchronization With
+<li><a href="#pull-based-synchronization-with-userfaultfd"><span class="toc-section-number">1.3.1</span> Pull-Based Synchronization With
 <code>userfaultfd</code></a></li>
-<li><a href="#push-based-synchronization-with-mmap-and-hashing"><span class="toc-section-number">1.4.2</span> Push-Based Synchronization With
+<li><a href="#push-based-synchronization-with-mmap-and-hashing"><span class="toc-section-number">1.3.2</span> Push-Based Synchronization With
 <code>mmap</code> and Hashing</a></li>
-<li><a href="#push-pull-synchronization-with-fuse"><span class="toc-section-number">1.4.3</span> Push-Pull Synchronization with
+<li><a href="#push-pull-synchronization-with-fuse"><span class="toc-section-number">1.3.3</span> Push-Pull Synchronization with
 FUSE</a></li>
-<li><a href="#pull-based-synchronization-with-nbd"><span class="toc-section-number">1.4.4</span> Pull-Based Synchronization With
+<li><a href="#pull-based-synchronization-with-nbd"><span class="toc-section-number">1.3.4</span> Pull-Based Synchronization With
 NBD</a></li>
-<li><a href="#push-pull-synchronization-with-mounts"><span class="toc-section-number">1.4.5</span> Push-Pull Synchronization with
+<li><a href="#push-pull-synchronization-with-mounts"><span class="toc-section-number">1.3.5</span> Push-Pull Synchronization with
 Mounts</a></li>
-<li><a href="#pull-based-synchronization-with-migrations"><span class="toc-section-number">1.4.6</span> Pull-Based Synchronization with
+<li><a href="#pull-based-synchronization-with-migrations"><span class="toc-section-number">1.3.6</span> Pull-Based Synchronization with
 Migrations</a></li>
 </ul></li>
-<li><a href="#implementation"><span class="toc-section-number">1.5</span> Implementation</a>
+<li><a href="#implementation"><span class="toc-section-number">1.4</span> Implementation</a>
 <ul>
-<li><a href="#userfaults-in-go-with-userfaultfd"><span class="toc-section-number">1.5.1</span> Userfaults in Go with
+<li><a href="#userfaults-in-go-with-userfaultfd"><span class="toc-section-number">1.4.1</span> Userfaults in Go with
 <code>userfaultfd</code></a></li>
-<li><a href="#file-based-synchronization"><span class="toc-section-number">1.5.2</span> File-Based
+<li><a href="#file-based-synchronization"><span class="toc-section-number">1.4.2</span> File-Based
 Synchronization</a></li>
-<li><a href="#fuse-implementation-in-go"><span class="toc-section-number">1.5.3</span> FUSE Implementation in
+<li><a href="#fuse-implementation-in-go"><span class="toc-section-number">1.4.3</span> FUSE Implementation in
 Go</a></li>
-<li><a href="#nbd-with-go-nbd"><span class="toc-section-number">1.5.4</span> NBD with
+<li><a href="#nbd-with-go-nbd"><span class="toc-section-number">1.4.4</span> NBD with
 <code>go-nbd</code></a></li>
-<li><a href="#chunking-pushpull-mechanisms-and-lifecycle-for-mounts"><span class="toc-section-number">1.5.5</span> Chunking, Push/Pull Mechanisms
+<li><a href="#chunking-pushpull-mechanisms-and-lifecycle-for-mounts"><span class="toc-section-number">1.4.5</span> Chunking, Push/Pull Mechanisms
 and Lifecycle for Mounts</a></li>
-<li><a href="#live-migration-for-mounts"><span class="toc-section-number">1.5.6</span> Live Migration for
+<li><a href="#live-migration-for-mounts"><span class="toc-section-number">1.4.6</span> Live Migration for
 Mounts</a></li>
-<li><a href="#pluggable-encryption-and-authentication"><span class="toc-section-number">1.5.7</span> Pluggable Encryption and
+<li><a href="#pluggable-encryption-and-authentication"><span class="toc-section-number">1.4.7</span> Pluggable Encryption and
 Authentication</a></li>
-<li><a href="#optimizing-backends-for-high-rtt"><span class="toc-section-number">1.5.8</span> Optimizing Backends For High
+<li><a href="#optimizing-backends-for-high-rtt"><span class="toc-section-number">1.4.8</span> Optimizing Backends For High
 RTT</a></li>
-<li><a href="#optimizing-the-transport-protocol-for-throughput"><span class="toc-section-number">1.5.9</span> Optimizing The Transport
+<li><a href="#optimizing-the-transport-protocol-for-throughput"><span class="toc-section-number">1.4.9</span> Optimizing The Transport
 Protocol For Throughput</a></li>
-<li><a href="#using-remote-stores-as-backends"><span class="toc-section-number">1.5.10</span> Using Remote Stores as
+<li><a href="#using-remote-stores-as-backends"><span class="toc-section-number">1.4.10</span> Using Remote Stores as
 Backends</a></li>
-<li><a href="#bi-directional-protocols-with-dudirekta"><span class="toc-section-number">1.5.11</span> Bi-Directional Protocols With
+<li><a href="#bi-directional-protocols-with-dudirekta"><span class="toc-section-number">1.4.11</span> Bi-Directional Protocols With
 Dudirekta</a></li>
-<li><a href="#connection-pooling-for-high-rtt-scenarios"><span class="toc-section-number">1.5.12</span> Connection Pooling For High RTT
+<li><a href="#connection-pooling-for-high-rtt-scenarios"><span class="toc-section-number">1.4.12</span> Connection Pooling For High RTT
 Scenarios</a></li>
 </ul></li>
-<li><a href="#results"><span class="toc-section-number">1.6</span>
+<li><a href="#results"><span class="toc-section-number">1.5</span>
 Results</a>
 <ul>
-<li><a href="#userfaults"><span class="toc-section-number">1.6.1</span>
+<li><a href="#userfaults"><span class="toc-section-number">1.5.1</span>
 Userfaults</a></li>
-<li><a href="#file-based-synchronization-1"><span class="toc-section-number">1.6.2</span> File-Based
+<li><a href="#file-based-synchronization-1"><span class="toc-section-number">1.5.2</span> File-Based
 Synchronization</a></li>
-<li><a href="#mounts-and-live-migration"><span class="toc-section-number">1.6.3</span> Mounts and Live
+<li><a href="#mounts-and-live-migration"><span class="toc-section-number">1.5.3</span> Mounts and Live
 Migration</a></li>
 </ul></li>
-<li><a href="#discussion"><span class="toc-section-number">1.7</span>
+<li><a href="#discussion"><span class="toc-section-number">1.6</span>
 Discussion</a>
 <ul>
-<li><a href="#userfaults-1"><span class="toc-section-number">1.7.1</span> Userfaults</a></li>
-<li><a href="#file-based-synchronization-2"><span class="toc-section-number">1.7.2</span> File-Based
+<li><a href="#userfaults-1"><span class="toc-section-number">1.6.1</span> Userfaults</a></li>
+<li><a href="#file-based-synchronization-2"><span class="toc-section-number">1.6.2</span> File-Based
 Synchronization</a></li>
-<li><a href="#fuse"><span class="toc-section-number">1.7.3</span>
+<li><a href="#fuse"><span class="toc-section-number">1.6.3</span>
 FUSE</a></li>
-<li><a href="#nbd"><span class="toc-section-number">1.7.4</span>
+<li><a href="#nbd"><span class="toc-section-number">1.6.4</span>
 NBD</a></li>
-<li><a href="#mounts-and-live-migration-1"><span class="toc-section-number">1.7.5</span> Mounts and Live
+<li><a href="#mounts-and-live-migration-1"><span class="toc-section-number">1.6.5</span> Mounts and Live
 Migration</a></li>
-<li><a href="#use-cases"><span class="toc-section-number">1.7.6</span>
+<li><a href="#use-cases"><span class="toc-section-number">1.6.6</span>
 Use Cases</a></li>
 </ul></li>
-<li><a href="#summary"><span class="toc-section-number">1.8</span>
+<li><a href="#summary"><span class="toc-section-number">1.7</span>
 Summary</a></li>
-<li><a href="#conclusion"><span class="toc-section-number">1.9</span>
+<li><a href="#conclusion"><span class="toc-section-number">1.8</span>
 Conclusion</a></li>
-<li><a href="#references"><span class="toc-section-number">1.10</span>
+<li><a href="#references"><span class="toc-section-number">1.9</span>
 References</a>
 <ul>
-<li><a href="#structure"><span class="toc-section-number">1.10.1</span>
+<li><a href="#structure"><span class="toc-section-number">1.9.1</span>
 Structure</a></li>
-<li><a href="#sources"><span class="toc-section-number">1.10.2</span>
+<li><a href="#sources"><span class="toc-section-number">1.9.2</span>
 Sources</a></li>
 </ul></li>
 </ul>
 </nav>
-<section id="technologies-to-introduce" data-number="0.1">
+<section id="introduction" data-number="0.1">
 <h2 data-number="1.1"><span class="header-section-number">1.1</span>
-Technologies to Introduce</h2>
-<ul>
-<li>Delta synchronization (redo)</li>
-<li>FUSE (redo)</li>
-<li>NBD (redo)</li>
-</ul>
-</section>
-<section id="introduction" data-number="0.2">
-<h2 data-number="1.2"><span class="header-section-number">1.2</span>
 Introduction</h2>
 <ul>
 <li>Research question: Could memory be the universal way to access and
@@ -340,11 +330,11 @@ component</li>
 today</li>
 </ul>
 </section>
-<section id="technology" data-number="0.3">
-<h2 data-number="1.3"><span class="header-section-number">1.3</span>
+<section id="technology" data-number="0.2">
+<h2 data-number="1.2"><span class="header-section-number">1.2</span>
 Technology</h2>
-<section id="the-linux-kernel" data-number="0.3.1">
-<h3 data-number="1.3.1"><span class="header-section-number">1.3.1</span>
+<section id="the-linux-kernel" data-number="0.2.1">
+<h3 data-number="1.2.1"><span class="header-section-number">1.2.1</span>
 The Linux Kernel</h3>
 <ul>
 <li>Open-Source kernel created by Linus Torvals in 1991</li>
@@ -359,8 +349,8 @@ embedded devices)</li>
 anyone to view, modify and contribute to the source code)</li>
 </ul>
 </section>
-<section id="linux-kernel-modules" data-number="0.3.2">
-<h3 data-number="1.3.2"><span class="header-section-number">1.3.2</span>
+<section id="linux-kernel-modules" data-number="0.2.2">
+<h3 data-number="1.2.2"><span class="header-section-number">1.2.2</span>
 Linux Kernel Modules</h3>
 <ul>
 <li>Linux kernel is monolithic, but extensible thanks to kernel
@@ -379,8 +369,8 @@ kernel modules</li>
 functions</li>
 </ul>
 </section>
-<section id="unix-signals-and-handlers" data-number="0.3.3">
-<h3 data-number="1.3.3"><span class="header-section-number">1.3.3</span>
+<section id="unix-signals-and-handlers" data-number="0.2.3">
+<h3 data-number="1.2.3"><span class="header-section-number">1.2.3</span>
 UNIX Signals and Handlers</h3>
 <ul>
 <li>Signals
@@ -404,8 +394,8 @@ signal</li>
 alert of an event, but not of any additional data for it</li>
 </ul>
 </section>
-<section id="memory-hierarchy" data-number="0.3.4">
-<h3 data-number="1.3.4"><span class="header-section-number">1.3.4</span>
+<section id="memory-hierarchy" data-number="0.2.4">
+<h3 data-number="1.2.4"><span class="header-section-number">1.2.4</span>
 Memory Hierarchy</h3>
 <ul>
 <li>Memory in computers can be classified based on size, speed, cost and
@@ -459,8 +449,8 @@ secondary storage with the same interfae as main memory</li>
 </ul></li>
 </ul>
 </section>
-<section id="memory-management-in-linux" data-number="0.3.5">
-<h3 data-number="1.3.5"><span class="header-section-number">1.3.5</span>
+<section id="memory-management-in-linux" data-number="0.2.5">
+<h3 data-number="1.2.5"><span class="header-section-number">1.2.5</span>
 Memory Management in Linux</h3>
 <ul>
 <li>Memory management is a crucial part of every operation system -
@@ -485,8 +475,8 @@ speeds up memory allocation, reduces fragmentation of the memory)</li>
 </ul></li>
 </ul>
 </section>
-<section id="swap-space" data-number="0.3.6">
-<h3 data-number="1.3.6"><span class="header-section-number">1.3.6</span>
+<section id="swap-space" data-number="0.2.6">
+<h3 data-number="1.2.6"><span class="header-section-number">1.2.6</span>
 Swap Space</h3>
 <ul>
 <li>A portion of the secondary storage is for virtual memory</li>
@@ -517,8 +507,8 @@ system is to swap memory pages</li>
 </ul></li>
 </ul>
 </section>
-<section id="page-faults" data-number="0.3.7">
-<h3 data-number="1.3.7"><span class="header-section-number">1.3.7</span>
+<section id="page-faults" data-number="0.2.7">
+<h3 data-number="1.2.7"><span class="header-section-number">1.2.7</span>
 Page Faults</h3>
 <ul>
 <li>Page faults occur when the process tries to access a page not
@@ -548,8 +538,8 @@ data when it is required</li>
 <code>SIGSEGV</code> signal in the process</li>
 </ul>
 </section>
-<section id="mmap" data-number="0.3.8">
-<h3 data-number="1.3.8"><span class="header-section-number">1.3.8</span>
+<section id="mmap" data-number="0.2.8">
+<h3 data-number="1.2.8"><span class="header-section-number">1.2.8</span>
 <code>mmap</code></h3>
 <ul>
 <li>Overview
@@ -579,8 +569,8 @@ through the kernel with syscalls</li>
 data if multiple processes read/write at the same time</li>
 </ul>
 </section>
-<section id="inotify" data-number="0.3.9">
-<h3 data-number="1.3.9"><span class="header-section-number">1.3.9</span>
+<section id="inotify" data-number="0.2.9">
+<h3 data-number="1.2.9"><span class="header-section-number">1.2.9</span>
 <code>inotify</code></h3>
 <ul>
 <li>Event-driven notification system of the Linux kernel</li>
@@ -595,8 +585,8 @@ synchronization</li>
 established</li>
 </ul>
 </section>
-<section id="linux-kernel-disk-and-file-caching" data-number="0.3.10">
-<h3 data-number="1.3.10"><span class="header-section-number">1.3.10</span> Linux Kernel Disk and File
+<section id="linux-kernel-disk-and-file-caching" data-number="0.2.10">
+<h3 data-number="1.2.10"><span class="header-section-number">1.2.10</span> Linux Kernel Disk and File
 Caching</h3>
 <ul>
 <li>Disk caching
@@ -625,8 +615,8 @@ requires intelligent algorithms, i.e. LRU</li>
 </ul></li>
 </ul>
 </section>
-<section id="tcp-udp-and-quic" data-number="0.3.11">
-<h3 data-number="1.3.11"><span class="header-section-number">1.3.11</span> TCP, UDP and QUIC</h3>
+<section id="tcp-udp-and-quic" data-number="0.2.11">
+<h3 data-number="1.2.11"><span class="header-section-number">1.2.11</span> TCP, UDP and QUIC</h3>
 <ul>
 <li>TCP
 <ul>
@@ -658,9 +648,14 @@ separate streams</li>
 </ul></li>
 </ul>
 </section>
-<section id="delta-synchronization" data-number="0.3.12">
-<h3 data-number="1.3.12"><span class="header-section-number">1.3.12</span> Delta Synchronization</h3>
+<section id="delta-synchronization" data-number="0.2.12">
+<h3 data-number="1.2.12"><span class="header-section-number">1.2.12</span> Delta Synchronization</h3>
 <ul>
+<li>Traditionally, when files are synchronized between hosts, the entire
+file is transfered</li>
+<li>Delta synchronization is a technique that intents to instead
+transfer only the part of the file that has changed</li>
+<li>Can lead to reduced network and I/O overhead</li>
 <li>The probably most popular tool for file synchronization like this is
 rsync</li>
 <li>When the delta-transfer algorithm for rsync is active, it computes
@@ -681,10 +676,16 @@ specified offset, reconstructing the file</li>
 <li>Once one polling interval is done, the process begins again</li>
 </ul>
 </section>
-<section id="file-systems-in-userspace-fuse" data-number="0.3.13">
-<h3 data-number="1.3.13"><span class="header-section-number">1.3.13</span> File Systems In Userspace
+<section id="file-systems-in-userspace-fuse" data-number="0.2.13">
+<h3 data-number="1.2.13"><span class="header-section-number">1.2.13</span> File Systems In Userspace
 (FUSE)</h3>
 <ul>
+<li>Software interface that allows writing custom file systems in
+userspace</li>
+<li>Developers can create file systems without having to engage in
+low-level kernel development</li>
+<li>Available on multiple platforms, mostly Linux but also macOS and
+FreeBSD</li>
 <li>In order to implement file systems in user space, we can use the
 FUSE API</li>
 <li>Here, a user space program registers itself with the FUSE kernel
@@ -703,10 +704,14 @@ error in the FUSE or the backend can’t crash the entire kernel</li>
 <li>Unlike a file system implemented as a kernel module, this layer of
 indirection makes the file system portable, since it only needs to
 communicate with the FUSE module</li>
+<li>Does have significant performance overhead due to the context
+switching between the kernel and the file system in userspace</li>
+<li>Is used for many high-level interfaces to extenal services, i.e. to
+mount S3 buckets or a remote system’s disk via SSH</li>
 </ul>
 </section>
-<section id="network-block-device-nbd" data-number="0.3.14">
-<h3 data-number="1.3.14"><span class="header-section-number">1.3.14</span> Network Block Device
+<section id="network-block-device-nbd" data-number="0.2.14">
+<h3 data-number="1.2.14"><span class="header-section-number">1.2.14</span> Network Block Device
 (NBD)</h3>
 <ul>
 <li>NBD uses a protocol to communicate between a server (provided by
@@ -754,13 +759,15 @@ it is not possible to work with high-level abstractions such as files or
 directories</li>
 <li>This is, for the narrow memory synchronization use case, however
 more of a feature than a bug</li>
+<li>Since it works on the block level, it can’t offer shared acesses to
+the same file for multiple clients</li>
 </ul>
 </section>
-<section id="virtual-machine-live-migration" data-number="0.3.15">
-<h3 data-number="1.3.15"><span class="header-section-number">1.3.15</span> Virtual Machine Live
+<section id="virtual-machine-live-migration" data-number="0.2.15">
+<h3 data-number="1.2.15"><span class="header-section-number">1.2.15</span> Virtual Machine Live
 Migration</h3>
-<section id="pre-copy" data-number="0.3.15.1">
-<h4 data-number="1.3.15.1"><span class="header-section-number">1.3.15.1</span> Pre-Copy</h4>
+<section id="pre-copy" data-number="0.2.15.1">
+<h4 data-number="1.2.15.1"><span class="header-section-number">1.2.15.1</span> Pre-Copy</h4>
 <ul>
 <li>While these systems already allow for some optimizations over simply
 using the NBD protocol over WAN, they still mean that chunks will only
@@ -798,8 +805,8 @@ might never get reached, and the maximum acceptable downtime is also
 somewhat limited by the available RTT</li>
 </ul>
 </section>
-<section id="post-copy" data-number="0.3.15.2">
-<h4 data-number="1.3.15.2"><span class="header-section-number">1.3.15.2</span> Post-Copy</h4>
+<section id="post-copy" data-number="0.2.15.2">
+<h4 data-number="1.2.15.2"><span class="header-section-number">1.2.15.2</span> Post-Copy</h4>
 <ul>
 <li>An alternative to pre-copy migration is post-copy migration</li>
 <li>In this approach, the VM is immediately suspended on the source,
@@ -816,8 +823,8 @@ longer migration times, because the chunks need to be fetched from the
 network on-demand, which is very latency/RTT-sensitive</li>
 </ul>
 </section>
-<section id="workload-analysis" data-number="0.3.15.3">
-<h4 data-number="1.3.15.3"><span class="header-section-number">1.3.15.3</span> Workload Analysis</h4>
+<section id="workload-analysis" data-number="0.2.15.3">
+<h4 data-number="1.2.15.3"><span class="header-section-number">1.2.15.3</span> Workload Analysis</h4>
 <ul>
 <li>“Reducing Virtual Machine Live Migration Overhead via Workload
 Analysis” provides an interesting analysis of options on how this
@@ -849,8 +856,8 @@ such a system would certainly be possible</li>
 </ul>
 </section>
 </section>
-<section id="streams-and-pipelines" data-number="0.3.16">
-<h3 data-number="1.3.16"><span class="header-section-number">1.3.16</span> Streams and Pipelines</h3>
+<section id="streams-and-pipelines" data-number="0.2.16">
+<h3 data-number="1.2.16"><span class="header-section-number">1.2.16</span> Streams and Pipelines</h3>
 <ul>
 <li>Fundamental concepts in computer science</li>
 <li>Sequentually process elements</li>
@@ -881,8 +888,8 @@ execution can be performend in parallel</li>
 </ul></li>
 </ul>
 </section>
-<section id="grpc" data-number="0.3.17">
-<h3 data-number="1.3.17"><span class="header-section-number">1.3.17</span> gRPC</h3>
+<section id="grpc" data-number="0.2.17">
+<h3 data-number="1.2.17"><span class="header-section-number">1.2.17</span> gRPC</h3>
 <ul>
 <li>Open-Source and high-performance RPC framework</li>
 <li>Developed by Google in 2015</li>
@@ -902,8 +909,8 @@ and authentication</li>
 <li>Developed by the CNCF</li>
 </ul>
 </section>
-<section id="redis" data-number="0.3.18">
-<h3 data-number="1.3.18"><span class="header-section-number">1.3.18</span> Redis</h3>
+<section id="redis" data-number="0.2.18">
+<h3 data-number="1.2.18"><span class="header-section-number">1.2.18</span> Redis</h3>
 <ul>
 <li>In-memory data structure store</li>
 <li>Used as a database, cache and/or message broker</li>
@@ -920,8 +927,8 @@ processing capabilities</li>
 broker</li>
 </ul>
 </section>
-<section id="s3-and-minio" data-number="0.3.19">
-<h3 data-number="1.3.19"><span class="header-section-number">1.3.19</span> S3 and Minio</h3>
+<section id="s3-and-minio" data-number="0.2.19">
+<h3 data-number="1.2.19"><span class="header-section-number">1.2.19</span> S3 and Minio</h3>
 <ul>
 <li>S3
 <ul>
@@ -943,8 +950,8 @@ across nodes</li>
 </ul></li>
 </ul>
 </section>
-<section id="cassandra-and-scyllladb" data-number="0.3.20">
-<h3 data-number="1.3.20"><span class="header-section-number">1.3.20</span> Cassandra and ScylllaDB</h3>
+<section id="cassandra-and-scyllladb" data-number="0.2.20">
+<h3 data-number="1.2.20"><span class="header-section-number">1.2.20</span> Cassandra and ScylllaDB</h3>
 <ul>
 <li>Popular wide-column NoSQL databases</li>
 <li>Combines Amazon’s Dynamo model and Google’s Bigtable model to create
@@ -975,11 +982,11 @@ studies</li>
 </ul>
 </section>
 </section>
-<section id="planning" data-number="0.4">
-<h2 data-number="1.4"><span class="header-section-number">1.4</span>
+<section id="planning" data-number="0.3">
+<h2 data-number="1.3"><span class="header-section-number">1.3</span>
 Planning</h2>
-<section id="pull-based-synchronization-with-userfaultfd" data-number="0.4.1">
-<h3 data-number="1.4.1"><span class="header-section-number">1.4.1</span>
+<section id="pull-based-synchronization-with-userfaultfd" data-number="0.3.1">
+<h3 data-number="1.3.1"><span class="header-section-number">1.3.1</span>
 Pull-Based Synchronization With <code>userfaultfd</code></h3>
 <ul>
 <li>In our case, we want to handle page faults in userspace</li>
@@ -1003,8 +1010,8 @@ snippet from
 https://github.com/loopholelabs/userfaultfd-go/blob/master/pkg/mapper/handler.go)</li>
 </ul>
 </section>
-<section id="push-based-synchronization-with-mmap-and-hashing" data-number="0.4.2">
-<h3 data-number="1.4.2"><span class="header-section-number">1.4.2</span>
+<section id="push-based-synchronization-with-mmap-and-hashing" data-number="0.3.2">
+<h3 data-number="1.3.2"><span class="header-section-number">1.3.2</span>
 Push-Based Synchronization With <code>mmap</code> and Hashing</h3>
 <ul>
 <li>File-based synchronization
@@ -1053,8 +1060,8 @@ between two polling iterations</li>
 </ul></li>
 </ul>
 </section>
-<section id="push-pull-synchronization-with-fuse" data-number="0.4.3">
-<h3 data-number="1.4.3"><span class="header-section-number">1.4.3</span>
+<section id="push-pull-synchronization-with-fuse" data-number="0.3.3">
+<h3 data-number="1.3.3"><span class="header-section-number">1.3.3</span>
 Push-Pull Synchronization with FUSE</h3>
 <ul>
 <li>File system-based synchronization in the kernel
@@ -1089,8 +1096,8 @@ it would also be very complex</li>
 </ul></li>
 </ul>
 </section>
-<section id="pull-based-synchronization-with-nbd" data-number="0.4.4">
-<h3 data-number="1.4.4"><span class="header-section-number">1.4.4</span>
+<section id="pull-based-synchronization-with-nbd" data-number="0.3.4">
+<h3 data-number="1.3.4"><span class="header-section-number">1.3.4</span>
 Pull-Based Synchronization With NBD</h3>
 <ul>
 <li>Block Device-based synchronization
@@ -1124,8 +1131,8 @@ FUSE</li>
 </ul></li>
 </ul>
 </section>
-<section id="push-pull-synchronization-with-mounts" data-number="0.4.5">
-<h3 data-number="1.4.5"><span class="header-section-number">1.4.5</span>
+<section id="push-pull-synchronization-with-mounts" data-number="0.3.5">
+<h3 data-number="1.3.5"><span class="header-section-number">1.3.5</span>
 Push-Pull Synchronization with Mounts</h3>
 <ul>
 <li>Limitations of the NBD protocol in WAN
@@ -1247,8 +1254,8 @@ mostly WAN with a pluggable transport protocol interface</li>
 </ul></li>
 </ul>
 </section>
-<section id="pull-based-synchronization-with-migrations" data-number="0.4.6">
-<h3 data-number="1.4.6"><span class="header-section-number">1.4.6</span>
+<section id="pull-based-synchronization-with-migrations" data-number="0.3.6">
+<h3 data-number="1.3.6"><span class="header-section-number">1.3.6</span>
 Pull-Based Synchronization with Migrations</h3>
 <ul>
 <li>Optimization mounts for migration scenarios
@@ -1300,11 +1307,11 @@ but also a shutdown of dependencies etc.)</li>
 </ul>
 </section>
 </section>
-<section id="implementation" data-number="0.5">
-<h2 data-number="1.5"><span class="header-section-number">1.5</span>
+<section id="implementation" data-number="0.4">
+<h2 data-number="1.4"><span class="header-section-number">1.4</span>
 Implementation</h2>
-<section id="userfaults-in-go-with-userfaultfd" data-number="0.5.1">
-<h3 data-number="1.5.1"><span class="header-section-number">1.5.1</span>
+<section id="userfaults-in-go-with-userfaultfd" data-number="0.4.1">
+<h3 data-number="1.4.1"><span class="header-section-number">1.4.1</span>
 Userfaults in Go with <code>userfaultfd</code></h3>
 <ul>
 <li>API design for <code>userfault-go</code>
@@ -1349,8 +1356,8 @@ https://github.com/loopholelabs/userfaultfd-go/blob/master/cmd/userfaultfd-go-ex
 </ul></li>
 </ul>
 </section>
-<section id="file-based-synchronization" data-number="0.5.2">
-<h3 data-number="1.5.2"><span class="header-section-number">1.5.2</span>
+<section id="file-based-synchronization" data-number="0.4.2">
+<h3 data-number="1.4.2"><span class="header-section-number">1.4.2</span>
 File-Based Synchronization</h3>
 <ul>
 <li>File-based synchronization
@@ -1411,8 +1418,8 @@ with each message</li>
 </ul></li>
 </ul>
 </section>
-<section id="fuse-implementation-in-go" data-number="0.5.3">
-<h3 data-number="1.5.3"><span class="header-section-number">1.5.3</span>
+<section id="fuse-implementation-in-go" data-number="0.4.3">
+<h3 data-number="1.4.3"><span class="header-section-number">1.4.3</span>
 FUSE Implementation in Go</h3>
 <ul>
 <li>It is possible to use even very complex and at first view
@@ -1434,8 +1441,8 @@ file system was still performant enough to be used, and supported almost
 all features required for the average user</li>
 </ul>
 </section>
-<section id="nbd-with-go-nbd" data-number="0.5.4">
-<h3 data-number="1.5.4"><span class="header-section-number">1.5.4</span>
+<section id="nbd-with-go-nbd" data-number="0.4.4">
+<h3 data-number="1.4.4"><span class="header-section-number">1.4.4</span>
 NBD with <code>go-nbd</code></h3>
 <ul>
 <li>Implementing <code>go-nbd</code>
@@ -1561,8 +1568,8 @@ chosen</li>
 </ul></li>
 </ul>
 </section>
-<section id="chunking-pushpull-mechanisms-and-lifecycle-for-mounts" data-number="0.5.5">
-<h3 data-number="1.5.5"><span class="header-section-number">1.5.5</span>
+<section id="chunking-pushpull-mechanisms-and-lifecycle-for-mounts" data-number="0.4.5">
+<h3 data-number="1.4.5"><span class="header-section-number">1.4.5</span>
 Chunking, Push/Pull Mechanisms and Lifecycle for Mounts</h3>
 <ul>
 <li>The <code>ReadWriterAt</code> pipeline
@@ -1750,8 +1757,8 @@ pull-only algorithm</li>
 </ul></li>
 </ul>
 </section>
-<section id="live-migration-for-mounts" data-number="0.5.6">
-<h3 data-number="1.5.6"><span class="header-section-number">1.5.6</span>
+<section id="live-migration-for-mounts" data-number="0.4.6">
+<h3 data-number="1.4.6"><span class="header-section-number">1.4.6</span>
 Live Migration for Mounts</h3>
 <ul>
 <li>Optimization mounts for migration scenarios
@@ -1867,8 +1874,8 @@ migrating from the destination to another destination again</li>
 </ul></li>
 </ul>
 </section>
-<section id="pluggable-encryption-and-authentication" data-number="0.5.7">
-<h3 data-number="1.5.7"><span class="header-section-number">1.5.7</span>
+<section id="pluggable-encryption-and-authentication" data-number="0.4.7">
+<h3 data-number="1.4.7"><span class="header-section-number">1.4.7</span>
 Pluggable Encryption and Authentication</h3>
 <ul>
 <li>Compared to existing remote mount and migration solutions, r3map is
@@ -1913,8 +1920,8 @@ multiple RTTs and thus signficantly reduce this overhead, and handle
 authentication in the same step</li>
 </ul>
 </section>
-<section id="optimizing-backends-for-high-rtt" data-number="0.5.8">
-<h3 data-number="1.5.8"><span class="header-section-number">1.5.8</span>
+<section id="optimizing-backends-for-high-rtt" data-number="0.4.8">
+<h3 data-number="1.4.8"><span class="header-section-number">1.4.8</span>
 Optimizing Backends For High RTT</h3>
 <ul>
 <li>In WAN, where latency is high, the ability to fetch chunks
@@ -1959,8 +1966,8 @@ significantly improve the pull speed in scenarios where the backing disk
 is slow or the latency is high</li>
 </ul>
 </section>
-<section id="optimizing-the-transport-protocol-for-throughput" data-number="0.5.9">
-<h3 data-number="1.5.9"><span class="header-section-number">1.5.9</span>
+<section id="optimizing-the-transport-protocol-for-throughput" data-number="0.4.9">
+<h3 data-number="1.4.9"><span class="header-section-number">1.4.9</span>
 Optimizing The Transport Protocol For Throughput</h3>
 <ul>
 <li>Despite these benefits, gRPC is not perfect however</li>
@@ -1987,8 +1994,8 @@ fRPC can increase throughput and decrease the initial latency by pulling
 more chunks pre-emptively</li>
 </ul>
 </section>
-<section id="using-remote-stores-as-backends" data-number="0.5.10">
-<h3 data-number="1.5.10"><span class="header-section-number">1.5.10</span> Using Remote Stores as
+<section id="using-remote-stores-as-backends" data-number="0.4.10">
+<h3 data-number="1.4.10"><span class="header-section-number">1.4.10</span> Using Remote Stores as
 Backends</h3>
 <ul>
 <li>Using key-value stores as ephemeral mounts
@@ -2057,8 +2064,8 @@ https://github.com/pojntfx/r3map/blob/main/cmd/r3map-direct-mount-benchmark/main
 </ul></li>
 </ul>
 </section>
-<section id="bi-directional-protocols-with-dudirekta" data-number="0.5.11">
-<h3 data-number="1.5.11"><span class="header-section-number">1.5.11</span> Bi-Directional Protocols
+<section id="bi-directional-protocols-with-dudirekta" data-number="0.4.11">
+<h3 data-number="1.4.11"><span class="header-section-number">1.4.11</span> Bi-Directional Protocols
 With Dudirekta</h3>
 <ul>
 <li>Another aspect that plays an important role in performance for
@@ -2145,8 +2152,8 @@ https://github.com/pojntfx/dudirekta/tree/main#1-define-local-functions)</li>
 <code>io.ReadWriter</code></li>
 </ul>
 </section>
-<section id="connection-pooling-for-high-rtt-scenarios" data-number="0.5.12">
-<h3 data-number="1.5.12"><span class="header-section-number">1.5.12</span> Connection Pooling For High
+<section id="connection-pooling-for-high-rtt-scenarios" data-number="0.4.12">
+<h3 data-number="1.4.12"><span class="header-section-number">1.4.12</span> Connection Pooling For High
 RTT Scenarios</h3>
 <ul>
 <li>This does however come at the cost of not being able to do
@@ -2214,19 +2221,19 @@ ones, speeding up parallel requests</li>
 </ul>
 </section>
 </section>
-<section id="results" data-number="0.6">
-<h2 data-number="1.6"><span class="header-section-number">1.6</span>
+<section id="results" data-number="0.5">
+<h2 data-number="1.5"><span class="header-section-number">1.5</span>
 Results</h2>
-<section id="userfaults" data-number="0.6.1">
-<h3 data-number="1.6.1"><span class="header-section-number">1.6.1</span>
+<section id="userfaults" data-number="0.5.1">
+<h3 data-number="1.5.1"><span class="header-section-number">1.5.1</span>
 Userfaults</h3>
 <ul>
 <li>Benchmark: Sensitivity of <code>userfaultfd</code> to network
 latency and throughput</li>
 </ul>
 </section>
-<section id="file-based-synchronization-1" data-number="0.6.2">
-<h3 data-number="1.6.2"><span class="header-section-number">1.6.2</span>
+<section id="file-based-synchronization-1" data-number="0.5.2">
+<h3 data-number="1.5.2"><span class="header-section-number">1.5.2</span>
 File-Based Synchronization</h3>
 <ul>
 <li>Benchmark: Performance of different Go hashing algorithms for
@@ -2237,8 +2244,8 @@ file</li>
 vs. rsync (which hashes entire files)</li>
 </ul>
 </section>
-<section id="mounts-and-live-migration" data-number="0.6.3">
-<h3 data-number="1.6.3"><span class="header-section-number">1.6.3</span>
+<section id="mounts-and-live-migration" data-number="0.5.3">
+<h3 data-number="1.5.3"><span class="header-section-number">1.5.3</span>
 Mounts and Live Migration</h3>
 <ul>
 <li>Benchmark: Local vs. remote chunking</li>
@@ -2260,11 +2267,11 @@ the Managed Mount API vs the Migration API</li>
 </ul>
 </section>
 </section>
-<section id="discussion" data-number="0.7">
-<h2 data-number="1.7"><span class="header-section-number">1.7</span>
+<section id="discussion" data-number="0.6">
+<h2 data-number="1.6"><span class="header-section-number">1.6</span>
 Discussion</h2>
-<section id="userfaults-1" data-number="0.7.1">
-<h3 data-number="1.7.1"><span class="header-section-number">1.7.1</span>
+<section id="userfaults-1" data-number="0.6.1">
+<h3 data-number="1.6.1"><span class="header-section-number">1.6.1</span>
 Userfaults</h3>
 <ul>
 <li>As we can see, using <code>userfaultfd</code> we are able to map
@@ -2299,8 +2306,8 @@ Go, for most data, esp. larger datasets and in high-latency scenarios/in
 WAN, we need a better solution</li>
 </ul>
 </section>
-<section id="file-based-synchronization-2" data-number="0.7.2">
-<h3 data-number="1.7.2"><span class="header-section-number">1.7.2</span>
+<section id="file-based-synchronization-2" data-number="0.6.2">
+<h3 data-number="1.6.2"><span class="header-section-number">1.6.2</span>
 File-Based Synchronization</h3>
 <ul>
 <li>Similarly to <code>userfaultfd</code>, this system also has
@@ -2322,8 +2329,8 @@ own</li>
 destinations</li>
 </ul>
 </section>
-<section id="fuse" data-number="0.7.3">
-<h3 data-number="1.7.3"><span class="header-section-number">1.7.3</span>
+<section id="fuse" data-number="0.6.3">
+<h3 data-number="1.6.3"><span class="header-section-number">1.6.3</span>
 FUSE</h3>
 <ul>
 <li>FUSE does however also have downsides</li>
@@ -2338,8 +2345,8 @@ system to track changes, but rather a single file</li>
 a file system led to it not being chosen</li>
 </ul>
 </section>
-<section id="nbd" data-number="0.7.4">
-<h3 data-number="1.7.4"><span class="header-section-number">1.7.4</span>
+<section id="nbd" data-number="0.6.4">
+<h3 data-number="1.6.4"><span class="header-section-number">1.6.4</span>
 NBD</h3>
 <ul>
 <li>Limitations of NBD and <code>ublk</code> as an alternative
@@ -2405,8 +2412,8 @@ now</li>
 </ul></li>
 </ul>
 </section>
-<section id="mounts-and-live-migration-1" data-number="0.7.5">
-<h3 data-number="1.7.5"><span class="header-section-number">1.7.5</span>
+<section id="mounts-and-live-migration-1" data-number="0.6.5">
+<h3 data-number="1.6.5"><span class="header-section-number">1.6.5</span>
 Mounts and Live Migration</h3>
 <ul>
 <li>Overhead of using managed mounts
@@ -2482,11 +2489,11 @@ through a different interface to make it usable in Go</li>
 </ul></li>
 </ul>
 </section>
-<section id="use-cases" data-number="0.7.6">
-<h3 data-number="1.7.6"><span class="header-section-number">1.7.6</span>
+<section id="use-cases" data-number="0.6.6">
+<h3 data-number="1.6.6"><span class="header-section-number">1.6.6</span>
 Use Cases</h3>
-<section id="remote-swap-with-ram-dl" data-number="0.7.6.1">
-<h4 data-number="1.7.6.1"><span class="header-section-number">1.7.6.1</span> Remote Swap With
+<section id="remote-swap-with-ram-dl" data-number="0.6.6.1">
+<h4 data-number="1.6.6.1"><span class="header-section-number">1.6.6.1</span> Remote Swap With
 <code>ram-dl</code></h4>
 <ul>
 <li>ram-dl is a fun experiment</li>
@@ -2509,8 +2516,8 @@ project is just ~300 SLOC including backend configuration, flags and
 other boilerplate</li>
 </ul>
 </section>
-<section id="mapping-tape-into-memory-with-tapisk" data-number="0.7.6.2">
-<h4 data-number="1.7.6.2"><span class="header-section-number">1.7.6.2</span> Mapping Tape Into Memory
+<section id="mapping-tape-into-memory-with-tapisk" data-number="0.6.6.2">
+<h4 data-number="1.6.6.2"><span class="header-section-number">1.6.6.2</span> Mapping Tape Into Memory
 With <code>tapisk</code></h4>
 <ul>
 <li>tapisk is an interesting usecase because of how close it is to STFS,
@@ -2581,8 +2588,8 @@ mapping, too</li>
 of SLOC, tapisk achieves the same and more in just under 350 SLOC</li>
 </ul>
 </section>
-<section id="improving-file-storage-solutions" data-number="0.7.6.3">
-<h4 data-number="1.7.6.3"><span class="header-section-number">1.7.6.3</span> Improving File Storage
+<section id="improving-file-storage-solutions" data-number="0.6.6.3">
+<h4 data-number="1.6.6.3"><span class="header-section-number">1.6.6.3</span> Improving File Storage
 Solutions</h4>
 <ul>
 <li>Another potential usecase is using r3map to create a mountable
@@ -2638,8 +2645,8 @@ synchronization tooling can be used to solve essentially the
 synchronization of any state, including disks</li>
 </ul>
 </section>
-<section id="universal-database-media-and-asset-streaming" data-number="0.7.6.4">
-<h4 data-number="1.7.6.4"><span class="header-section-number">1.7.6.4</span> Universal Database, Media
+<section id="universal-database-media-and-asset-streaming" data-number="0.6.6.4">
+<h4 data-number="1.6.6.4"><span class="header-section-number">1.6.6.4</span> Universal Database, Media
 and Asset Streaming</h4>
 <ul>
 <li>Another usecase is accessing a remote database locally</li>
@@ -2729,8 +2736,8 @@ binaries/scripts/libraries from, or by using the block device as a file
 or <code>mmap</code>ing it directly to fetch it</li>
 </ul>
 </section>
-<section id="universal-app-state-synchronization-and-migration" data-number="0.7.6.5">
-<h4 data-number="1.7.6.5"><span class="header-section-number">1.7.6.5</span> Universal App State
+<section id="universal-app-state-synchronization-and-migration" data-number="0.6.6.5">
+<h4 data-number="1.6.6.5"><span class="header-section-number">1.6.6.5</span> Universal App State
 Synchronization and Migration</h4>
 <ul>
 <li>Synchronization of app state is hard</li>
@@ -2822,8 +2829,8 @@ state is (def. a process level or VM level etc.)</li>
 </section>
 </section>
 </section>
-<section id="summary" data-number="0.8">
-<h2 data-number="1.8"><span class="header-section-number">1.8</span>
+<section id="summary" data-number="0.7">
+<h2 data-number="1.7"><span class="header-section-number">1.7</span>
 Summary</h2>
 <ul>
 <li>Looking back at all synchronization options and comparing ease of
@@ -2832,8 +2839,8 @@ implementation, CPU load and network traffic between them</li>
 make it possible to use memory as the universal access format</li>
 </ul>
 </section>
-<section id="conclusion" data-number="0.9">
-<h2 data-number="1.9"><span class="header-section-number">1.9</span>
+<section id="conclusion" data-number="0.8">
+<h2 data-number="1.8"><span class="header-section-number">1.8</span>
 Conclusion</h2>
 <ul>
 <li>Answer to the research question (Could memory be the universal way
@@ -2843,11 +2850,12 @@ state?</li>
 <li>Further research recommendations (e.g. <code>ublk</code>)</li>
 </ul>
 </section>
-<section id="references" data-number="0.10">
-<h2 data-number="1.10"><span class="header-section-number">1.10</span>
+<section id="references" data-number="0.9">
+<h2 data-number="1.9"><span class="header-section-number">1.9</span>
 References</h2>
-<section id="structure" data-number="0.10.1">
-<h3 data-number="1.10.1"><span class="header-section-number">1.10.1</span> Structure</h3>
+<section id="structure" data-number="0.9.1">
+<h3 data-number="1.9.1"><span class="header-section-number">1.9.1</span>
+Structure</h3>
 <ul>
 <li>Abstract</li>
 <li>Tables
@@ -2870,8 +2878,9 @@ use cases there are for the methods</li>
 future research questions</li>
 </ul>
 </section>
-<section id="sources" data-number="0.10.2">
-<h3 data-number="1.10.2"><span class="header-section-number">1.10.2</span> Sources</h3>
+<section id="sources" data-number="0.9.2">
+<h3 data-number="1.9.2"><span class="header-section-number">1.9.2</span>
+Sources</h3>
 <ul>
 <li>FluidMem: Full, Flexible, and Fast Memory Disaggregation for the
 Cloud (userfaultfd)</li>

@@ -3,79 +3,72 @@ Comparative Study and Implementation (Notes)
 Felicitas Pojtinger (Stuttgart Media University)
 2023-08-04
 
--   1 Technologies to Introduce
--   2 Introduction
--   3 Technology
-    -   3.1 The Linux Kernel
-    -   3.2 Linux Kernel Modules
-    -   3.3 UNIX Signals and Handlers
-    -   3.4 Memory Hierarchy
-    -   3.5 Memory Management in Linux
-    -   3.6 Swap Space
-    -   3.7 Page Faults
-    -   3.8 mmap
-    -   3.9 inotify
-    -   3.10 Linux Kernel Disk and File Caching
-    -   3.11 TCP, UDP and QUIC
-    -   3.12 Delta Synchronization
-    -   3.13 File Systems In Userspace (FUSE)
-    -   3.14 Network Block Device (NBD)
-    -   3.15 Virtual Machine Live Migration
-        -   3.15.1 Pre-Copy
-        -   3.15.2 Post-Copy
-        -   3.15.3 Workload Analysis
-    -   3.16 Streams and Pipelines
-    -   3.17 gRPC
-    -   3.18 Redis
-    -   3.19 S3 and Minio
-    -   3.20 Cassandra and ScylllaDB
--   4 Planning
-    -   4.1 Pull-Based Synchronization With userfaultfd
-    -   4.2 Push-Based Synchronization With mmap and Hashing
-    -   4.3 Push-Pull Synchronization with FUSE
-    -   4.4 Pull-Based Synchronization With NBD
-    -   4.5 Push-Pull Synchronization with Mounts
-    -   4.6 Pull-Based Synchronization with Migrations
--   5 Implementation
-    -   5.1 Userfaults in Go with userfaultfd
+-   1 Introduction
+-   2 Technology
+    -   2.1 The Linux Kernel
+    -   2.2 Linux Kernel Modules
+    -   2.3 UNIX Signals and Handlers
+    -   2.4 Memory Hierarchy
+    -   2.5 Memory Management in Linux
+    -   2.6 Swap Space
+    -   2.7 Page Faults
+    -   2.8 mmap
+    -   2.9 inotify
+    -   2.10 Linux Kernel Disk and File Caching
+    -   2.11 TCP, UDP and QUIC
+    -   2.12 Delta Synchronization
+    -   2.13 File Systems In Userspace (FUSE)
+    -   2.14 Network Block Device (NBD)
+    -   2.15 Virtual Machine Live Migration
+        -   2.15.1 Pre-Copy
+        -   2.15.2 Post-Copy
+        -   2.15.3 Workload Analysis
+    -   2.16 Streams and Pipelines
+    -   2.17 gRPC
+    -   2.18 Redis
+    -   2.19 S3 and Minio
+    -   2.20 Cassandra and ScylllaDB
+-   3 Planning
+    -   3.1 Pull-Based Synchronization With userfaultfd
+    -   3.2 Push-Based Synchronization With mmap and Hashing
+    -   3.3 Push-Pull Synchronization with FUSE
+    -   3.4 Pull-Based Synchronization With NBD
+    -   3.5 Push-Pull Synchronization with Mounts
+    -   3.6 Pull-Based Synchronization with Migrations
+-   4 Implementation
+    -   4.1 Userfaults in Go with userfaultfd
+    -   4.2 File-Based Synchronization
+    -   4.3 FUSE Implementation in Go
+    -   4.4 NBD with go-nbd
+    -   4.5 Chunking, Push/Pull Mechanisms and Lifecycle for Mounts
+    -   4.6 Live Migration for Mounts
+    -   4.7 Pluggable Encryption and Authentication
+    -   4.8 Optimizing Backends For High RTT
+    -   4.9 Optimizing The Transport Protocol For Throughput
+    -   4.10 Using Remote Stores as Backends
+    -   4.11 Bi-Directional Protocols With Dudirekta
+    -   4.12 Connection Pooling For High RTT Scenarios
+-   5 Results
+    -   5.1 Userfaults
     -   5.2 File-Based Synchronization
-    -   5.3 FUSE Implementation in Go
-    -   5.4 NBD with go-nbd
-    -   5.5 Chunking, Push/Pull Mechanisms and Lifecycle for Mounts
-    -   5.6 Live Migration for Mounts
-    -   5.7 Pluggable Encryption and Authentication
-    -   5.8 Optimizing Backends For High RTT
-    -   5.9 Optimizing The Transport Protocol For Throughput
-    -   5.10 Using Remote Stores as Backends
-    -   5.11 Bi-Directional Protocols With Dudirekta
-    -   5.12 Connection Pooling For High RTT Scenarios
--   6 Results
+    -   5.3 Mounts and Live Migration
+-   6 Discussion
     -   6.1 Userfaults
     -   6.2 File-Based Synchronization
-    -   6.3 Mounts and Live Migration
--   7 Discussion
-    -   7.1 Userfaults
-    -   7.2 File-Based Synchronization
-    -   7.3 FUSE
-    -   7.4 NBD
-    -   7.5 Mounts and Live Migration
-    -   7.6 Use Cases
-        -   7.6.1 Remote Swap With ram-dl
-        -   7.6.2 Mapping Tape Into Memory With tapisk
-        -   7.6.3 Improving File Storage Solutions
-        -   7.6.4 Universal Database, Media and Asset Streaming
-        -   7.6.5 Universal App State Synchronization and Migration
--   8 Summary
--   9 Conclusion
--   10 References
-    -   10.1 Structure
-    -   10.2 Sources
-
-Technologies to Introduce
-
--   Delta synchronization (redo)
--   FUSE (redo)
--   NBD (redo)
+    -   6.3 FUSE
+    -   6.4 NBD
+    -   6.5 Mounts and Live Migration
+    -   6.6 Use Cases
+        -   6.6.1 Remote Swap With ram-dl
+        -   6.6.2 Mapping Tape Into Memory With tapisk
+        -   6.6.3 Improving File Storage Solutions
+        -   6.6.4 Universal Database, Media and Asset Streaming
+        -   6.6.5 Universal App State Synchronization and Migration
+-   7 Summary
+-   8 Conclusion
+-   9 References
+    -   9.1 Structure
+    -   9.2 Sources
 
 Introduction
 
@@ -319,6 +312,11 @@ TCP, UDP and QUIC
 
 Delta Synchronization
 
+-   Traditionally, when files are synchronized between hosts, the entire
+    file is transfered
+-   Delta synchronization is a technique that intents to instead
+    transfer only the part of the file that has changed
+-   Can lead to reduced network and I/O overhead
 -   The probably most popular tool for file synchronization like this is
     rsync
 -   When the delta-transfer algorithm for rsync is active, it computes
@@ -340,6 +338,12 @@ Delta Synchronization
 
 File Systems In Userspace (FUSE)
 
+-   Software interface that allows writing custom file systems in
+    userspace
+-   Developers can create file systems without having to engage in
+    low-level kernel development
+-   Available on multiple platforms, mostly Linux but also macOS and
+    FreeBSD
 -   In order to implement file systems in user space, we can use the
     FUSE API
 -   Here, a user space program registers itself with the FUSE kernel
@@ -357,6 +361,10 @@ File Systems In Userspace (FUSE)
 -   Unlike a file system implemented as a kernel module, this layer of
     indirection makes the file system portable, since it only needs to
     communicate with the FUSE module
+-   Does have significant performance overhead due to the context
+    switching between the kernel and the file system in userspace
+-   Is used for many high-level interfaces to extenal services, i.e. to
+    mount S3 buckets or a remote system’s disk via SSH
 
 Network Block Device (NBD)
 
@@ -405,6 +413,8 @@ Network Block Device (NBD)
     abstractions such as files or directories
 -   This is, for the narrow memory synchronization use case, however
     more of a feature than a bug
+-   Since it works on the block level, it can’t offer shared acesses to
+    the same file for multiple clients
 
 Virtual Machine Live Migration
 

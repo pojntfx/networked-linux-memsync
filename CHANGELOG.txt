@@ -1,3 +1,9 @@
+commit 740e7e9de3347f0b9f562b27ab53c0d69c501f2c
+Author: Felicitas Pojtinger <felicitas@pojtinger.com>
+Date:   Sun Jul 16 23:48:12 2023 +0200
+
+    docs: Add rest of the notes on delta sync and FUSE
+
 commit cb0b3b3d4bf900256fb8b008ff55eb26579ca3d1
 Author: Felicitas Pojtinger <felicitas@pojtinger.com>
 Date:   Sun Jul 16 23:23:27 2023 +0200
