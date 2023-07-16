@@ -27,11 +27,6 @@ csl: static/ieee.csl
 
 ## Technologies to Introduce
 
-- gRPC and fRPC
-- Streams and pipelines
-- Redis
-- S3
-- Cassandra
 - Delta synchronization (redo)
 - FUSE (redo)
 - NBD (redo)
@@ -78,10 +73,11 @@ csl: static/ieee.csl
   - Can be installed with `sigaction()`
 - Signals are not designed as an IPC mechanism, since they can only alert of an event, but not of any additional data for it
 
-### The Memory Hierarchy
+### Memory Hierarchy
 
 - Memory in computers can be classified based on size, speed, cost and proximity to the CPU
 - Principle of locality: The most frequently accessed data and instructions should be in the closest memory
+- Locality is important mostly due to the "speed of the cable" - throughput (due to dampening) and latency (due to being limited by the speed of light) decreases as distance increases
 - Registers
   - Closest to the CPU
   - Very small amount of storage (32-64 bits of data)
@@ -198,6 +194,26 @@ csl: static/ieee.csl
   - Data consistency: Between the disk and cache via writebacks. Aggressive writebacks lead to reduced performance, delays risk data loss
   - Release of cached data under memory pressure: Cache eviction requires intelligent algorithms, i.e. LRU
 
+### TCP, UDP and QUIC
+
+- TCP
+  - Connection-oriented
+  - Has been the reliable backbone of internet commmunication
+  - Guaranteed delivery and maintained data order
+  - Includes error checking, lost packet retransmission, and congestion control mechanisms
+  - Powers the majority of the web
+- UDP
+  - Connectionless
+  - No reliability or ordered packet delivery guarantees
+  - Faster than TCP due to less guarantees
+  - Suitable for applications that require speed over reliability (i.e. online gaming, video calls etc.)
+- QUIC
+  - Modern transport layer protocol developed by Google and standardized by the IETF in 2020
+  - Intents to combine the best aspects of TCP and UDP
+  - Provides reliability and ordered delivery guarantees
+  - Reduces connection establishment times/initial latency by combining connection and security handshakes
+  - Avoids head-of-line blocking by allowing independent delivery of separate streams
+
 ### Delta Synchronization
 
 - The probably most popular tool for file synchronization like this is rsync
@@ -282,6 +298,80 @@ csl: static/ieee.csl
 - Compared to the alternative, which is usually waiting for a significant percentage of the chunks that were not changed before tracking started to be synced first, this can potentially yield a lot of improvements
 - The paper has found an improvement of up to 74% in terms of live migration time/downtime and 43% in terms of the amount of data transferred over the network
 - While such a system was not implemented for r3map, using r3map with such a system would certainly be possible
+
+### Streams and Pipelines
+
+- Fundamental concepts in computer science
+- Sequentually process elements
+- Allow for the efficient processing of large amounts of data, without having to load everything into memory
+- Form the backbone of efficient, modular data processing
+- Streams
+  - Represent a continous sequence of data
+  - Can be a source or destination of data (i.e. files, network connections, stdin/stdout etc.)
+  - Allow processing of data as it becomes available
+  - Minimized memory consumption
+  - Especially well suited for long-running processes (where data gets streamed in for a extended time)
+- Pipelines
+  - Series of data processing stages: Output of one stage serves as input to the next
+  - Stages can often be run in parallel, improving performance due to a higher degree of concurrency
+  - Example: Instruction pipeline in CPU, were the stages of instruction execution can be performend in parallel
+  - Example: UNIX pipes, where the output of a command (e.g. `curl`) can be piped into another command (e.g. `jq`) to achieve a larger goal
+
+### gRPC
+
+- Open-Source and high-performance RPC framework
+- Developed by Google in 2015
+- Features
+  - Uses HTTP/2 as the transport protocol to benefit from header compression and request multiplexing
+  - Uses protobuf as the IDL and wire format, a high-performance, polyglot mechanism for data serialization (instead of the slower and more verbose JSON of REST APIs)
+  - Supports unary RPCs, server-streaming RPCs, client-streaming RPCs and bidirectional RPCs
+  - Has pluggable support for load balancing, tracing, health checking and authentication
+- Supports many languages (Go, Rust, JS etc.)
+- Developed by the CNCF
+
+### Redis
+
+- In-memory data structure store
+- Used as a database, cache and/or message broker
+- Created by S. Sanfilippo in 2009
+- Different from other NoSQL databases by supporting various data structures like lists, sets, hashes or bitmaps
+- Uses in-memory data storage for maximum speed and efficiency
+- Allows for low-latency reads/writes
+- While not intended for persistance, it is possible to store data on disk
+- Has a non-blocking I/O model and offers near real-time data processing capabilities
+- Includes a pub-sub system to be able to function as a message broker
+
+### S3 and Minio
+
+- S3
+  - Object storage service for data-intensive workloads
+  - Offered by AWS
+  - Can be globally distributed to allow for fast access times from anywhere on the globe
+  - Range of storage classes with different requirements
+  - Includes authentication and authorization
+  - Exposes HTTP API for accessing the stored folders and files
+- Minio
+  - Open-source storage server compatible wiht S3
+  - Lightweight and simple, written in Go
+  - Can be hosted on-prem and is open source
+  - Allows horizontal scalability to storage large amounts of data across nodes
+
+### Cassandra and ScylllaDB
+
+- Popular wide-column NoSQL databases
+- Combines Amazon's Dynamo model and Google's Bigtable model to create a highly available database
+- Apache Cassandra
+  - Highly scalable, eventually consistent
+  - Can handle large amounts of data across many servers with no single point of failure
+  - Consistency can be tuned according to needs (eventual to strong)
+  - Doesn't use master nodes due to it's use of a P2P protocol and distributed hash ring design
+  - Does have high latency under heavy load and requires fairly complex configuration
+- ScyllaDB
+  - Launched in 2015
+  - Written in C++ and has a shared-nothing architecture, unlike Cassandra which is written in Java
+  - Compatible with Cassandra's API and data model
+  - Designed to overcome Cassandra's limitations esp. around latency, esp. P99 latency
+  - Performance improvements were confirmed with various benchmarking studies
 
 ## Planning
 
@@ -686,6 +776,7 @@ csl: static/ieee.csl
   - In order to prevent having to store empty data, the backend interprets "not found" errors as empty chunks
 - Document databases as persistent mount remotes
   - Another backend option is a NoSQL server such as Cassandra
+  - Specifically, as noted earlier, ScyllaDB - which improves upon Cassandra's latency, which is important for the mount API
   - This is more of a proof of concept than a real usecase, but shows the versitility and flexibility of how a database can be mapped to a memory region, which can be interesting for accessing e.g. a remote database's content without having to use a specific client
   - `ReadAt` and `WriteAt` are implemented using Cassandra's query language (code snippet from https://github.com/pojntfx/r3map/blob/main/pkg/backend/cassandra.go#L36-L63)
   - Similarly to Redis, locking individual keys can be handled by the DB server
@@ -1079,3 +1170,17 @@ csl: static/ieee.csl
 - UNIX systems programming: communication, concurrency, and threads (Robbins, Kay A) (signals)
 - Modeling the Linux page cache for accurate
   simulation of data-intensive applications (Hoang-Dung Do) (Linux page cache)
+- Transmission Control Protocol (Postel, J) (TCP)
+- User Datagram Protocol (Postel, J) (UDP)
+- The QUIC Transport Protocol: Design and Internet-Scale Deployment (Langley) (QUIC)
+- Streaming Systems - The What, Where, When, and How of Large-Scale Data Processing (Akidau) (Streams)
+- UNIX Power Tools (Peek) (Pipelines, UNIX pipes)
+- grpc.io/docs/what-is-grpc/introduction/ (gRPC)
+- protobuf.dev (Protobuf)
+- redis.io/docs/about/ (Redis)
+- redis.io/docs/interact/pubsub/ (Redis)
+- aws.amazon.com/s3/ (S3)
+- min.io/ (Minio)
+- Cassandra - A Decentralized Structured Storage System (Lakshman) (Cassandra)
+- Apache Cassandra 4.0 Performance Benchmark Whitepaper (ScyllaDB)
+- opensource.docs.scylladb.com/stable/architecture/index.html (ScyllaDB)
