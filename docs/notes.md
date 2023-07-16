@@ -25,12 +25,6 @@ csl: static/ieee.csl
 
 # Efficient Synchronization of Linux Memory Regions over a Network: A Comparative Study and Implementation (Notes)
 
-## Technologies to Introduce
-
-- Delta synchronization (redo)
-- FUSE (redo)
-- NBD (redo)
-
 ## Introduction
 
 - Research question: Could memory be the universal way to access and migrate state?
@@ -216,6 +210,9 @@ csl: static/ieee.csl
 
 ### Delta Synchronization
 
+- Traditionally, when files are synchronized between hosts, the entire file is transfered
+- Delta synchronization is a technique that intents to instead transfer only the part of the file that has changed
+- Can lead to reduced network and I/O overhead
 - The probably most popular tool for file synchronization like this is rsync
 - When the delta-transfer algorithm for rsync is active, it computes the difference between the local and the remote file, and then synchronizes the changes
 - The delta sync algorithm first does file block division
@@ -229,6 +226,9 @@ csl: static/ieee.csl
 
 ### File Systems In Userspace (FUSE)
 
+- Software interface that allows writing custom file systems in userspace
+- Developers can create file systems without having to engage in low-level kernel development
+- Available on multiple platforms, mostly Linux but also macOS and FreeBSD
 - In order to implement file systems in user space, we can use the FUSE API
 - Here, a user space program registers itself with the FUSE kernel module
 - This program provides callbacks for the file system operations, e.g. for `open`, `read`, `write` etc.
@@ -236,6 +236,8 @@ csl: static/ieee.csl
 - This makes it much easier to create a file system compared to writing it in the kernel, as it can run in user space
 - It is also much safer as no custom kernel module is required and an error in the FUSE or the backend can't crash the entire kernel
 - Unlike a file system implemented as a kernel module, this layer of indirection makes the file system portable, since it only needs to communicate with the FUSE module
+- Does have significant performance overhead due to the context switching between the kernel and the file system in userspace
+- Is used for many high-level interfaces to extenal services, i.e. to mount S3 buckets or a remote system's disk via SSH
 
 ### Network Block Device (NBD)
 
@@ -258,6 +260,7 @@ csl: static/ieee.csl
 - As such, the protocol is very simple to implement
 - With this simplicity however also come some drawbacks: NBD is less suited for use cases where the backing device behaves very differently from a random-access store device, like for example a tape drive, since it is not possible to work with high-level abstractions such as files or directories
 - This is, for the narrow memory synchronization use case, however more of a feature than a bug
+- Since it works on the block level, it can't offer shared acesses to the same file for multiple clients
 
 ### Virtual Machine Live Migration
 
