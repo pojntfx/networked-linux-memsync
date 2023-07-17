@@ -1,3 +1,9 @@
+commit 4c45e0c0216bc159f0674d6033bf3f94d392b5ed
+Author: Felicitas Pojtinger <felicitas@pojtinger.com>
+Date:   Tue Jul 18 00:03:00 2023 +0200
+
+    feat: Add basic r3map benchmark
+
 commit f21929e707130587caa89a6de8d38e336b7d61d1
 Author: Felicitas Pojtinger <felicitas@pojtinger.com>
 Date:   Mon Jul 17 23:44:16 2023 +0200
