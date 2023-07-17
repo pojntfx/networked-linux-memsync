@@ -1,3 +1,9 @@
+commit c18435fad9431f90d287d292f9610050dd80777f
+Author: Felicitas Pojtinger <felicitas@pojtinger.com>
+Date:   Tue Jul 18 00:45:01 2023 +0200
+
+    refactor: Switch to `mmap` for r3map benchmark Go client
+
 commit fa96f9443b24d0e904eb824dad53d142f94b0baf
 Author: Felicitas Pojtinger <felicitas@pojtinger.com>
 Date:   Tue Jul 18 00:26:15 2023 +0200
