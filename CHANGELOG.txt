@@ -1,3 +1,9 @@
+commit dc5a463eea7763366eb23c5633c6e44f4e62320f
+Author: Felicitas Pojtinger <felicitas@pojtinger.com>
+Date:   Tue Jul 18 01:57:04 2023 +0200
+
+    feat: Add disk and memory benchmarks as the baseline
+
 commit 5a50fbce155728a204108251d62853c6718cc675
 Author: Felicitas Pojtinger <felicitas@pojtinger.com>
 Date:   Tue Jul 18 01:15:15 2023 +0200
