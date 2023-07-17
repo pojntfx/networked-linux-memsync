@@ -1710,6 +1710,7 @@ Results
 
 Userfaults
 
+-   Benchmark: I/O-bound throughput & latency for userfaultfd
 -   Benchmark: Sensitivity of userfaultfd to network latency and
     throughput
 

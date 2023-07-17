@@ -1,3 +1,9 @@
+commit 424550bd76f72b66a5fd9e6d0e82fdc87227ee23
+Author: Felicitas Pojtinger <felicitas@pojtinger.com>
+Date:   Mon Jul 17 23:39:36 2023 +0200
+
+    feat: Add simple `userfaultfd` handler benchmark
+
 commit 740e7e9de3347f0b9f562b27ab53c0d69c501f2c
 Author: Felicitas Pojtinger <felicitas@pojtinger.com>
 Date:   Sun Jul 16 23:48:12 2023 +0200
