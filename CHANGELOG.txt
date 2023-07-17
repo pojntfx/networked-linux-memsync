@@ -1,3 +1,9 @@
+commit 5a50fbce155728a204108251d62853c6718cc675
+Author: Felicitas Pojtinger <felicitas@pojtinger.com>
+Date:   Tue Jul 18 01:15:15 2023 +0200
+
+    feat: Add raw read speed benchmark, add real server-side copy operations
+
 commit c18435fad9431f90d287d292f9610050dd80777f
 Author: Felicitas Pojtinger <felicitas@pojtinger.com>
 Date:   Tue Jul 18 00:45:01 2023 +0200
