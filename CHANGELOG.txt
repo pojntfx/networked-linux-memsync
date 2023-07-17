@@ -1,3 +1,9 @@
+commit fa96f9443b24d0e904eb824dad53d142f94b0baf
+Author: Felicitas Pojtinger <felicitas@pojtinger.com>
+Date:   Tue Jul 18 00:26:15 2023 +0200
+
+    feat: Add client/server split for r3map benchmark
+
 commit 4c45e0c0216bc159f0674d6033bf3f94d392b5ed
 Author: Felicitas Pojtinger <felicitas@pojtinger.com>
 Date:   Tue Jul 18 00:03:00 2023 +0200
