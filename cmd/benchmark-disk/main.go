@@ -1,13 +1,9 @@
 package main
 
 import (
-	"encoding/json"
 	"flag"
 	"fmt"
-	"log"
-	"net"
 	"os"
-	"path/filepath"
 	"time"
 
 	"github.com/edsrzf/mmap-go"
@@ -16,34 +12,24 @@ import (
 func main() {
 	chunkSize := flag.Int("chunk-size", os.Getpagesize(), "Chunk size to use")
 	size := flag.Int("size", os.Getpagesize()*1024*1024, "Amount of bytes to read")
-	socket := flag.String("socket", filepath.Join(os.TempDir(), "r3map.sock"), "Socket to share the file descriptor over")
 
 	flag.Parse()
 
-	addr, err := net.ResolveUnixAddr("unix", *socket)
+	inputFile, err := os.CreateTemp("", "")
 	if err != nil {
 		panic(err)
 	}
+	defer func() {
+		_ = inputFile.Close()
 
-	conn, err := net.DialUnix("unix", nil, addr)
-	if err != nil {
+		_ = os.Remove(inputFile.Name())
+	}()
+
+	if err := inputFile.Truncate(int64(*size)); err != nil {
 		panic(err)
 	}
 
-	log.Println("Connected to", conn.RemoteAddr())
-
-	devPath := ""
-	if json.NewDecoder(conn).Decode(&devPath); err != nil {
-		panic(err)
-	}
-
-	deviceFile, err := os.OpenFile(devPath, os.O_RDWR, os.ModePerm)
-	if err != nil {
-		panic(err)
-	}
-	defer deviceFile.Close()
-
-	b, err := mmap.MapRegion(deviceFile, *size, mmap.RDWR, 0, 0)
+	b, err := mmap.MapRegion(inputFile, *size, mmap.RDWR, 0, 0)
 	if err != nil {
 		panic(err)
 	}

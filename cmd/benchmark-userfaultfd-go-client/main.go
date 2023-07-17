@@ -47,16 +47,15 @@ func main() {
 		panic(err)
 	}
 
-	beforeFirstTwoChunks := time.Now()
-
 	p := make([]byte, *chunkSize)
-	for i := 0; i < 2; i++ {
-		copy(p, b[i**chunkSize:])
-	}
 
-	afterFirstTwoChunks := time.Since(beforeFirstTwoChunks)
+	beforeFirstChunk := time.Now()
 
-	fmt.Printf("Latency till first two chunks: %v\n", afterFirstTwoChunks)
+	copy(p, b[*chunkSize:])
+
+	afterFirstChunk := time.Since(beforeFirstChunk)
+
+	fmt.Printf("Latency till first chunk: %v\n", afterFirstChunk)
 
 	beforeRead := time.Now()
 

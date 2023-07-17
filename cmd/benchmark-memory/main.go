@@ -13,23 +13,22 @@ func main() {
 
 	flag.Parse()
 
-	input := make([]byte, *chunkSize)
-	output := make([]byte, *chunkSize)
+	b := make([]byte, *size)
 
-	beforeFirstTwoChunks := time.Now()
+	p := make([]byte, *chunkSize)
 
-	for i := 0; i < 2; i++ {
-		copy(output, input)
-	}
+	beforeFirstChunk := time.Now()
 
-	afterFirstTwoChunks := time.Since(beforeFirstTwoChunks)
+	copy(p, b[*chunkSize:])
 
-	fmt.Printf("Latency till first two chunks: %v\n", afterFirstTwoChunks)
+	afterFirstChunk := time.Since(beforeFirstChunk)
+
+	fmt.Printf("Latency till first chunk: %v\n", afterFirstChunk)
 
 	beforeRead := time.Now()
 
 	for i := 0; i < *size / *chunkSize; i++ {
-		copy(output, input)
+		copy(p, b[i**chunkSize:])
 	}
 
 	afterRead := time.Since(beforeRead)
