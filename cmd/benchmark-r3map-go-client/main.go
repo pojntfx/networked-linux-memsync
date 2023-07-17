@@ -9,6 +9,8 @@ import (
 	"os"
 	"path/filepath"
 	"time"
+
+	"github.com/edsrzf/mmap-go"
 )
 
 func main() {
@@ -35,20 +37,24 @@ func main() {
 		panic(err)
 	}
 
-	b, err := os.OpenFile(devPath, os.O_RDWR, os.ModePerm)
+	deviceFile, err := os.OpenFile(devPath, os.O_RDWR, os.ModePerm)
 	if err != nil {
 		panic(err)
 	}
-	defer b.Close()
+	defer deviceFile.Close()
+
+	b, err := mmap.MapRegion(deviceFile, *size, mmap.RDWR, 0, 0)
+	if err != nil {
+		panic(err)
+	}
+	defer b.Unmap()
 
 	beforeFirstTwoChunks := time.Now()
 
 	p := make([]byte, *chunkSize)
 
 	for i := 0; i < 2; i++ {
-		if _, err := b.ReadAt(p, int64(i**chunkSize)); err != nil {
-			panic(err)
-		}
+		copy(p, b[i**chunkSize:])
 	}
 
 	afterFirstTwoChunks := time.Since(beforeFirstTwoChunks)
@@ -58,9 +64,7 @@ func main() {
 	beforeRead := time.Now()
 
 	for i := 0; i < *size / *chunkSize; i++ {
-		if _, err := b.ReadAt(p, int64(i**chunkSize)); err != nil {
-			panic(err)
-		}
+		copy(p, b[i**chunkSize:])
 	}
 
 	afterRead := time.Since(beforeRead)
