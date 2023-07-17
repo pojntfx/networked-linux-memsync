@@ -6,19 +6,27 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/loopholelabs/userfaultfd-go/pkg/mapper"
 	"github.com/loopholelabs/userfaultfd-go/pkg/transfer"
 )
 
-type dummyReader struct{}
+type dummyReader struct {
+	rtt time.Duration
+}
 
 func (r *dummyReader) ReadAt(p []byte, off int64) (int, error) {
+	if r.rtt > 0 {
+		time.Sleep(r.rtt)
+	}
+
 	return len(p), nil
 }
 
 func main() {
 	socket := flag.String("socket", filepath.Join(os.TempDir(), "userfaultd.sock"), "Socket to share the file descriptor over")
+	rtt := flag.Duration("rtt", 0, "RTT to simulate")
 
 	flag.Parse()
 
@@ -56,7 +64,7 @@ func main() {
 				panic(err)
 			}
 
-			if err := mapper.Handle(uffd, start, &dummyReader{}); err != nil {
+			if err := mapper.Handle(uffd, start, &dummyReader{*rtt}); err != nil {
 				panic(err)
 			}
 		}()
