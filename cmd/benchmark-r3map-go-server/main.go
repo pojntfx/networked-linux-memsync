@@ -17,12 +17,15 @@ import (
 type dummyBackend struct {
 	size int
 	rtt  time.Duration
+	p    []byte
 }
 
 func (b *dummyBackend) ReadAt(p []byte, off int64) (int, error) {
 	if b.rtt > 0 {
 		time.Sleep(b.rtt)
 	}
+
+	copy(b.p, p)
 
 	return len(p), nil
 }
@@ -31,6 +34,8 @@ func (b *dummyBackend) WriteAt(p []byte, off int64) (int, error) {
 	if b.rtt > 0 {
 		time.Sleep(b.rtt)
 	}
+
+	copy(p, b.p)
 
 	return len(p), nil
 }
@@ -52,6 +57,7 @@ func (b *dummyBackend) Sync() error {
 }
 
 func main() {
+	chunkSize := flag.Int("chunk-size", os.Getpagesize(), "Chunk size to use")
 	size := flag.Int("size", os.Getpagesize()*1024*1024, "Amount of bytes to read")
 	socket := flag.String("socket", filepath.Join(os.TempDir(), "r3map.sock"), "Socket to share the file descriptor over")
 	rtt := flag.Duration("rtt", 0, "RTT to simulate")
@@ -98,10 +104,13 @@ func main() {
 			}
 			defer devFile.Close()
 
+			p := make([]byte, *chunkSize)
+
 			mnt := mount.NewDirectPathMount(
 				&dummyBackend{
 					size: *size,
 					rtt:  *rtt,
+					p:    p,
 				},
 				devFile,
 
