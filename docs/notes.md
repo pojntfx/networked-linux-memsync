@@ -849,6 +849,7 @@ csl: static/ieee.csl
 
 ### Userfaults
 
+- Benchmark: I/O-bound throughput & latency for userfaultfd
 - Benchmark: Sensitivity of `userfaultfd` to network latency and throughput
 
 ### File-Based Synchronization
