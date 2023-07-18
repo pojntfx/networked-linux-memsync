@@ -1,3 +1,15 @@
+commit 07eb1d1860b04fb8ae7dc0ad37655f738c791c66
+Author: Felicitas Pojtinger <felicitas@pojtinger.com>
+Date:   Tue Jul 18 23:56:52 2023 +0200
+
+    feat: Add references in BibTeX format
+
+commit 481c2c58c9db69db88999851940a430343d8080b
+Author: Felicitas Pojtinger <felicitas@pojtinger.com>
+Date:   Tue Jul 18 23:56:23 2023 +0200
+
+    refactor: Create new benchmarks that better display results for discussion
+
 commit 5ee6afdd89d646cf76af5c259d7197f0e47ff00b
 Author: Felicitas Pojtinger <felicitas@pojtinger.com>
 Date:   Tue Jul 18 02:34:34 2023 +0200

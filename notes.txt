@@ -49,9 +49,10 @@ Felicitas Pojtinger (Stuttgart Media University)
     -   4.11 Bi-Directional Protocols With Dudirekta
     -   4.12 Connection Pooling For High RTT Scenarios
 -   5 Results
-    -   5.1 Userfaults
-    -   5.2 File-Based Synchronization
-    -   5.3 Mounts and Live Migration
+    -   5.1 Latency
+    -   5.2 Throughput
+    -   5.3 Pull Heuristics
+    -   5.4 Downtime
 -   6 Discussion
     -   6.1 Userfaults
     -   6.2 File-Based Synchronization
@@ -69,6 +70,7 @@ Felicitas Pojtinger (Stuttgart Media University)
 -   9 References
     -   9.1 Structure
     -   9.2 Sources
+    -   Citations
 
 Introduction
 
@@ -1708,39 +1710,55 @@ Connection Pooling For High RTT Scenarios
 
 Results
 
-Userfaults
+Latency
 
--   Benchmark: I/O-bound throughput & latency for userfaultfd
--   Benchmark: Sensitivity of userfaultfd to network latency and
-    throughput
+-   First chunk latency of baseline vs. userfault vs. direct vs. managed
 
-File-Based Synchronization
+-   Development of first chunk latency as RTT increases
 
--   Benchmark: Performance of different Go hashing algorithms for
-    detecting writes
--   Benchmark: Hashing the chunks individually vs. hashing the entire
-    file
--   Benchmark: Throughput of this custom synchronization protocol
-    vs. rsync (which hashes entire files)
+-   Development of first chunk latency as number of workers increases
 
-Mounts and Live Migration
+-   MB of pre-emptive pulls in managed API as RTT increases
 
--   Benchmark: Local vs. remote chunking
--   Benchmark: Parallelizing startups and pulling n MBs as the device
-    starts
--   Benchmark: File vs. directory backend performance
--   fRPC is 2-4x faster than gRPC, and especially in terms of throughput
-    (insert graphics from https://frpc.io/performance/grpc-benchmarks)
--   Benchmark: Effect of tuning the amount of push/pull workers in
-    high-latency for these three backends on latency till first n chunks
-    and throughput
--   Benchmark: These three backends on localhost and on remote hosts,
-    where they could be of use
--   Benchmark: Latency and throughput of all benchmarks on localhost and
-    in a realistic latency and throughput scenario (direct mounts can
-    outperform managed mounts in tests on localhosts)
--   Benchmark: Maximum acceptable downtime for a migration scenario with
-    the Managed Mount API vs the Migration API
+-   Development of MB of pre-emptive pulls as RTT increases
+
+-   Development of MB of pre-emptive pulls as number of workers
+    increases
+
+-   Development of MB of pre-emptive pulls as chunk size increases
+
+Throughput
+
+-   Throughput of dudirekta, gRPC and fRPC as RTT increases
+
+-   Throughput of dudirekta, gRPC and fRPC as number of workers
+    increases
+
+-   Throughput of dudirekta, gRPC and fRPC as chunk size increases
+
+-   Throughput of baseline vs. userfault vs. direct vs. migration (we
+    can use the onChunkLocal value)
+
+-   Development of throughput as RTT increases
+
+-   Development of throughput as number of workers increases (migration
+    only)
+
+-   Development of throughput as chunk size increases
+
+Pull Heuristics
+
+-   Effect of correct (return n) vs wrong (return -n) pull heuristic on
+    first chunk latency for managed API
+-   Effect of correct (return n) vs wrong (return -n) pull heuristic on
+    throughput for managed API
+
+Downtime
+
+-   Open time for userfault vs. r3map (doesn’t matter if
+    direct/mount/migration)
+-   Minimum downtime of direct/mount (one step - Open = downtime)
+    vs. migration (two steps - Finalize = downtime)
 
 Discussion
 
@@ -2292,58 +2310,187 @@ Structure
 Sources
 
 -   FluidMem: Full, Flexible, and Fast Memory Disaggregation for the
-    Cloud (userfaultfd)
+    Cloud (userfaultfd) [1]
 -   Memory Disaggregation: Advances and Open Challenges (general memory
-    hierarchy etc.)
+    hierarchy etc.) [2]
 -   User Level Page Faults (sigaction & signal-based page fault
-    handlers)
+    handlers) [3]
 -   Towards Web-based Delta Synchronization for Cloud Storage Services
-    (rsync)
+    (rsync) [4]
 -   To FUSE or Not to FUSE: Performance of User-Space File Systems
-    (implementing a FUSE)
+    (implementing a FUSE) [5]
 -   The NBD protocol (NBD protocol documentation from the sources; info
-    on implementing a NBD server and client)
+    on implementing a NBD server and client) [6]
 -   Remote regions: a simple abstraction for remote memory (Kernel
-    filesystem for remote memory access)
+    filesystem for remote memory access) [7]
 -   Reducing Virtual Machine Live Migration Overhead via Workload
     Analysis (when to trigger the finalization process for a live VM
-    migration)
--   Cache Memories, Alan Jay Smith (Memory hierarchy)
+    migration) [8]
+-   Cache Memories, Alan Jay Smith (Memory hierarchy) [9]
 -   A RAM cache approach using Host Memory Buffer of the NVMe interface
-    (JuHyung Hong)
+    (JuHyung Hong) [10]
 -   The Slab Allocator: An Object-Caching Kernel Memory Allocator (Linux
-    kernel memory management)
--   Understanding the Linux Virtual Memory Manager (Mel Gorman)
+    kernel memory management) [11]
+-   Understanding the Linux Virtual Memory Manager (Mel Gorman) [12]
 -   Operating Systems Design And Implementation: Design and
-    Implementation (Tanenbaum, Woodhull) (Page faults)
+    Implementation (Tanenbaum, Woodhull) (Page faults) [3]
 -   Operating System Concepts (Silberschatz, A., Galvin, P. B., &
-    Gagne, G. 2018) (memory compression)
+    Gagne, G. 2018) (memory compression) [13]
 -   Efficient Memory Mapped File I/O for In-Memory File Systems (Jungsik
-    Choi) (mmap)
+    Choi) (mmap) [14]
 -   Advanced Programming in the UNIX Environment (W. Stevens) (mmap,
-    signals)
+    signals) [15]
 -   Professional Linux Kernel Architecture (Wolfgang Mauerer) (kernel
-    modules)
--   Linux Kernel Development (Robert Love) (kernel modules)
+    modules) [16]
+-   Linux Kernel Development (Robert Love) (kernel modules) [17]
 -   UNIX systems programming: communication, concurrency, and threads
-    (Robbins, Kay A) (signals)
+    (Robbins, Kay A) (signals) [18]
 -   Modeling the Linux page cache for accurate simulation of
-    data-intensive applications (Hoang-Dung Do) (Linux page cache)
--   Transmission Control Protocol (Postel, J) (TCP)
--   User Datagram Protocol (Postel, J) (UDP)
+    data-intensive applications (Hoang-Dung Do) (Linux page cache) [19]
+-   Transmission Control Protocol (Postel, J) (TCP) [20]
+-   User Datagram Protocol (Postel, J) (UDP) [21]
 -   The QUIC Transport Protocol: Design and Internet-Scale Deployment
-    (Langley) (QUIC)
+    (Langley) (QUIC) [22]
 -   Streaming Systems - The What, Where, When, and How of Large-Scale
-    Data Processing (Akidau) (Streams)
--   UNIX Power Tools (Peek) (Pipelines, UNIX pipes)
--   grpc.io/docs/what-is-grpc/introduction/ (gRPC)
--   protobuf.dev (Protobuf)
--   redis.io/docs/about/ (Redis)
--   redis.io/docs/interact/pubsub/ (Redis)
--   aws.amazon.com/s3/ (S3)
--   min.io/ (Minio)
+    Data Processing (Akidau) (Streams) [23]
+-   UNIX Power Tools (Peek) (Pipelines, UNIX pipes) [24]
+-   grpc.io/docs/what-is-grpc/introduction/ (gRPC) [25]j
+-   protobuf.dev (Protobuf) [26]
+-   redis.io/docs/about/ (Redis) [27]
+-   redis.io/docs/interact/pubsub/ (Redis) [28]
+-   https://docs.aws.amazon.com/AmazonS3/latest/userguide/Welcome.html
+    (AWS) [29]
+-   https://min.io/docs/minio/kubernetes/upstream/administration/concepts.html
+    (Minio) [30]
 -   Cassandra - A Decentralized Structured Storage System (Lakshman)
-    (Cassandra)
+    (Cassandra) [31]
 -   Apache Cassandra 4.0 Performance Benchmark Whitepaper (ScyllaDB)
+    [32]
 -   opensource.docs.scylladb.com/stable/architecture/index.html
-    (ScyllaDB)
+    (ScyllaDB) [33]
+
+Citations
+
+[1] B. Caldwell et al., “FluidMem: Full, flexible, and fast memory
+disaggregation for the cloud,” in 2020 IEEE 40th international
+conference on distributed computing systems (ICDCS), 2020, pp. 665–677.
+doi: 10.1109/ICDCS47774.2020.00090.
+
+[2] H. A. Maruf and M. Chowdhury, “Memory disaggregation: Advances and
+open challenges.” 2023.Available: https://arxiv.org/abs/2305.03943
+
+[3] Q. Li, “User level page faults,” Master's thesis, Carnegie Mellon
+University, School of Computer Science, Pittsburgh, PA 15213, 2020.
+
+[4] H. Xiao et al., “Towards web-based delta synchronization for cloud
+storage services,” in 16th USENIX conference on file and storage
+technologies (FAST 18), Feb. 2018, pp. 155–168.Available:
+https://www.usenix.org/conference/fast18/presentation/xiao
+
+[5] B. K. R. Vangoor, V. Tarasov, and E. Zadok, “To FUSE or not to FUSE:
+Performance of User-Space file systems,” in 15th USENIX conference on
+file and storage technologies (FAST 17), Feb. 2017, pp. 59–72.Available:
+https://www.usenix.org/conference/fast17/technical-sessions/presentation/vangoor
+
+[6] E. Blake, W. Verhelst, and other NBD maintainers, “The NBD
+protocol.”
+https://github.com/NetworkBlockDevice/nbd/blob/master/doc/proto.md, Apr.
+2023.
+
+[7] M. K. Aguilera et al., “Remote regions: A simple abstraction for
+remote memory,” in Proceedings of the 2018 USENIX conference on usenix
+annual technical conference, 2018, pp. 775–787.
+
+[8] A. Baruchi, E. Toshimi Midorikawa, and L. Matsumoto Sato, “Reducing
+virtual machine live migration overhead via workload analysis,” IEEE
+Latin America Transactions, vol. 13, no. 4, pp. 1178–1186, 2015, doi:
+10.1109/TLA.2015.7106373.
+
+[9] A. J. Smith, “Cache memories,” ACM Comput. Surv., vol. 14, no. 3,
+pp. 473–530, Sep. 1982, doi: 10.1145/356887.356892.
+
+[10] J. Hong, S. Han, and E.-Y. Chung, “A RAM cache approach using host
+memory buffer of the NVMe interface,” in 2016 international SoC design
+conference (ISOCC), 2016, pp. 109–110. doi: 10.1109/ISOCC.2016.7799757.
+
+[11] J. Bonwick, “The slab allocator: An Object-Caching kernel,” Jun.
+1994.Available:
+https://www.usenix.org/conference/usenix-summer-1994-technical-conference/slab-allocator-object-caching-kernel
+
+[12] M. Gorman, Understanding the linux virtual memory manager. Upper
+Saddle River, New Jersey 07458: Pearson Education, Inc. Publishing as
+Prentice Hall Professional Technical Reference, 2004.
+
+[13] A. Silberschatz, P. B. Galvin, and G. Gagne, Operating system
+concepts, 10th ed. Hoboken, NJ: Wiley, 2018.Available:
+https://lccn.loc.gov/2017043464
+
+[14] J. Choi, J. Kim, and H. Han, “Efficient memory mapped file I/O for
+In-Memory file systems,” Jul. 2017.Available:
+https://www.usenix.org/conference/hotstorage17/program/presentation/choi
+
+[15] W. R. Stevens, Advanced programming in the UNIX environment. Delhi:
+Addison Wesley Logman (Singapore) Pte Ltd., Indian Branch, 2000.
+
+[16] W. Mauerer, Professional linux kernel architecture. Indianapolis,
+IN: Wiley Publishing, Inc., 2008.
+
+[17] R. Love, Linux kernel development, 3rd ed. Pearson Education, Inc.,
+2010.
+
+[18] K. A. Robbins and S. Robbins, Unix™ systems programming:
+Communication, concurrency, and threads. Prentice Hall PTR, 2003.
+
+[19] H.-D. Do, V. Hayot-Sasson, R. F. da Silva, C. Steele, H. Casanova,
+and T. Glatard, “Modeling the linux page cache for accurate simulation
+of data-intensive applications.” 2021.Available:
+https://arxiv.org/abs/2101.01335
+
+[20] “Transmission Control Protocol.” RFC 793; J. Postel, Sep. 1981.
+doi: 10.17487/RFC0793.
+
+[21] “User Datagram Protocol.” RFC 768; J. Postel, Aug. 1980. doi:
+10.17487/RFC0768.
+
+[22] A. Langley et al., “The QUIC transport protocol: Design and
+internet-scale deployment,” in Proceedings of the conference of the ACM
+special interest group on data communication, 2017, pp. 183–196. doi:
+10.1145/3098822.3098842.
+
+[23] T. Akidau, S. Chernyak, and R. Lax, Streaming systems. Sebastopol,
+CA: O’Reilly Media, Inc., 2018.
+
+[24] J. D. Peek, UNIX power tools. Sebastopol, CA; New York: O’Reilly
+Associates; Bantam Books, 1994.
+
+[25] gRPC Authors, “Introduction to gRPC.” 2023.Available:
+https://grpc.io/docs/what-is-grpc/introduction/
+
+[26] Google LLC, “Protocol buffers.” https://protobuf.dev/, 2023.
+
+[27] Redis Ltd, “Introduction to redis.” https://redis.io/docs/about/,
+2023.
+
+[28] Redis Ltd, “Redis pub/sub.” https://redis.io/docs/interact/pubsub/,
+2023.
+
+[29] Amazon Web Services, Inc, “What is amazon S3?”
+https://docs.aws.amazon.com/AmazonS3/latest/userguide/Welcome.html,
+2023.
+
+[30] MinIO, Inc, “Core administration concepts.”
+https://min.io/docs/minio/kubernetes/upstream/administration/concepts.html,
+2023.
+
+[31] A. Lakshman and P. Malik, “Cassandra: A decentralized structured
+storage system,” SIGOPS Oper. Syst. Rev., vol. 44, no. 2, pp. 35–40,
+Apr. 2010, doi: 10.1145/1773912.1773922.
+
+[32] P. Grabowski, J. Stasiewicz, and K. Baryla, “Apache cassandra 4.0
+performance benchmark: Comparing cassandra 4.0, cassandra 3.11 and
+scylla open source 4.4,” ScyllaDB Inc, 2021.Available:
+https://www.scylladb.com/wp-content/uploads/wp-apache-cassandra-4-performance-benchmark-3.pdf
+
+[33] Inc. ScyllaDB, “ScyllaDB ring architecture - overview.”
+https://opensource.docs.scylladb.com/stable/architecture/ringarchitecture/index.html,
+2023.

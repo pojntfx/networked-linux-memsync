@@ -169,6 +169,25 @@ protocol, performance evaluation" />
     div.column{display: inline-block; vertical-align: top; width: 50%;}
     div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
     ul.task-list{list-style: none;}
+    div.csl-bib-body { }
+    div.csl-entry {
+      clear: both;
+    }
+    .hanging div.csl-entry {
+      margin-left:2em;
+      text-indent:-2em;
+    }
+    div.csl-left-margin {
+      min-width:2em;
+      float:left;
+    }
+    div.csl-right-inline {
+      margin-left:2em;
+      padding-left:1em;
+    }
+    div.csl-indent {
+      margin-left: 2em;
+    }
   </style>
 </head>
 <body>
@@ -282,24 +301,26 @@ Scenarios</a></li>
 <li><a href="#results"><span class="toc-section-number">1.5</span>
 Results</a>
 <ul>
-<li><a href="#userfaults"><span class="toc-section-number">1.5.1</span>
-Userfaults</a></li>
-<li><a href="#file-based-synchronization-1"><span class="toc-section-number">1.5.2</span> File-Based
-Synchronization</a></li>
-<li><a href="#mounts-and-live-migration"><span class="toc-section-number">1.5.3</span> Mounts and Live
-Migration</a></li>
+<li><a href="#latency"><span class="toc-section-number">1.5.1</span>
+Latency</a></li>
+<li><a href="#throughput"><span class="toc-section-number">1.5.2</span>
+Throughput</a></li>
+<li><a href="#pull-heuristics"><span class="toc-section-number">1.5.3</span> Pull Heuristics</a></li>
+<li><a href="#downtime"><span class="toc-section-number">1.5.4</span>
+Downtime</a></li>
 </ul></li>
 <li><a href="#discussion"><span class="toc-section-number">1.6</span>
 Discussion</a>
 <ul>
-<li><a href="#userfaults-1"><span class="toc-section-number">1.6.1</span> Userfaults</a></li>
-<li><a href="#file-based-synchronization-2"><span class="toc-section-number">1.6.2</span> File-Based
+<li><a href="#userfaults"><span class="toc-section-number">1.6.1</span>
+Userfaults</a></li>
+<li><a href="#file-based-synchronization-1"><span class="toc-section-number">1.6.2</span> File-Based
 Synchronization</a></li>
 <li><a href="#fuse"><span class="toc-section-number">1.6.3</span>
 FUSE</a></li>
 <li><a href="#nbd"><span class="toc-section-number">1.6.4</span>
 NBD</a></li>
-<li><a href="#mounts-and-live-migration-1"><span class="toc-section-number">1.6.5</span> Mounts and Live
+<li><a href="#mounts-and-live-migration"><span class="toc-section-number">1.6.5</span> Mounts and Live
 Migration</a></li>
 <li><a href="#use-cases"><span class="toc-section-number">1.6.6</span>
 Use Cases</a></li>
@@ -315,6 +336,7 @@ References</a>
 Structure</a></li>
 <li><a href="#sources"><span class="toc-section-number">1.9.2</span>
 Sources</a></li>
+<li><a href="#citations">Citations</a></li>
 </ul></li>
 </ul>
 </nav>
@@ -2224,54 +2246,66 @@ ones, speeding up parallel requests</li>
 <section id="results" data-number="0.5">
 <h2 data-number="1.5"><span class="header-section-number">1.5</span>
 Results</h2>
-<section id="userfaults" data-number="0.5.1">
+<section id="latency" data-number="0.5.1">
 <h3 data-number="1.5.1"><span class="header-section-number">1.5.1</span>
-Userfaults</h3>
+Latency</h3>
 <ul>
-<li>Benchmark: I/O-bound throughput &amp; latency for userfaultfd</li>
-<li>Benchmark: Sensitivity of <code>userfaultfd</code> to network
-latency and throughput</li>
+<li><p>First chunk latency of baseline vs. userfault vs. direct
+vs. managed</p></li>
+<li><p>Development of first chunk latency as RTT increases</p></li>
+<li><p>Development of first chunk latency as number of workers
+increases</p></li>
+<li><p>MB of pre-emptive pulls in managed API as RTT increases</p></li>
+<li><p>Development of MB of pre-emptive pulls as RTT increases</p></li>
+<li><p>Development of MB of pre-emptive pulls as number of workers
+increases</p></li>
+<li><p>Development of MB of pre-emptive pulls as chunk size
+increases</p></li>
 </ul>
 </section>
-<section id="file-based-synchronization-1" data-number="0.5.2">
+<section id="throughput" data-number="0.5.2">
 <h3 data-number="1.5.2"><span class="header-section-number">1.5.2</span>
-File-Based Synchronization</h3>
+Throughput</h3>
 <ul>
-<li>Benchmark: Performance of different Go hashing algorithms for
-detecting writes</li>
-<li>Benchmark: Hashing the chunks individually vs. hashing the entire
-file</li>
-<li>Benchmark: Throughput of this custom synchronization protocol
-vs. rsync (which hashes entire files)</li>
+<li><p>Throughput of dudirekta, gRPC and fRPC as RTT increases</p></li>
+<li><p>Throughput of dudirekta, gRPC and fRPC as number of workers
+increases</p></li>
+<li><p>Throughput of dudirekta, gRPC and fRPC as chunk size
+increases</p></li>
+<li><p>Throughput of baseline vs. userfault vs. direct vs. migration (we
+can use the <code>onChunkLocal</code> value)</p></li>
+<li><p>Development of throughput as RTT increases</p></li>
+<li><p>Development of throughput as number of workers increases
+(migration only)</p></li>
+<li><p>Development of throughput as chunk size increases</p></li>
 </ul>
 </section>
-<section id="mounts-and-live-migration" data-number="0.5.3">
+<section id="pull-heuristics" data-number="0.5.3">
 <h3 data-number="1.5.3"><span class="header-section-number">1.5.3</span>
-Mounts and Live Migration</h3>
+Pull Heuristics</h3>
 <ul>
-<li>Benchmark: Local vs. remote chunking</li>
-<li>Benchmark: Parallelizing startups and pulling n MBs as the device
-starts</li>
-<li>Benchmark: File vs. directory backend performance</li>
-<li>fRPC is 2-4x faster than gRPC, and especially in terms of throughput
-(insert graphics from https://frpc.io/performance/grpc-benchmarks)</li>
-<li>Benchmark: Effect of tuning the amount of push/pull workers in
-high-latency for these three backends on latency till first n chunks and
-throughput</li>
-<li>Benchmark: These three backends on localhost and on remote hosts,
-where they could be of use</li>
-<li>Benchmark: Latency and throughput of all benchmarks on localhost and
-in a realistic latency and throughput scenario (direct mounts can
-outperform managed mounts in tests on localhosts)</li>
-<li>Benchmark: Maximum acceptable downtime for a migration scenario with
-the Managed Mount API vs the Migration API</li>
+<li>Effect of correct (return n) vs wrong (return -n) pull heuristic on
+first chunk latency for managed API</li>
+<li>Effect of correct (return n) vs wrong (return -n) pull heuristic on
+throughput for managed API</li>
+</ul>
+</section>
+<section id="downtime" data-number="0.5.4">
+<h3 data-number="1.5.4"><span class="header-section-number">1.5.4</span>
+Downtime</h3>
+<ul>
+<li><code>Open</code> time for userfault vs. r3map (doesn’t matter if
+direct/mount/migration)</li>
+<li>Minimum downtime of direct/mount (one step - <code>Open</code> =
+downtime) vs. migration (two steps - <code>Finalize</code> =
+downtime)</li>
 </ul>
 </section>
 </section>
 <section id="discussion" data-number="0.6">
 <h2 data-number="1.6"><span class="header-section-number">1.6</span>
 Discussion</h2>
-<section id="userfaults-1" data-number="0.6.1">
+<section id="userfaults" data-number="0.6.1">
 <h3 data-number="1.6.1"><span class="header-section-number">1.6.1</span>
 Userfaults</h3>
 <ul>
@@ -2307,7 +2341,7 @@ Go, for most data, esp. larger datasets and in high-latency scenarios/in
 WAN, we need a better solution</li>
 </ul>
 </section>
-<section id="file-based-synchronization-2" data-number="0.6.2">
+<section id="file-based-synchronization-1" data-number="0.6.2">
 <h3 data-number="1.6.2"><span class="header-section-number">1.6.2</span>
 File-Based Synchronization</h3>
 <ul>
@@ -2413,7 +2447,7 @@ now</li>
 </ul></li>
 </ul>
 </section>
-<section id="mounts-and-live-migration-1" data-number="0.6.5">
+<section id="mounts-and-live-migration" data-number="0.6.5">
 <h3 data-number="1.6.5"><span class="header-section-number">1.6.5</span>
 Mounts and Live Migration</h3>
 <ul>
@@ -2884,64 +2918,248 @@ future research questions</li>
 Sources</h3>
 <ul>
 <li>FluidMem: Full, Flexible, and Fast Memory Disaggregation for the
-Cloud (userfaultfd)</li>
+Cloud (userfaultfd) <span class="citation" data-cites="caldwell2020fluidmem">[1]</span></li>
 <li>Memory Disaggregation: Advances and Open Challenges (general memory
-hierarchy etc.)</li>
+hierarchy etc.) <span class="citation" data-cites="maruf2023memory">[2]</span></li>
 <li>User Level Page Faults (sigaction &amp; signal-based page fault
-handlers)</li>
+handlers) <span class="citation" data-cites="li2020user">[3]</span></li>
 <li>Towards Web-based Delta Synchronization for Cloud Storage Services
-(rsync)</li>
+(rsync) <span class="citation" data-cites="xiao2018rsync">[4]</span></li>
 <li>To FUSE or Not to FUSE: Performance of User-Space File Systems
-(implementing a FUSE)</li>
+(implementing a FUSE) <span class="citation" data-cites="vangoor2017fuse">[5]</span></li>
 <li>The NBD protocol (NBD protocol documentation from the sources; info
-on implementing a NBD server and client)</li>
+on implementing a NBD server and client) <span class="citation" data-cites="blake2023nbd">[6]</span></li>
 <li>Remote regions: a simple abstraction for remote memory (Kernel
-filesystem for remote memory access)</li>
+filesystem for remote memory access) <span class="citation" data-cites="aguilera2018remoteregions">[7]</span></li>
 <li>Reducing Virtual Machine Live Migration Overhead via Workload
 Analysis (when to trigger the finalization process for a live VM
-migration)</li>
-<li>Cache Memories, Alan Jay Smith (Memory hierarchy)</li>
+migration) <span class="citation" data-cites="baruchi2015workload">[8]</span></li>
+<li>Cache Memories, Alan Jay Smith (Memory hierarchy) <span class="citation" data-cites="smith1982cache">[9]</span></li>
 <li>A RAM cache approach using Host Memory Buffer of the NVMe interface
-(JuHyung Hong)</li>
+(JuHyung Hong) <span class="citation" data-cites="hong2016ramcache">[10]</span></li>
 <li>The Slab Allocator: An Object-Caching Kernel Memory Allocator (Linux
-kernel memory management)</li>
-<li>Understanding the Linux Virtual Memory Manager (Mel Gorman)</li>
+kernel memory management) <span class="citation" data-cites="bonwick1994slaballoc">[11]</span></li>
+<li>Understanding the Linux Virtual Memory Manager (Mel Gorman) <span class="citation" data-cites="gorman2004linuxmem">[12]</span></li>
 <li>Operating Systems Design And Implementation: Design and
-Implementation (Tanenbaum, Woodhull) (Page faults)</li>
+Implementation (Tanenbaum, Woodhull) (Page faults) <span class="citation" data-cites="li2020user">[3]</span></li>
 <li>Operating System Concepts (Silberschatz, A., Galvin, P. B., &amp;
-Gagne, G. 2018) (memory compression)</li>
+Gagne, G. 2018) (memory compression) <span class="citation" data-cites="silberschatz2018operating">[13]</span></li>
 <li>Efficient Memory Mapped File I/O for In-Memory File Systems (Jungsik
-Choi) (<code>mmap</code>)</li>
+Choi) (<code>mmap</code>) <span class="citation" data-cites="choi2017mmap">[14]</span></li>
 <li>Advanced Programming in the UNIX Environment (W. Stevens)
-(<code>mmap</code>, signals)</li>
+(<code>mmap</code>, signals) <span class="citation" data-cites="stevens2000advanced">[15]</span></li>
 <li>Professional Linux Kernel Architecture (Wolfgang Mauerer) (kernel
-modules)</li>
-<li>Linux Kernel Development (Robert Love) (kernel modules)</li>
+modules) <span class="citation" data-cites="maurer2008professional">[16]</span></li>
+<li>Linux Kernel Development (Robert Love) (kernel modules) <span class="citation" data-cites="love2010linux">[17]</span></li>
 <li>UNIX systems programming: communication, concurrency, and threads
-(Robbins, Kay A) (signals)</li>
+(Robbins, Kay A) (signals) <span class="citation" data-cites="robbins2003unix">[18]</span></li>
 <li>Modeling the Linux page cache for accurate simulation of
-data-intensive applications (Hoang-Dung Do) (Linux page cache)</li>
-<li>Transmission Control Protocol (Postel, J) (TCP)</li>
-<li>User Datagram Protocol (Postel, J) (UDP)</li>
+data-intensive applications (Hoang-Dung Do) (Linux page cache) <span class="citation" data-cites="do2021modeling">[19]</span></li>
+<li>Transmission Control Protocol (Postel, J) (TCP) <span class="citation" data-cites="postel1981tcp">[20]</span></li>
+<li>User Datagram Protocol (Postel, J) (UDP) <span class="citation" data-cites="postel1980rfc768">[21]</span></li>
 <li>The QUIC Transport Protocol: Design and Internet-Scale Deployment
-(Langley) (QUIC)</li>
+(Langley) (QUIC) <span class="citation" data-cites="langley2017quic">[22]</span></li>
 <li>Streaming Systems - The What, Where, When, and How of Large-Scale
-Data Processing (Akidau) (Streams)</li>
-<li>UNIX Power Tools (Peek) (Pipelines, UNIX pipes)</li>
-<li>grpc.io/docs/what-is-grpc/introduction/ (gRPC)</li>
-<li>protobuf.dev (Protobuf)</li>
-<li>redis.io/docs/about/ (Redis)</li>
-<li>redis.io/docs/interact/pubsub/ (Redis)</li>
-<li>aws.amazon.com/s3/ (S3)</li>
-<li>min.io/ (Minio)</li>
+Data Processing (Akidau) (Streams) <span class="citation" data-cites="akidau2018streaming">[23]</span></li>
+<li>UNIX Power Tools (Peek) (Pipelines, UNIX pipes) <span class="citation" data-cites="peek1994unix">[24]</span></li>
+<li>grpc.io/docs/what-is-grpc/introduction/ (gRPC) <span class="citation" data-cites="google2023grpc">[25]</span>j</li>
+<li>protobuf.dev (Protobuf) <span class="citation" data-cites="google2023protobuf">[26]</span></li>
+<li>redis.io/docs/about/ (Redis) <span class="citation" data-cites="redis2023introduction">[27]</span></li>
+<li>redis.io/docs/interact/pubsub/ (Redis) <span class="citation" data-cites="redis2023pubsub">[28]</span></li>
+<li>https://docs.aws.amazon.com/AmazonS3/latest/userguide/Welcome.html
+(AWS) <span class="citation" data-cites="aws2023s3">[29]</span></li>
+<li>https://min.io/docs/minio/kubernetes/upstream/administration/concepts.html
+(Minio) <span class="citation" data-cites="minio2023coreadmin">[30]</span></li>
 <li>Cassandra - A Decentralized Structured Storage System (Lakshman)
-(Cassandra)</li>
-<li>Apache Cassandra 4.0 Performance Benchmark Whitepaper
-(ScyllaDB)</li>
+(Cassandra) <span class="citation" data-cites="lakshman2010cassandra">[31]</span></li>
+<li>Apache Cassandra 4.0 Performance Benchmark Whitepaper (ScyllaDB)
+<span class="citation" data-cites="grabowski2021scylladb">[32]</span></li>
 <li>opensource.docs.scylladb.com/stable/architecture/index.html
-(ScyllaDB)</li>
+(ScyllaDB) <span class="citation" data-cites="scylladb2023ring">[33]</span></li>
 </ul>
 </section>
+<h3 class="unnumbered" id="citations">Citations</h3>
+<div id="refs" class="references csl-bib-body" role="doc-bibliography">
+<div id="ref-caldwell2020fluidmem" class="csl-entry" role="doc-biblioentry">
+<div class="csl-left-margin">[1] </div><div class="csl-right-inline">B.
+Caldwell <em>et al.</em>, <span>“FluidMem: Full, flexible, and fast
+memory disaggregation for the cloud,”</span> in <em>2020 IEEE 40th
+international conference on distributed computing systems (ICDCS)</em>,
+2020, pp. 665–677. doi: <a href="https://doi.org/10.1109/ICDCS47774.2020.00090">10.1109/ICDCS47774.2020.00090</a>.</div>
+</div>
+<div id="ref-maruf2023memory" class="csl-entry" role="doc-biblioentry">
+<div class="csl-left-margin">[2] </div><div class="csl-right-inline">H.
+A. Maruf and M. Chowdhury, <span>“Memory disaggregation: Advances and
+open challenges.”</span> 2023.Available: <a href="https://arxiv.org/abs/2305.03943">https://arxiv.org/abs/2305.03943</a></div>
+</div>
+<div id="ref-li2020user" class="csl-entry" role="doc-biblioentry">
+<div class="csl-left-margin">[3] </div><div class="csl-right-inline">Q.
+Li, <span>“User level page faults,”</span> Master&#39;s thesis, Carnegie
+Mellon University, School of Computer Science, Pittsburgh, PA 15213,
+2020.</div>
+</div>
+<div id="ref-xiao2018rsync" class="csl-entry" role="doc-biblioentry">
+<div class="csl-left-margin">[4] </div><div class="csl-right-inline">H.
+Xiao <em>et al.</em>, <span>“Towards web-based delta synchronization for
+cloud storage services,”</span> in <em>16th USENIX conference on file
+and storage technologies (FAST 18)</em>, Feb. 2018, pp.
+155–168.Available: <a href="https://www.usenix.org/conference/fast18/presentation/xiao">https://www.usenix.org/conference/fast18/presentation/xiao</a></div>
+</div>
+<div id="ref-vangoor2017fuse" class="csl-entry" role="doc-biblioentry">
+<div class="csl-left-margin">[5] </div><div class="csl-right-inline">B.
+K. R. Vangoor, V. Tarasov, and E. Zadok, <span>“To <span>FUSE</span> or
+not to <span>FUSE</span>: Performance of <span>User-Space</span> file
+systems,”</span> in <em>15th USENIX conference on file and storage
+technologies (FAST 17)</em>, Feb. 2017, pp. 59–72.Available: <a href="https://www.usenix.org/conference/fast17/technical-sessions/presentation/vangoor">https://www.usenix.org/conference/fast17/technical-sessions/presentation/vangoor</a></div>
+</div>
+<div id="ref-blake2023nbd" class="csl-entry" role="doc-biblioentry">
+<div class="csl-left-margin">[6] </div><div class="csl-right-inline">E.
+Blake, W. Verhelst, and other NBD maintainers, <span>“The NBD
+protocol.”</span> <a href="https://github.com/NetworkBlockDevice/nbd/blob/master/doc/proto.md" class="uri">https://github.com/NetworkBlockDevice/nbd/blob/master/doc/proto.md</a>,
+Apr. 2023.</div>
+</div>
+<div id="ref-aguilera2018remoteregions" class="csl-entry" role="doc-biblioentry">
+<div class="csl-left-margin">[7] </div><div class="csl-right-inline">M.
+K. Aguilera <em>et al.</em>, <span>“Remote regions: A simple abstraction
+for remote memory,”</span> in <em>Proceedings of the 2018 USENIX
+conference on usenix annual technical conference</em>, 2018, pp.
+775–787.</div>
+</div>
+<div id="ref-baruchi2015workload" class="csl-entry" role="doc-biblioentry">
+<div class="csl-left-margin">[8] </div><div class="csl-right-inline">A.
+Baruchi, E. Toshimi Midorikawa, and L. Matsumoto Sato, <span>“Reducing
+virtual machine live migration overhead via workload analysis,”</span>
+<em>IEEE Latin America Transactions</em>, vol. 13, no. 4, pp. 1178–1186,
+2015, doi: <a href="https://doi.org/10.1109/TLA.2015.7106373">10.1109/TLA.2015.7106373</a>.</div>
+</div>
+<div id="ref-smith1982cache" class="csl-entry" role="doc-biblioentry">
+<div class="csl-left-margin">[9] </div><div class="csl-right-inline">A.
+J. Smith, <span>“Cache memories,”</span> <em>ACM Comput. Surv.</em>,
+vol. 14, no. 3, pp. 473–530, Sep. 1982, doi: <a href="https://doi.org/10.1145/356887.356892">10.1145/356887.356892</a>.</div>
+</div>
+<div id="ref-hong2016ramcache" class="csl-entry" role="doc-biblioentry">
+<div class="csl-left-margin">[10] </div><div class="csl-right-inline">J.
+Hong, S. Han, and E.-Y. Chung, <span>“A RAM cache approach using host
+memory buffer of the NVMe interface,”</span> in <em>2016 international
+SoC design conference (ISOCC)</em>, 2016, pp. 109–110. doi: <a href="https://doi.org/10.1109/ISOCC.2016.7799757">10.1109/ISOCC.2016.7799757</a>.</div>
+</div>
+<div id="ref-bonwick1994slaballoc" class="csl-entry" role="doc-biblioentry">
+<div class="csl-left-margin">[11] </div><div class="csl-right-inline">J.
+Bonwick, <span>“The slab allocator: An <span>Object-Caching</span>
+kernel,”</span> Jun. 1994.Available: <a href="https://www.usenix.org/conference/usenix-summer-1994-technical-conference/slab-allocator-object-caching-kernel">https://www.usenix.org/conference/usenix-summer-1994-technical-conference/slab-allocator-object-caching-kernel</a></div>
+</div>
+<div id="ref-gorman2004linuxmem" class="csl-entry" role="doc-biblioentry">
+<div class="csl-left-margin">[12] </div><div class="csl-right-inline">M.
+Gorman, <em>Understanding the linux virtual memory manager</em>. Upper
+Saddle River, New Jersey 07458: Pearson Education, Inc. Publishing as
+Prentice Hall Professional Technical Reference, 2004.</div>
+</div>
+<div id="ref-silberschatz2018operating" class="csl-entry" role="doc-biblioentry">
+<div class="csl-left-margin">[13] </div><div class="csl-right-inline">A.
+Silberschatz, P. B. Galvin, and G. Gagne, <em>Operating system
+concepts</em>, 10th ed. Hoboken, NJ: Wiley, 2018.Available: <a href="https://lccn.loc.gov/2017043464">https://lccn.loc.gov/2017043464</a></div>
+</div>
+<div id="ref-choi2017mmap" class="csl-entry" role="doc-biblioentry">
+<div class="csl-left-margin">[14] </div><div class="csl-right-inline">J.
+Choi, J. Kim, and H. Han, <span>“Efficient memory mapped file
+<span>I/O</span> for <span>In-Memory</span> file systems,”</span> Jul.
+2017.Available: <a href="https://www.usenix.org/conference/hotstorage17/program/presentation/choi">https://www.usenix.org/conference/hotstorage17/program/presentation/choi</a></div>
+</div>
+<div id="ref-stevens2000advanced" class="csl-entry" role="doc-biblioentry">
+<div class="csl-left-margin">[15] </div><div class="csl-right-inline">W.
+R. Stevens, <em>Advanced programming in the UNIX environment</em>.
+Delhi: Addison Wesley Logman (Singapore) Pte Ltd., Indian Branch,
+2000.</div>
+</div>
+<div id="ref-maurer2008professional" class="csl-entry" role="doc-biblioentry">
+<div class="csl-left-margin">[16] </div><div class="csl-right-inline">W.
+Mauerer, <em>Professional linux kernel architecture</em>. Indianapolis,
+IN: Wiley Publishing, Inc., 2008.</div>
+</div>
+<div id="ref-love2010linux" class="csl-entry" role="doc-biblioentry">
+<div class="csl-left-margin">[17] </div><div class="csl-right-inline">R.
+Love, <em>Linux kernel development</em>, 3rd ed. Pearson Education,
+Inc., 2010.</div>
+</div>
+<div id="ref-robbins2003unix" class="csl-entry" role="doc-biblioentry">
+<div class="csl-left-margin">[18] </div><div class="csl-right-inline">K.
+A. Robbins and S. Robbins, <em>Unix™ systems programming: Communication,
+concurrency, and threads</em>. Prentice Hall PTR, 2003.</div>
+</div>
+<div id="ref-do2021modeling" class="csl-entry" role="doc-biblioentry">
+<div class="csl-left-margin">[19] </div><div class="csl-right-inline">H.-D. Do, V. Hayot-Sasson, R. F. da Silva, C.
+Steele, H. Casanova, and T. Glatard, <span>“Modeling the linux page
+cache for accurate simulation of data-intensive applications.”</span>
+2021.Available: <a href="https://arxiv.org/abs/2101.01335">https://arxiv.org/abs/2101.01335</a></div>
+</div>
+<div id="ref-postel1981tcp" class="csl-entry" role="doc-biblioentry">
+<div class="csl-left-margin">[20] </div><div class="csl-right-inline"><span>“<span>Transmission Control
+Protocol</span>.”</span> RFC 793; J. Postel, Sep. 1981. doi: <a href="https://doi.org/10.17487/RFC0793">10.17487/RFC0793</a>.</div>
+</div>
+<div id="ref-postel1980rfc768" class="csl-entry" role="doc-biblioentry">
+<div class="csl-left-margin">[21] </div><div class="csl-right-inline"><span>“<span>User Datagram
+Protocol</span>.”</span> RFC 768; J. Postel, Aug. 1980. doi: <a href="https://doi.org/10.17487/RFC0768">10.17487/RFC0768</a>.</div>
+</div>
+<div id="ref-langley2017quic" class="csl-entry" role="doc-biblioentry">
+<div class="csl-left-margin">[22] </div><div class="csl-right-inline">A.
+Langley <em>et al.</em>, <span>“The QUIC transport protocol: Design and
+internet-scale deployment,”</span> in <em>Proceedings of the conference
+of the ACM special interest group on data communication</em>, 2017, pp.
+183–196. doi: <a href="https://doi.org/10.1145/3098822.3098842">10.1145/3098822.3098842</a>.</div>
+</div>
+<div id="ref-akidau2018streaming" class="csl-entry" role="doc-biblioentry">
+<div class="csl-left-margin">[23] </div><div class="csl-right-inline">T.
+Akidau, S. Chernyak, and R. Lax, <em>Streaming systems</em>. Sebastopol,
+CA: O’Reilly Media, Inc., 2018.</div>
+</div>
+<div id="ref-peek1994unix" class="csl-entry" role="doc-biblioentry">
+<div class="csl-left-margin">[24] </div><div class="csl-right-inline">J.
+D. Peek, <em>UNIX power tools</em>. Sebastopol, CA; New York: O’Reilly
+Associates; Bantam Books, 1994.</div>
+</div>
+<div id="ref-google2023grpc" class="csl-entry" role="doc-biblioentry">
+<div class="csl-left-margin">[25] </div><div class="csl-right-inline">gRPC Authors, <span>“Introduction to
+gRPC.”</span> 2023.Available: <a href="https://grpc.io/docs/what-is-grpc/introduction/">https://grpc.io/docs/what-is-grpc/introduction/</a></div>
+</div>
+<div id="ref-google2023protobuf" class="csl-entry" role="doc-biblioentry">
+<div class="csl-left-margin">[26] </div><div class="csl-right-inline">Google LLC, <span>“Protocol buffers.”</span> <a href="https://protobuf.dev/" class="uri">https://protobuf.dev/</a>,
+2023.</div>
+</div>
+<div id="ref-redis2023introduction" class="csl-entry" role="doc-biblioentry">
+<div class="csl-left-margin">[27] </div><div class="csl-right-inline">Redis Ltd, <span>“Introduction to
+redis.”</span> <a href="https://redis.io/docs/about/" class="uri">https://redis.io/docs/about/</a>, 2023.</div>
+</div>
+<div id="ref-redis2023pubsub" class="csl-entry" role="doc-biblioentry">
+<div class="csl-left-margin">[28] </div><div class="csl-right-inline">Redis Ltd, <span>“Redis pub/sub.”</span> <a href="https://redis.io/docs/interact/pubsub/" class="uri">https://redis.io/docs/interact/pubsub/</a>, 2023.</div>
+</div>
+<div id="ref-aws2023s3" class="csl-entry" role="doc-biblioentry">
+<div class="csl-left-margin">[29] </div><div class="csl-right-inline">Amazon Web Services, Inc, <span>“What is amazon
+S3?”</span> <a href="https://docs.aws.amazon.com/AmazonS3/latest/userguide/Welcome.html" class="uri">https://docs.aws.amazon.com/AmazonS3/latest/userguide/Welcome.html</a>,
+2023.</div>
+</div>
+<div id="ref-minio2023coreadmin" class="csl-entry" role="doc-biblioentry">
+<div class="csl-left-margin">[30] </div><div class="csl-right-inline">MinIO, Inc, <span>“Core administration
+concepts.”</span> <a href="https://min.io/docs/minio/kubernetes/upstream/administration/concepts.html" class="uri">https://min.io/docs/minio/kubernetes/upstream/administration/concepts.html</a>,
+2023.</div>
+</div>
+<div id="ref-lakshman2010cassandra" class="csl-entry" role="doc-biblioentry">
+<div class="csl-left-margin">[31] </div><div class="csl-right-inline">A.
+Lakshman and P. Malik, <span>“Cassandra: A decentralized structured
+storage system,”</span> <em>SIGOPS Oper. Syst. Rev.</em>, vol. 44, no.
+2, pp. 35–40, Apr. 2010, doi: <a href="https://doi.org/10.1145/1773912.1773922">10.1145/1773912.1773922</a>.</div>
+</div>
+<div id="ref-grabowski2021scylladb" class="csl-entry" role="doc-biblioentry">
+<div class="csl-left-margin">[32] </div><div class="csl-right-inline">P.
+Grabowski, J. Stasiewicz, and K. Baryla, <span>“Apache cassandra 4.0
+performance benchmark: Comparing cassandra 4.0, cassandra 3.11 and
+scylla open source 4.4,”</span> ScyllaDB Inc, 2021.Available: <a href="https://www.scylladb.com/wp-content/uploads/wp-apache-cassandra-4-performance-benchmark-3.pdf">https://www.scylladb.com/wp-content/uploads/wp-apache-cassandra-4-performance-benchmark-3.pdf</a></div>
+</div>
+<div id="ref-scylladb2023ring" class="csl-entry" role="doc-biblioentry">
+<div class="csl-left-margin">[33] </div><div class="csl-right-inline">Inc. ScyllaDB, <span>“ScyllaDB ring
+architecture - overview.”</span> <a href="https://opensource.docs.scylladb.com/stable/architecture/ringarchitecture/index.html" class="uri">https://opensource.docs.scylladb.com/stable/architecture/ringarchitecture/index.html</a>,
+2023.</div>
+</div>
+</div>
 </section>
 </body>
 </html>
