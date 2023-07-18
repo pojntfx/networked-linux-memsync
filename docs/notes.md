@@ -847,27 +847,37 @@ csl: static/ieee.csl
 
 ## Results
 
-### Userfaults
+### Latency
 
-- Benchmark: I/O-bound throughput & latency for userfaultfd
-- Benchmark: Sensitivity of `userfaultfd` to network latency and throughput
+- First chunk latency of baseline vs. userfault vs. direct vs. managed
+- Development of first chunk latency as RTT increases
+- Development of first chunk latency as number of workers increases
 
-### File-Based Synchronization
+- MB of pre-emptive pulls in managed API as RTT increases
+- Development of MB of pre-emptive pulls as RTT increases
+- Development of MB of pre-emptive pulls as number of workers increases
+- Development of MB of pre-emptive pulls as chunk size increases
 
-- Benchmark: Performance of different Go hashing algorithms for detecting writes
-- Benchmark: Hashing the chunks individually vs. hashing the entire file
-- Benchmark: Throughput of this custom synchronization protocol vs. rsync (which hashes entire files)
+### Throughput
 
-### Mounts and Live Migration
+- Throughput of dudirekta, gRPC and fRPC as RTT increases
+- Throughput of dudirekta, gRPC and fRPC as number of workers increases
+- Throughput of dudirekta, gRPC and fRPC as chunk size increases
 
-- Benchmark: Local vs. remote chunking
-- Benchmark: Parallelizing startups and pulling n MBs as the device starts
-- Benchmark: File vs. directory backend performance
-- fRPC is 2-4x faster than gRPC, and especially in terms of throughput (insert graphics from https://frpc.io/performance/grpc-benchmarks)
-- Benchmark: Effect of tuning the amount of push/pull workers in high-latency for these three backends on latency till first n chunks and throughput
-- Benchmark: These three backends on localhost and on remote hosts, where they could be of use
-- Benchmark: Latency and throughput of all benchmarks on localhost and in a realistic latency and throughput scenario (direct mounts can outperform managed mounts in tests on localhosts)
-- Benchmark: Maximum acceptable downtime for a migration scenario with the Managed Mount API vs the Migration API
+- Throughput of baseline vs. userfault vs. direct vs. migration (we can use the `onChunkLocal` value)
+- Development of throughput as RTT increases
+- Development of throughput as number of workers increases (migration only)
+- Development of throughput as chunk size increases
+
+### Pull Heuristics
+
+- Effect of correct (return n) vs wrong (return -n) pull heuristic on first chunk latency for managed API
+- Effect of correct (return n) vs wrong (return -n) pull heuristic on throughput for managed API
+
+### Downtime
+
+- `Open` time for userfault vs. r3map (doesn't matter if direct/mount/migration)
+- Minimum downtime of direct/mount (one step - `Open` = downtime) vs. migration (two steps - `Finalize` = downtime)
 
 ## Discussion
 
