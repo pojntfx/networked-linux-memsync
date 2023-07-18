@@ -1163,38 +1163,39 @@ csl: static/ieee.csl
 
 ### Sources
 
-- FluidMem: Full, Flexible, and Fast Memory Disaggregation for the Cloud (userfaultfd)
-- Memory Disaggregation: Advances and Open Challenges (general memory hierarchy etc.)
-- User Level Page Faults (sigaction & signal-based page fault handlers)
-- Towards Web-based Delta Synchronization for Cloud Storage Services (rsync)
-- To FUSE or Not to FUSE: Performance of User-Space File Systems (implementing a FUSE)
-- The NBD protocol (NBD protocol documentation from the sources; info on implementing a NBD server and client)
-- Remote regions: a simple abstraction for remote memory (Kernel filesystem for remote memory access)
-- Reducing Virtual Machine Live Migration Overhead via Workload Analysis (when to trigger the finalization process for a live VM migration)
-- Cache Memories, Alan Jay Smith (Memory hierarchy)
-- A RAM cache approach using Host Memory Buffer of the NVMe interface (JuHyung Hong)
-- The Slab Allocator: An Object-Caching Kernel Memory Allocator (Linux kernel memory management)
-- Understanding the Linux Virtual Memory Manager (Mel Gorman)
-- Operating Systems Design And Implementation: Design and Implementation (Tanenbaum, Woodhull) (Page faults)
-- Operating System Concepts (Silberschatz, A., Galvin, P. B., & Gagne, G. 2018) (memory compression)
-- Efficient Memory Mapped File I/O for In-Memory File Systems (Jungsik Choi) (`mmap`)
-- Advanced Programming in the UNIX Environment (W. Stevens) (`mmap`, signals)
-- Professional Linux Kernel Architecture (Wolfgang Mauerer) (kernel modules)
-- Linux Kernel Development (Robert Love) (kernel modules)
-- UNIX systems programming: communication, concurrency, and threads (Robbins, Kay A) (signals)
-- Modeling the Linux page cache for accurate
-  simulation of data-intensive applications (Hoang-Dung Do) (Linux page cache)
-- Transmission Control Protocol (Postel, J) (TCP)
-- User Datagram Protocol (Postel, J) (UDP)
-- The QUIC Transport Protocol: Design and Internet-Scale Deployment (Langley) (QUIC)
-- Streaming Systems - The What, Where, When, and How of Large-Scale Data Processing (Akidau) (Streams)
-- UNIX Power Tools (Peek) (Pipelines, UNIX pipes)
-- grpc.io/docs/what-is-grpc/introduction/ (gRPC)
-- protobuf.dev (Protobuf)
-- redis.io/docs/about/ (Redis)
-- redis.io/docs/interact/pubsub/ (Redis)
-- aws.amazon.com/s3/ (S3)
-- min.io/ (Minio)
-- Cassandra - A Decentralized Structured Storage System (Lakshman) (Cassandra)
-- Apache Cassandra 4.0 Performance Benchmark Whitepaper (ScyllaDB)
-- opensource.docs.scylladb.com/stable/architecture/index.html (ScyllaDB)
+- FluidMem: Full, Flexible, and Fast Memory Disaggregation for the Cloud (userfaultfd) [@caldwell2020fluidmem]
+- Memory Disaggregation: Advances and Open Challenges (general memory hierarchy etc.) [@maruf2023memory]
+- User Level Page Faults (sigaction & signal-based page fault handlers) [@li2020user]
+- Towards Web-based Delta Synchronization for Cloud Storage Services (rsync) [@xiao2018rsync]
+- To FUSE or Not to FUSE: Performance of User-Space File Systems (implementing a FUSE) [@vangoor2017fuse]
+- The NBD protocol (NBD protocol documentation from the sources; info on implementing a NBD server and client) [@blake2023nbd]
+- Remote regions: a simple abstraction for remote memory (Kernel filesystem for remote memory access) [@aguilera2018remoteregions]
+- Reducing Virtual Machine Live Migration Overhead via Workload Analysis (when to trigger the finalization process for a live VM migration) [@baruchi2015workload]
+- Cache Memories, Alan Jay Smith (Memory hierarchy) [@smith1982cache]
+- A RAM cache approach using Host Memory Buffer of the NVMe interface (JuHyung Hong) [@hong2016ramcache]
+- The Slab Allocator: An Object-Caching Kernel Memory Allocator (Linux kernel memory management) [@bonwick1994slaballoc]
+- Understanding the Linux Virtual Memory Manager (Mel Gorman) [@gorman2004linuxmem]
+- Operating Systems Design And Implementation: Design and Implementation (Tanenbaum, Woodhull) (Page faults) [@li2020user]
+- Operating System Concepts (Silberschatz, A., Galvin, P. B., & Gagne, G. 2018) (memory compression) [@silberschatz2018operating]
+- Efficient Memory Mapped File I/O for In-Memory File Systems (Jungsik Choi) (`mmap`) [@choi2017mmap]
+- Advanced Programming in the UNIX Environment (W. Stevens) (`mmap`, signals) [@stevens2000advanced]
+- Professional Linux Kernel Architecture (Wolfgang Mauerer) (kernel modules) [@maurer2008professional]
+- Linux Kernel Development (Robert Love) (kernel modules) [@love2010linux]
+- UNIX systems programming: communication, concurrency, and threads (Robbins, Kay A) (signals) [@robbins2003unix]
+- Modeling the Linux page cache for accurate simulation of data-intensive applications (Hoang-Dung Do) (Linux page cache) [@do2021modeling]
+- Transmission Control Protocol (Postel, J) (TCP) [@postel1981tcp]
+- User Datagram Protocol (Postel, J) (UDP) [@postel1980rfc768]
+- The QUIC Transport Protocol: Design and Internet-Scale Deployment (Langley) (QUIC) [@langley2017quic]
+- Streaming Systems - The What, Where, When, and How of Large-Scale Data Processing (Akidau) (Streams) [@akidau2018streaming]
+- UNIX Power Tools (Peek) (Pipelines, UNIX pipes) [@peek1994unix]
+- grpc.io/docs/what-is-grpc/introduction/ (gRPC) [@google2023grpc]j
+- protobuf.dev (Protobuf) [@google2023protobuf]
+- redis.io/docs/about/ (Redis) [@redis2023introduction]
+- redis.io/docs/interact/pubsub/ (Redis) [@redis2023pubsub]
+- https://docs.aws.amazon.com/AmazonS3/latest/userguide/Welcome.html (AWS) [@aws2023s3]
+- https://min.io/docs/minio/kubernetes/upstream/administration/concepts.html (Minio) [@minio2023coreadmin]
+- Cassandra - A Decentralized Structured Storage System (Lakshman) (Cassandra) [@lakshman2010cassandra]
+- Apache Cassandra 4.0 Performance Benchmark Whitepaper (ScyllaDB) [@grabowski2021scylladb]
+- opensource.docs.scylladb.com/stable/architecture/index.html (ScyllaDB) [@scylladb2023ring]
+
+### Citations

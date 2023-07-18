@@ -1,0 +1,367 @@
+@inproceedings{caldwell2020fluidmem,
+  author    = {Caldwell, Blake and Goodarzy, Sepideh and Ha, Sangtae and Han, Richard and Keller, Eric and Rozner, Eric and Im, Youngbin},
+  booktitle = {2020 IEEE 40th International Conference on Distributed Computing Systems (ICDCS)},
+  title     = {FluidMem: Full, Flexible, and Fast Memory Disaggregation for the Cloud},
+  year      = {2020},
+  volume    = {},
+  number    = {},
+  pages     = {665-677},
+  doi       = {10.1109/ICDCS47774.2020.00090}
+}
+
+@inproceedings{xiao2018rsync,
+  author    = {He Xiao and Zhenhua Li and Ennan Zhai and Tianyin Xu and Yang Li and Yunhao Liu and Quanlu Zhang and Yao Liu},
+  title     = {Towards Web-based Delta Synchronization for Cloud Storage Services},
+  booktitle = {16th USENIX Conference on File and Storage Technologies (FAST 18)},
+  year      = {2018},
+  isbn      = {978-1-931971-42-3},
+  address   = {Oakland, CA},
+  pages     = {155-168},
+  url       = {https://www.usenix.org/conference/fast18/presentation/xiao},
+  publisher = {USENIX Association},
+  month     = feb
+}
+
+@inproceedings{vangoor2017fuse,
+  author    = {Bharath Kumar Reddy Vangoor and Vasily Tarasov and Erez Zadok},
+  title     = {To {FUSE} or Not to {FUSE}: Performance of {User-Space} File Systems},
+  booktitle = {15th USENIX Conference on File and Storage Technologies (FAST 17)},
+  year      = {2017},
+  isbn      = {978-1-931971-36-2},
+  address   = {Santa Clara, CA},
+  pages     = {59--72},
+  url       = {https://www.usenix.org/conference/fast17/technical-sessions/presentation/vangoor},
+  publisher = {USENIX Association},
+  month     = feb
+}
+
+@mastersthesis{li2020user,
+  title   = {User Level Page Faults},
+  author  = {Li, Qingyang},
+  school  = {Carnegie Mellon University, School of Computer Science},
+  address = {Pittsburgh, PA 15213},
+  type    = {Master's thesis},
+  year    = {2020},
+  month   = {12},
+  note    = {Thesis Committee: Seth Copen Goldstein, Chair; David A. Eckhardt}
+}
+
+@misc{maruf2023memory,
+  title         = {Memory Disaggregation: Advances and Open Challenges},
+  author        = {Hasan Al Maruf and Mosharaf Chowdhury},
+  year          = {2023},
+  eprint        = {2305.03943},
+  archiveprefix = {arXiv},
+  primaryclass  = {cs.DC}
+}
+
+@misc{blake2023nbd,
+  title        = {The NBD Protocol},
+  author       = {Blake, Eric and Verhelst, Wouter and other NBD maintainers},
+  year         = {2023},
+  month        = {4},
+  howpublished = {\url{https://github.com/NetworkBlockDevice/nbd/blob/master/doc/proto.md}},
+  note         = {Accessed: Jul 18, 2023}
+}
+
+@inproceedings{aguilera2018remoteregions,
+  author    = {Aguilera, Marcos K. and Amit, Nadav and Calciu, Irina and Deguillard, Xavier and Gandhi, Jayneel and Novakovic, Stanko and Ramanathan, Arun and Subrahmanyam, Pratap and Suresh, Lalith and Tati, Kiran and Venkatasubramanian, Rajesh and Wei, Michael},
+  title     = {Remote Regions: A Simple Abstraction for Remote Memory},
+  year      = {2018},
+  isbn      = {9781931971447},
+  publisher = {USENIX Association},
+  address   = {USA},
+  abstract  = {We propose an intuitive abstraction for a process to export its memory to remote hosts, and to access the memory exported by others. This abstraction provides a simpler interface to RDMA and other remote memory technologies compared to the existing verbs interface. The key idea is that a process can export parts of its memory as files, called remote regions, that can be accessed through the usual file system operations (read, write, memory map, etc). We built this abstraction in the Linux kernel, and evaluated it. We show that remote regions are easy to use and perform close to RDMA. We demonstrate it via micro-benchmarks and by adapting two in-memory single-host applications to use remote memory: R and Metis. With R, using remote regions requires no changes to the code and allows R to run with remote memory that exceeds the physical memory of a host. With Metis, the modifications amount to ≈100 lines of code and they allow Metis to scale its performance across 8 hosts.},
+  booktitle = {Proceedings of the 2018 USENIX Conference on Usenix Annual Technical Conference},
+  pages     = {775–787},
+  numpages  = {13},
+  location  = {Boston, MA, USA},
+  series    = {USENIX ATC '18}
+}
+
+@article{baruchi2015workload,
+  author  = {Baruchi, Artur and Toshimi Midorikawa, Edson and Matsumoto Sato, Liria},
+  journal = {IEEE Latin America Transactions},
+  title   = {Reducing Virtual Machine Live Migration Overhead via Workload Analysis},
+  year    = {2015},
+  volume  = {13},
+  number  = {4},
+  pages   = {1178-1186},
+  doi     = {10.1109/TLA.2015.7106373}
+}
+
+@article{smith1982cache,
+  author     = {Smith, Alan Jay},
+  title      = {Cache Memories},
+  year       = {1982},
+  issue_date = {Sept. 1982},
+  publisher  = {Association for Computing Machinery},
+  address    = {New York, NY, USA},
+  volume     = {14},
+  number     = {3},
+  issn       = {0360-0300},
+  url        = {https://doi.org/10.1145/356887.356892},
+  doi        = {10.1145/356887.356892},
+  journal    = {ACM Comput. Surv.},
+  month      = {sep},
+  pages      = {473–530},
+  numpages   = {58}
+}
+
+@inproceedings{hong2016ramcache,
+  author    = {Hong, JuHyung and Han, SangWoo and Chung, Eui-Young},
+  booktitle = {2016 International SoC Design Conference (ISOCC)},
+  title     = {A RAM cache approach using host memory buffer of the NVMe interface},
+  year      = {2016},
+  volume    = {},
+  number    = {},
+  pages     = {109-110},
+  doi       = {10.1109/ISOCC.2016.7799757}
+}
+
+@inproceedings{bonwick1994slaballoc,
+  author    = {Jeff Bonwick},
+  title     = {The Slab Allocator: An {Object-Caching} Kernel},
+  booktitle = {USENIX Summer 1994 Technical Conference (USENIX Summer 1994 Technical Conference)},
+  year      = {1994},
+  address   = {Boston, MA},
+  url       = {https://www.usenix.org/conference/usenix-summer-1994-technical-conference/slab-allocator-object-caching-kernel},
+  publisher = {USENIX Association},
+  month     = jun
+}
+
+@book{gorman2004linuxmem,
+  title     = {Understanding the Linux Virtual Memory Manager},
+  author    = {Gorman, Mel},
+  series    = {Bruce Perens' Open source series},
+  year      = {2004},
+  publisher = {Pearson Education, Inc. Publishing as Prentice Hall Professional Technical Reference},
+  address   = {Upper Saddle River, New Jersey 07458},
+  isbn      = {0-13-145348-3}
+}
+
+@book{tanenbaum2006operating,
+  title     = {Operating Systems: Design and Implementation},
+  author    = {Tanenbaum, Andrew S. and Woodhull, Albert S.},
+  edition   = {3},
+  year      = {2006},
+  publisher = {Pearson Education, Inc. Pearson Prentice Hall},
+  address   = {Upper Saddle River, NJ 07458},
+  isbn      = {0-13-142938-8}
+}
+
+@book{silberschatz2018operating,
+  title     = {Operating System Concepts},
+  author    = {Silberschatz, Abraham and Galvin, Peter B. and Gagne, Greg},
+  edition   = {10},
+  year      = {2018},
+  publisher = {Wiley},
+  address   = {Hoboken, NJ},
+  isbn      = {9781119320913},
+  url       = {https://lccn.loc.gov/2017043464}
+}
+
+@inproceedings{choi2017mmap,
+  author    = {Jungsik Choi and Jiwon Kim and Hwansoo Han},
+  title     = {Efficient Memory Mapped File {I/O} for {In-Memory} File Systems},
+  booktitle = {9th USENIX Workshop on Hot Topics in Storage and File Systems (HotStorage 17)},
+  year      = {2017},
+  address   = {Santa Clara, CA},
+  url       = {https://www.usenix.org/conference/hotstorage17/program/presentation/choi},
+  publisher = {USENIX Association},
+  month     = jul
+}
+
+@book{stevens2000advanced,
+  title     = {Advanced Programming in the UNIX Environment},
+  author    = {Stevens, W. Richard},
+  year      = {2000},
+  publisher = {Addison Wesley Logman (Singapore) Pte Ltd., Indian Branch},
+  address   = {Delhi},
+  isbn      = {978-81-7808-096-3},
+  note      = {Originally published: Reading, Mass. : Addison-Wesley Pub. Co., 1992}
+}
+
+@book{maurer2008professional,
+  title     = {Professional Linux Kernel Architecture},
+  author    = {Mauerer, Wolfgang},
+  year      = {2008},
+  publisher = {Wiley Publishing, Inc.},
+  address   = {Indianapolis, IN},
+  isbn      = {978-0-470-34343-2}
+}
+
+
+@book{love2010linux,
+  title     = {Linux Kernel Development},
+  author    = {Love, Robert},
+  edition   = {3},
+  year      = {2010},
+  publisher = {Pearson Education, Inc.},
+  isbn      = {978-0-672-32946-3}
+}
+
+@book{robbins2003unix,
+  title     = {Unix™ Systems Programming: Communication, Concurrency, and Threads},
+  author    = {Robbins, Kay A. and Robbins, Steven},
+  year      = {2003},
+  publisher = {Prentice Hall PTR},
+  isbn      = {0-13-042411-0}
+}
+
+@misc{do2021modeling,
+  title         = {Modeling the Linux page cache for accurate simulation of data-intensive applications},
+  author        = {Hoang-Dung Do and Valerie Hayot-Sasson and Rafael Ferreira da Silva and Christopher Steele and Henri Casanova and Tristan Glatard},
+  year          = {2021},
+  eprint        = {2101.01335},
+  archiveprefix = {arXiv},
+  primaryclass  = {cs.DC}
+}
+
+@misc{postel1981tcp,
+  series       = {Request for Comments},
+  number       = 793,
+  howpublished = {RFC 793},
+  publisher    = {J. Postel},
+  doi          = {10.17487/RFC0793},
+  url          = {https://www.rfc-editor.org/info/rfc793},
+  author       = {},
+  title        = {{Transmission Control Protocol}},
+  pagetotal    = 91,
+  year         = 1981,
+  month        = sep,
+  abstract     = {}
+}
+
+@misc{postel1980rfc768,
+  series       = {Request for Comments},
+  number       = 768,
+  howpublished = {RFC 768},
+  publisher    = {J. Postel},
+  doi          = {10.17487/RFC0768},
+  url          = {https://www.rfc-editor.org/info/rfc768},
+  author       = {},
+  title        = {{User Datagram Protocol}},
+  pagetotal    = 3,
+  year         = 1980,
+  month        = aug,
+  abstract     = {}
+}
+
+@inproceedings{langley2017quic,
+  author    = {Langley, Adam and Riddoch, Alistair and Wilk, Alyssa and Vicente, Antonio and Krasic, Charles and Zhang, Dan and Yang, Fan and Kouranov, Fedor and Swett, Ian and Iyengar, Janardhan and Bailey, Jeff and Dorfman, Jeremy and Roskind, Jim and Kulik, Joanna and Westin, Patrik and Tenneti, Raman and Shade, Robbie and Hamilton, Ryan and Vasiliev, Victor and Chang, Wan-Teh and Shi, Zhongyi},
+  title     = {The QUIC Transport Protocol: Design and Internet-Scale Deployment},
+  year      = {2017},
+  isbn      = {9781450346535},
+  publisher = {Association for Computing Machinery},
+  address   = {New York, NY, USA},
+  url       = {https://doi.org/10.1145/3098822.3098842},
+  doi       = {10.1145/3098822.3098842},
+  abstract  = {We present our experience with QUIC, an encrypted, multiplexed, and low-latency transport protocol designed from the ground up to improve transport performance for HTTPS traffic and to enable rapid deployment and continued evolution of transport mechanisms. QUIC has been globally deployed at Google on thousands of servers and is used to serve traffic to a range of clients including a widely-used web browser (Chrome) and a popular mobile video streaming app (YouTube). We estimate that 7\% of Internet traffic is now QUIC. We describe our motivations for developing a new transport, the principles that guided our design, the Internet-scale process that we used to perform iterative experiments on QUIC, performance improvements seen by our various services, and our experience deploying QUIC globally. We also share lessons about transport design and the Internet ecosystem that we learned from our deployment.},
+  booktitle = {Proceedings of the Conference of the ACM Special Interest Group on Data Communication},
+  pages     = {183–196},
+  numpages  = {14},
+  location  = {Los Angeles, CA, USA},
+  series    = {SIGCOMM '17}
+}
+
+@book{akidau2018streaming,
+  title     = {Streaming Systems},
+  author    = {Akidau, Tyler and Chernyak, Slava and Lax, Reuven},
+  year      = {2018},
+  publisher = {O'Reilly Media, Inc.},
+  address   = {Sebastopol, CA}
+}
+
+@book{peek1994unix,
+  title     = {UNIX Power Tools},
+  author    = {Peek, Jerry D},
+  year      = {1994},
+  publisher = {O'Reilly Associates and Bantam Books},
+  address   = {Sebastopol, CA and New York},
+  isbn      = {978-1-56592-260-0}
+}
+
+@misc{google2023grpc,
+  title  = {Introduction to gRPC},
+  author = {{gRPC Authors}},
+  year   = {2023},
+  url    = {https://grpc.io/docs/what-is-grpc/introduction/},
+  note   = {Last modified February 16, 2023, accessed July 18, 2023}
+}
+
+@misc{google2023protobuf,
+  title        = {Protocol Buffers},
+  howpublished = {\url{https://protobuf.dev/}},
+  year         = {2023},
+  note         = {Last changed on June 27, 2023, accessed July 18, 2023},
+  author       = {{Google LLC}}
+}
+
+@misc{redis2023introduction,
+  title        = {Introduction to Redis},
+  howpublished = {\url{https://redis.io/docs/about/}},
+  year         = {2023},
+  note         = {Last change on July 5, 2023, accessed July 18, 2023},
+  author       = {{Redis Ltd}}
+}
+
+@misc{redis2023pubsub,
+  title        = {Redis Pub/Sub},
+  howpublished = {\url{https://redis.io/docs/interact/pubsub/}},
+  year         = {2023},
+  note         = {Last change on July 6, 2023, accessed July 18, 2023},
+  author       = {{Redis Ltd}}
+}
+
+@misc{aws2023s3,
+  title        = {What is Amazon S3?},
+  howpublished = {\url{https://docs.aws.amazon.com/AmazonS3/latest/userguide/Welcome.html}},
+  year         = {2023},
+  note         = {Accessed July 18, 2023},
+  author       = {{Amazon Web Services, Inc}}
+}
+
+
+@misc{minio2023coreadmin,
+  title        = {Core Administration Concepts},
+  howpublished = {\url{https://min.io/docs/minio/kubernetes/upstream/administration/concepts.html}},
+  year         = {2023},
+  note         = {Accessed July 18, 2023},
+  author       = {{MinIO, Inc}}
+}
+
+@article{lakshman2010cassandra,
+  author     = {Lakshman, Avinash and Malik, Prashant},
+  title      = {Cassandra: A Decentralized Structured Storage System},
+  year       = {2010},
+  issue_date = {April 2010},
+  publisher  = {Association for Computing Machinery},
+  address    = {New York, NY, USA},
+  volume     = {44},
+  number     = {2},
+  issn       = {0163-5980},
+  url        = {https://doi.org/10.1145/1773912.1773922},
+  doi        = {10.1145/1773912.1773922},
+  abstract   = {Cassandra is a distributed storage system for managing very large amounts of structured data spread out across many commodity servers, while providing highly available service with no single point of failure. Cassandra aims to run on top of an infrastructure of hundreds of nodes (possibly spread across different data centers). At this scale, small and large components fail continuously. The way Cassandra manages the persistent state in the face of these failures drives the reliability and scalability of the software systems relying on this service. While in many ways Cassandra resembles a database and shares many design and implementation strategies therewith, Cassandra does not support a full relational data model; instead, it provides clients with a simple data model that supports dynamic control over data layout and format. Cassandra system was designed to run on cheap commodity hardware and handle high write throughput while not sacrificing read efficiency.},
+  journal    = {SIGOPS Oper. Syst. Rev.},
+  month      = {apr},
+  pages      = {35–40},
+  numpages   = {6}
+}
+
+@techreport{grabowski2021scylladb,
+  title       = {Apache Cassandra 4.0 Performance Benchmark: Comparing Cassandra 4.0, Cassandra 3.11 and Scylla Open Source 4.4},
+  author      = {Grabowski, Piotr and Stasiewicz, Juliusz and Baryla, Karol},
+  year        = {2021},
+  institution = {ScyllaDB Inc},
+  url         = {https://www.scylladb.com/wp-content/uploads/wp-apache-cassandra-4-performance-benchmark-3.pdf}
+}
+
+@misc{scylladb2023ring,
+  author       = {ScyllaDB, Inc.},
+  title        = {ScyllaDB Ring Architecture - Overview},
+  year         = {2023},
+  howpublished = {\url{https://opensource.docs.scylladb.com/stable/architecture/ringarchitecture/index.html}},
+  note         = {Accessed: 2023-07-18}
+}
