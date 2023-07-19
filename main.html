@@ -166,6 +166,69 @@
     div.column{display: inline-block; vertical-align: top; width: 50%;}
     div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
     ul.task-list{list-style: none;}
+    pre > code.sourceCode { white-space: pre; position: relative; }
+    pre > code.sourceCode > span { display: inline-block; line-height: 1.25; }
+    pre > code.sourceCode > span:empty { height: 1.2em; }
+    .sourceCode { overflow: visible; }
+    code.sourceCode > span { color: inherit; text-decoration: inherit; }
+    div.sourceCode { margin: 1em 0; }
+    pre.sourceCode { margin: 0; }
+    @media screen {
+    div.sourceCode { overflow: auto; }
+    }
+    @media print {
+    pre > code.sourceCode { white-space: pre-wrap; }
+    pre > code.sourceCode > span { text-indent: -5em; padding-left: 5em; }
+    }
+    pre.numberSource code
+      { counter-reset: source-line 0; }
+    pre.numberSource code > span
+      { position: relative; left: -4em; counter-increment: source-line; }
+    pre.numberSource code > span > a:first-child::before
+      { content: counter(source-line);
+        position: relative; left: -1em; text-align: right; vertical-align: baseline;
+        border: none; display: inline-block;
+        -webkit-touch-callout: none; -webkit-user-select: none;
+        -khtml-user-select: none; -moz-user-select: none;
+        -ms-user-select: none; user-select: none;
+        padding: 0 4px; width: 4em;
+        color: #aaaaaa;
+      }
+    pre.numberSource { margin-left: 3em; border-left: 1px solid #aaaaaa;  padding-left: 4px; }
+    div.sourceCode
+      {   }
+    @media screen {
+    pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
+    }
+    code span.al { color: #ff0000; font-weight: bold; } /* Alert */
+    code span.an { color: #60a0b0; font-weight: bold; font-style: italic; } /* Annotation */
+    code span.at { color: #7d9029; } /* Attribute */
+    code span.bn { color: #40a070; } /* BaseN */
+    code span.bu { color: #008000; } /* BuiltIn */
+    code span.cf { color: #007020; font-weight: bold; } /* ControlFlow */
+    code span.ch { color: #4070a0; } /* Char */
+    code span.cn { color: #880000; } /* Constant */
+    code span.co { color: #60a0b0; font-style: italic; } /* Comment */
+    code span.cv { color: #60a0b0; font-weight: bold; font-style: italic; } /* CommentVar */
+    code span.do { color: #ba2121; font-style: italic; } /* Documentation */
+    code span.dt { color: #902000; } /* DataType */
+    code span.dv { color: #40a070; } /* DecVal */
+    code span.er { color: #ff0000; font-weight: bold; } /* Error */
+    code span.ex { } /* Extension */
+    code span.fl { color: #40a070; } /* Float */
+    code span.fu { color: #06287e; } /* Function */
+    code span.im { color: #008000; font-weight: bold; } /* Import */
+    code span.in { color: #60a0b0; font-weight: bold; font-style: italic; } /* Information */
+    code span.kw { color: #007020; font-weight: bold; } /* Keyword */
+    code span.op { color: #666666; } /* Operator */
+    code span.ot { color: #007020; } /* Other */
+    code span.pp { color: #bc7a00; } /* Preprocessor */
+    code span.sc { color: #4070a0; } /* SpecialChar */
+    code span.ss { color: #bb6688; } /* SpecialString */
+    code span.st { color: #4070a0; } /* String */
+    code span.va { color: #19177c; } /* Variable */
+    code span.vs { color: #4070a0; } /* VerbatimString */
+    code span.wa { color: #60a0b0; font-weight: bold; font-style: italic; } /* Warning */
     div.csl-bib-body { }
     div.csl-entry {
       clear: both;
@@ -351,6 +414,7 @@ be stored as close to the CPU as possible<span class="citation" data-cites="smit
 primarily due to the limitations of “the speed of the cable”, where both
 throughput and latency decrease as distance increases due to factors
 like signal dampening and the finite speed of light.</p>
+<p>TODO: Add graphic of the memory hierarchy</p>
 <p>At the top of the hierarchy are registers, which are closest to the
 CPU. They offer very high speed, but provide limited storage space,
 typically accommodating 32-64 bits of data. These registers are used by
@@ -660,17 +724,44 @@ creating new file systems.</p>
 <p>The FUSE APIs are available on various platforms; though mostly
 deployed on Linux, it can also be found on macOS and FreeBSD. In FUSE, a
 userspace program registers itself with the FUSE kernel module and
-provides callbacks for the file system operations. These operations can
-include tasks like <code>open</code>, <code>read</code>,
-<code>write</code>, and many others.</p>
-<p>When a user performs a file system operation on a mounted FUSE file
-system, the kernel module sends a request for executing that operation
-to the userspace program. This is followed by the userspace program
-returning a response, which the FUSE kernel module conveys back to the
-user. As such, FUSE circumvents the complexity of coding the file system
-implementation directly in the kernel. This approach enhances safety,
-preventing entire kernel crashes due to errors within the implementation
-being limited to user instead of kernel space.</p>
+provides callbacks for the file system operations. A simple read-only
+FUSE can for example implement the following callbacks:</p>
+<p>The <code>getattr</code> function is responsible for getting the
+attributes of a file. For a real file system, this would include things
+like the file’s size, its permissions, when it was last accessed or
+modified, and so forth:</p>
+<div class="sourceCode" id="cb1"><pre class="sourceCode c"><code class="sourceCode c"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="dt">static</span> <span class="dt">int</span> example_getattr<span class="op">(</span><span class="dt">const</span> <span class="dt">char</span> <span class="op">*</span>path<span class="op">,</span> <span class="kw">struct</span> stat <span class="op">*</span>stbuf<span class="op">,</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>                         <span class="kw">struct</span> fuse_file_info <span class="op">*</span>fi<span class="op">);</span></span></code></pre></div>
+<p>The <code>readdir</code> function is used when a process wants to
+list the files in a directory. It’s responsible for filling in the
+entries for that directory:</p>
+<div class="sourceCode" id="cb2"><pre class="sourceCode c"><code class="sourceCode c"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="dt">static</span> <span class="dt">int</span> example_readdir<span class="op">(</span><span class="dt">const</span> <span class="dt">char</span> <span class="op">*</span>path<span class="op">,</span> <span class="dt">void</span> <span class="op">*</span>buf<span class="op">,</span> fuse_fill_dir_t filler<span class="op">,</span></span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>                         off_t offset<span class="op">,</span> <span class="kw">struct</span> fuse_file_info <span class="op">*</span>fi<span class="op">,</span></span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>                         <span class="kw">enum</span> fuse_readdir_flags flags<span class="op">);</span></span></code></pre></div>
+<p>The <code>open</code> function is called when a process opens a file.
+It’s responsible for checking that the operation is permitted (i.e. the
+file exists and the process has the necessary permissions), and for
+doing any necessary setup:</p>
+<div class="sourceCode" id="cb3"><pre class="sourceCode c"><code class="sourceCode c"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="dt">static</span> <span class="dt">int</span> example_open<span class="op">(</span><span class="dt">const</span> <span class="dt">char</span> <span class="op">*</span>path<span class="op">,</span> <span class="kw">struct</span> fuse_file_info <span class="op">*</span>fi<span class="op">);</span></span></code></pre></div>
+<p>Finally, the <code>read</code> function is used when a process wants
+to read data from a file. It’s responsible for copying the requested
+data into the provided buffer:</p>
+<div class="sourceCode" id="cb4"><pre class="sourceCode c"><code class="sourceCode c"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="dt">static</span> <span class="dt">int</span> example_read<span class="op">(</span><span class="dt">const</span> <span class="dt">char</span> <span class="op">*</span>path<span class="op">,</span> <span class="dt">char</span> <span class="op">*</span>buf<span class="op">,</span> <span class="dt">size_t</span> size<span class="op">,</span> off_t offset<span class="op">,</span> <span class="kw">struct</span> fuse_file_info <span class="op">*</span>fi<span class="op">);</span></span></code></pre></div>
+<p>These callbacks would then be added to the FUSE operations struct and
+passed to <code>fuse_main</code>, which takes care of registering the
+operations with the FUSE kernel module and mounts the FUSE to a
+directory. Similarly to this, callbacks for handling writes etc. can be
+provided to the operation struct for a read-write capable FUSE<span class="citation" data-cites="libfuse2020example">[20]</span>.</p>
+<p>When a user then performs a file system operation on a mounted FUSE
+file system, the kernel module sends a request for executing that
+operation to the userspace program. This is followed by the userspace
+program returning a response, which the FUSE kernel module conveys back
+to the user. As such, FUSE circumvents the complexity of coding the file
+system implementation directly in the kernel. This approach enhances
+safety, preventing entire kernel crashes due to errors within the
+implementation being limited to user instead of kernel space.</p>
+<p>TODO: Add graphic from
+https://en.wikipedia.org/wiki/Filesystem_in_Userspace#/media/File:FUSE_structure.svg</p>
 <p>Another benefit of a file system implemented as a FUSE is its
 inherent portability. Unlike a file system created as a kernel module,
 its interaction with the FUSE module rather than the kernel itself
@@ -680,11 +771,11 @@ typically need to be built from source on the target machine unless they
 are vendored by a distribution. Despite these benefits of FUSE, there is
 a noticeable performance overhead associated with it. This is largely
 due to the context switching between the kernel and the userspace that
-occurs during its operation<span class="citation" data-cites="vangoor2017fuse">[20]</span>.</p>
+occurs during its operation<span class="citation" data-cites="vangoor2017fuse">[21]</span>.</p>
 <p>Today, FUSE is widely utilized to mount high-level external services
-as file sysems. For instance, it can be used to mount remote AWS S3
-buckets with <code>s3fs</code><span class="citation" data-cites="gaul2023s3fs">[21]</span> or to mount a remote system’s disk
-via Secure Shell (SSH) with SSHFS <span class="citation" data-cites="libfuse2022sshfs">[22]</span>.</p>
+as file systems. For instance, it can be used to mount remote AWS S3
+buckets with <code>s3fs</code><span class="citation" data-cites="gaul2023s3fs">[22]</span> or to mount a remote system’s disk
+via Secure Shell (SSH) with SSHFS <span class="citation" data-cites="libfuse2022sshfs">[23]</span>.</p>
 </section>
 <section id="network-block-device-nbd" data-number="0.2.14">
 <h3 data-number="1.2.14"><span class="header-section-number">1.2.14</span> Network Block Device
@@ -694,7 +785,7 @@ Linux block device. It typically works by communicating between a user
 space-provided server and a Kernel-provided client. Though potentially
 deployable over Wide Area Networks (WAN), it is primarily designed for
 Local Area Networks (LAN) or localhost usage. The protocol is divided
-into two phases: the handshake and the transmission<span class="citation" data-cites="blake2023nbd">[23]</span>.</p>
+into two phases: the handshake and the transmission<span class="citation" data-cites="blake2023nbd">[24]</span>.</p>
 <p>TODO: Add sequence diagram of the NBD protocol</p>
 <p>The NBD protocol involves multiple participants, notably one or
 several clients, a server, and the concept of an export. It starts with
@@ -712,8 +803,8 @@ might also contain data such as a chunk for writing, offsets, and
 lengths among other elements. Replies may contain error messages,
 success status, or data contingent on the reply type.</p>
 <p>While powerful in many regards, NBD has some limitations. Its maximum
-message size is capped at 32 MB<span class="citation" data-cites="clements2013nbd">[24]</span>, and the maximum block or chunk
-size supported by the Kernel’s NBD client is a mere 4KB<span class="citation" data-cites="verhelst2023nbdclient">[25]</span>. Thus,
+message size is capped at 32 MB<span class="citation" data-cites="clements2013nbd">[25]</span>, and the maximum block or chunk
+size supported by the Kernel’s NBD client is a mere 4KB<span class="citation" data-cites="verhelst2023nbdclient">[26]</span>. Thus,
 it might not be the most optimal protocol for WAN usage, especially in
 scenarios with high latency.</p>
 <p>NBD, being a protocol with a long legacy, comes with its own set of
@@ -769,7 +860,7 @@ in full either at the source or the destination.</p>
 application alters too many chunks on the source during migration, it
 may not be possible to meet the maximum acceptable downtime criteria.
 Furthermore, maximum permissible downtime is inherently restricted by
-the available round-trip time (RTT)<span class="citation" data-cites="he2016migration">[26]</span>.</p>
+the available round-trip time (RTT)<span class="citation" data-cites="he2016migration">[27]</span>.</p>
 <p>Despite these constraints, the pre-copy migration strategy offers
 viable benefits in terms of consistent VM availability and resilience
 against network disconnections, underlining its potential effectiveness
@@ -806,13 +897,13 @@ primarily as a consequence of its ‘fetch-on-demand’ model for retrieving
 chunks, a model highly sensitive to network latency and round-trip time
 (RTT). This essentially means that the time taken for data to travel to
 the destination and then for an acknowledgement of receipt to return to
-the source can affect the overall efficiency of the migration<span class="citation" data-cites="he2016migration">[26]</span>.</p>
+the source can affect the overall efficiency of the migration<span class="citation" data-cites="he2016migration">[27]</span>.</p>
 </section>
 <section id="workload-analysis" data-number="0.2.15.3">
 <h4 data-number="1.2.15.3"><span class="header-section-number">1.2.15.3</span> Workload Analysis</h4>
 <p>The research article “Reducing Virtual Machine Live Migration
 Overhead via Workload Analysis” explores strategies to determine the
-most suitable timing for virtual machine (VM) migration<span class="citation" data-cites="baruchi2015workload">[27]</span>. Even
+most suitable timing for virtual machine (VM) migration<span class="citation" data-cites="baruchi2015workload">[28]</span>. Even
 though the study chiefly focuses on virtual machines, the methodologies
 proposed could be adapted for use with various other applications or
 migration circumstances.</p>
@@ -852,7 +943,7 @@ power of streams comes from their ability to process data as it becomes
 available. This aspect allows for minimization of memory consumption,
 making streams particularly impactful for scenarios involving
 long-running processes where data is streamed over extended periods of
-time<span class="citation" data-cites="akidau2018streaming">[28]</span>.</p>
+time<span class="citation" data-cites="akidau2018streaming">[29]</span>.</p>
 <p>On the other hand, a pipeline comprises a series of data processing
 stages, wherein the output of one stage directly serves as the input to
 the next. It’s this chain of processing stages that forms a ‘pipeline.’
@@ -869,7 +960,7 @@ fundamental part of UNIX and Linux command-line interfaces. Here, the
 output of a command can be ‘piped’ into another for further processing.
 For instance, the results from a <code>curl</code> command fetching data
 from an API could be piped into the <code>jq</code> tool for JSON
-manipulation<span class="citation" data-cites="peek1994unix">[29]</span>.</p>
+manipulation<span class="citation" data-cites="peek1994unix">[30]</span>.</p>
 </section>
 <section id="grpc" data-number="0.2.17">
 <h3 data-number="1.2.17"><span class="header-section-number">1.2.17</span> gRPC</h3>
@@ -906,7 +997,7 @@ other.</p>
 <p>What distinguishes gRPC is its pluggable structure that allows for
 added functionalities such as load balancing, tracing, health checking,
 and authentication. These features make it a comprehensive solution for
-efficient and effective communication mechanisms<span class="citation" data-cites="google2023grpc">[30]</span>.</p>
+efficient and effective communication mechanisms<span class="citation" data-cites="google2023grpc">[31]</span>.</p>
 </section>
 <section id="redis" data-number="0.2.18">
 <h3 data-number="1.2.18"><span class="header-section-number">1.2.18</span> Redis</h3>
@@ -921,7 +1012,7 @@ multitude of data structures, including lists, sets, hashes, and
 bitmaps. These differing data types allow for versatile data
 manipulation capabilities. Thus, in scenarios where a diverse set of
 data types need to be managed concurrently, Redis supplies a fitting
-solution<span class="citation" data-cites="redis2023introduction">[31]</span>.</p>
+solution<span class="citation" data-cites="redis2023introduction">[32]</span>.</p>
 <p>One of the primary drivers for Redis’s speed is its reliance on
 in-memory data storage. By storing data in memory rather than on disk,
 Redis enables low-latency reads and writes, contributing to the
@@ -943,7 +1034,7 @@ message broker, where messages are published to ‘channels’ and delivered
 to all the ‘subscribers’ interested in those channels. This feature is
 particularly useful when it comes to real-time event notifications in
 web applications or the distribution of tasks among worker nodes in
-high-performance computing setups<span class="citation" data-cites="redis2023pubsub">[32]</span>.</p>
+high-performance computing setups<span class="citation" data-cites="redis2023pubsub">[33]</span>.</p>
 </section>
 <section id="s3-and-minio" data-number="0.2.19">
 <h3 data-number="1.2.19"><span class="header-section-number">1.2.19</span> S3 and Minio</h3>
@@ -969,7 +1060,7 @@ and access control.</p>
 <p>Communication with S3 is facilitated through an exposed HTTP API.
 Users and applications can interact with the stored data—including files
 and folders—via this API, allowing for seamless data manipulation and
-retrieval<span class="citation" data-cites="aws2023s3">[33]</span>.</p>
+retrieval<span class="citation" data-cites="aws2023s3">[34]</span>.</p>
 <p>On the contrary, Minio represents a different approach towards
 storage solutions. It is an open-source storage server, underlining
 compatibility with Amazon S3’s API. Written in the Go programming
@@ -984,7 +1075,7 @@ preferring to maintain direct control over their data could find Minio a
 fitting choice. Moreover, Minio supports horizontal scalability,
 designed to distribute large quantities of data across multiple nodes.
 This feature aids in optimizing storage efficiency, data access times,
-and overall capability to handle growing data volumes<span class="citation" data-cites="minio2023coreadmin">[34]</span>.</p>
+and overall capability to handle growing data volumes<span class="citation" data-cites="minio2023coreadmin">[35]</span>.</p>
 </section>
 <section id="cassandra-and-scyllladb" data-number="0.2.20">
 <h3 data-number="1.2.20"><span class="header-section-number">1.2.20</span> Cassandra and ScylllaDB</h3>
@@ -1006,7 +1097,7 @@ bottleneck and failure risks associated with master nodes.</p>
 <p>Despite its robust capabilities, Cassandra does come with certain
 limitations. Under heavy load, it experiences high latency that can
 negatively affect system performance. Besides, it demands complex
-configuration to correctly fine-tune according to specific needs<span class="citation" data-cites="lakshman2010cassandra">[35]</span>.</p>
+configuration to correctly fine-tune according to specific needs<span class="citation" data-cites="lakshman2010cassandra">[36]</span>.</p>
 <p>In response to the perceived shortcomings of Cassandra, ScyllaDB was
 launched in 2015. It shares design principles with
 Cassandra—compatibility with Cassandra’s API and data model—but boasts
@@ -1018,7 +1109,7 @@ that aims to minimize contention and enhance performance.</p>
 around latency, specifically the 99th percentile latency that impacts
 system reliability and predictability. In fact, ScyllaDB’s design
 improvements and performance gains over Cassandra have been endorsed by
-various benchmarking studies<span class="citation" data-cites="grabowski2021scylladb">[36]</span>.</p>
+various benchmarking studies<span class="citation" data-cites="grabowski2021scylladb">[37]</span>.</p>
 <div id="refs" class="references csl-bib-body" role="doc-bibliography">
 <div id="ref-linux2023docs" class="csl-entry" role="doc-biblioentry">
 <div class="csl-left-margin">[1] </div><div class="csl-right-inline">T.
@@ -1122,41 +1213,47 @@ cloud storage services,”</span> in <em>16th USENIX conference on file
 and storage technologies (FAST 18)</em>, Feb. 2018, pp.
 155–168.Available: <a href="https://www.usenix.org/conference/fast18/presentation/xiao">https://www.usenix.org/conference/fast18/presentation/xiao</a></div>
 </div>
+<div id="ref-libfuse2020example" class="csl-entry" role="doc-biblioentry">
+<div class="csl-left-margin">[20] </div><div class="csl-right-inline">T.
+libfuse authors, <span>“FUSE minimal example filesystem using high-level
+API.”</span> <a href="https://github.com/libfuse/libfuse/blob/master/example/hello.c" class="uri">https://github.com/libfuse/libfuse/blob/master/example/hello.c</a>,
+2020.</div>
+</div>
 <div id="ref-vangoor2017fuse" class="csl-entry" role="doc-biblioentry">
-<div class="csl-left-margin">[20] </div><div class="csl-right-inline">B.
+<div class="csl-left-margin">[21] </div><div class="csl-right-inline">B.
 K. R. Vangoor, V. Tarasov, and E. Zadok, <span>“To <span>FUSE</span> or
 not to <span>FUSE</span>: Performance of <span>User-Space</span> file
 systems,”</span> in <em>15th USENIX conference on file and storage
 technologies (FAST 17)</em>, Feb. 2017, pp. 59–72.Available: <a href="https://www.usenix.org/conference/fast17/technical-sessions/presentation/vangoor">https://www.usenix.org/conference/fast17/technical-sessions/presentation/vangoor</a></div>
 </div>
 <div id="ref-gaul2023s3fs" class="csl-entry" role="doc-biblioentry">
-<div class="csl-left-margin">[21] </div><div class="csl-right-inline">A.
+<div class="csl-left-margin">[22] </div><div class="csl-right-inline">A.
 Gaul, T. Nakatani, and @rrizun, <span>“s3fs: FUSE-based file system
 backed by amazon S3.”</span> <a href="https://github.com/s3fs-fuse/s3fs-fuse" class="uri">https://github.com/s3fs-fuse/s3fs-fuse</a>, 2023.</div>
 </div>
 <div id="ref-libfuse2022sshfs" class="csl-entry" role="doc-biblioentry">
-<div class="csl-left-margin">[22] </div><div class="csl-right-inline">T.
+<div class="csl-left-margin">[23] </div><div class="csl-right-inline">T.
 libfuse authors, <span>“SSHFS: A network filesystem client to connect to
 SSH servers.”</span> <a href="https://github.com/libfuse/sshfs" class="uri">https://github.com/libfuse/sshfs</a>, 2022.</div>
 </div>
 <div id="ref-blake2023nbd" class="csl-entry" role="doc-biblioentry">
-<div class="csl-left-margin">[23] </div><div class="csl-right-inline">E.
+<div class="csl-left-margin">[24] </div><div class="csl-right-inline">E.
 Blake, W. Verhelst, and other NBD maintainers, <span>“The NBD
 protocol.”</span> <a href="https://github.com/NetworkBlockDevice/nbd/blob/master/doc/proto.md" class="uri">https://github.com/NetworkBlockDevice/nbd/blob/master/doc/proto.md</a>,
 Apr. 2023.</div>
 </div>
 <div id="ref-clements2013nbd" class="csl-entry" role="doc-biblioentry">
-<div class="csl-left-margin">[24] </div><div class="csl-right-inline">P.
+<div class="csl-left-margin">[25] </div><div class="csl-right-inline">P.
 Clements, <span>“[PATCH] nbd: Increase default and max request
 sizes.”</span> <a href="https://lore.kernel.org/lkml/20130402194120.54043222C0@clements/" class="uri">https://lore.kernel.org/lkml/20130402194120.54043222C0@clements/</a>,
 Apr. 02, 2013.</div>
 </div>
 <div id="ref-verhelst2023nbdclient" class="csl-entry" role="doc-biblioentry">
-<div class="csl-left-margin">[25] </div><div class="csl-right-inline">W.
+<div class="csl-left-margin">[26] </div><div class="csl-right-inline">W.
 Verhelst, <em>Nbd-client man page</em>. 2023.Available: <a href="https://manpages.ubuntu.com/manpages/lunar/en/man8/nbd-client.8.html">https://manpages.ubuntu.com/manpages/lunar/en/man8/nbd-client.8.html</a></div>
 </div>
 <div id="ref-he2016migration" class="csl-entry" role="doc-biblioentry">
-<div class="csl-left-margin">[26] </div><div class="csl-right-inline">S.
+<div class="csl-left-margin">[27] </div><div class="csl-right-inline">S.
 He, C. Hu, B. Shi, T. Wo, and B. Li, <span>“Optimizing virtual machine
 live migration without shared storage in hybrid clouds,”</span> in
 <em>2016 IEEE 18th international conference on high performance
@@ -1165,51 +1262,51 @@ smart city; IEEE 2nd international conference on data science and
 systems (HPCC/SmartCity/DSS)</em>, 2016, pp. 921–928. doi: <a href="https://doi.org/10.1109/HPCC-SmartCity-DSS.2016.0132">10.1109/HPCC-SmartCity-DSS.2016.0132</a>.</div>
 </div>
 <div id="ref-baruchi2015workload" class="csl-entry" role="doc-biblioentry">
-<div class="csl-left-margin">[27] </div><div class="csl-right-inline">A.
+<div class="csl-left-margin">[28] </div><div class="csl-right-inline">A.
 Baruchi, E. Toshimi Midorikawa, and L. Matsumoto Sato, <span>“Reducing
 virtual machine live migration overhead via workload analysis,”</span>
 <em>IEEE Latin America Transactions</em>, vol. 13, no. 4, pp. 1178–1186,
 2015, doi: <a href="https://doi.org/10.1109/TLA.2015.7106373">10.1109/TLA.2015.7106373</a>.</div>
 </div>
 <div id="ref-akidau2018streaming" class="csl-entry" role="doc-biblioentry">
-<div class="csl-left-margin">[28] </div><div class="csl-right-inline">T.
+<div class="csl-left-margin">[29] </div><div class="csl-right-inline">T.
 Akidau, S. Chernyak, and R. Lax, <em>Streaming systems</em>. Sebastopol,
 CA: O’Reilly Media, Inc., 2018.</div>
 </div>
 <div id="ref-peek1994unix" class="csl-entry" role="doc-biblioentry">
-<div class="csl-left-margin">[29] </div><div class="csl-right-inline">J.
+<div class="csl-left-margin">[30] </div><div class="csl-right-inline">J.
 D. Peek, <em>UNIX power tools</em>. Sebastopol, CA; New York: O’Reilly
 Associates; Bantam Books, 1994.</div>
 </div>
 <div id="ref-google2023grpc" class="csl-entry" role="doc-biblioentry">
-<div class="csl-left-margin">[30] </div><div class="csl-right-inline">gRPC Authors, <span>“Introduction to
+<div class="csl-left-margin">[31] </div><div class="csl-right-inline">gRPC Authors, <span>“Introduction to
 gRPC.”</span> 2023.Available: <a href="https://grpc.io/docs/what-is-grpc/introduction/">https://grpc.io/docs/what-is-grpc/introduction/</a></div>
 </div>
 <div id="ref-redis2023introduction" class="csl-entry" role="doc-biblioentry">
-<div class="csl-left-margin">[31] </div><div class="csl-right-inline">Redis Ltd, <span>“Introduction to
+<div class="csl-left-margin">[32] </div><div class="csl-right-inline">Redis Ltd, <span>“Introduction to
 redis.”</span> <a href="https://redis.io/docs/about/" class="uri">https://redis.io/docs/about/</a>, 2023.</div>
 </div>
 <div id="ref-redis2023pubsub" class="csl-entry" role="doc-biblioentry">
-<div class="csl-left-margin">[32] </div><div class="csl-right-inline">Redis Ltd, <span>“Redis pub/sub.”</span> <a href="https://redis.io/docs/interact/pubsub/" class="uri">https://redis.io/docs/interact/pubsub/</a>, 2023.</div>
+<div class="csl-left-margin">[33] </div><div class="csl-right-inline">Redis Ltd, <span>“Redis pub/sub.”</span> <a href="https://redis.io/docs/interact/pubsub/" class="uri">https://redis.io/docs/interact/pubsub/</a>, 2023.</div>
 </div>
 <div id="ref-aws2023s3" class="csl-entry" role="doc-biblioentry">
-<div class="csl-left-margin">[33] </div><div class="csl-right-inline">Amazon Web Services, Inc, <span>“What is amazon
+<div class="csl-left-margin">[34] </div><div class="csl-right-inline">Amazon Web Services, Inc, <span>“What is amazon
 S3?”</span> <a href="https://docs.aws.amazon.com/AmazonS3/latest/userguide/Welcome.html" class="uri">https://docs.aws.amazon.com/AmazonS3/latest/userguide/Welcome.html</a>,
 2023.</div>
 </div>
 <div id="ref-minio2023coreadmin" class="csl-entry" role="doc-biblioentry">
-<div class="csl-left-margin">[34] </div><div class="csl-right-inline">MinIO, Inc, <span>“Core administration
+<div class="csl-left-margin">[35] </div><div class="csl-right-inline">MinIO, Inc, <span>“Core administration
 concepts.”</span> <a href="https://min.io/docs/minio/kubernetes/upstream/administration/concepts.html" class="uri">https://min.io/docs/minio/kubernetes/upstream/administration/concepts.html</a>,
 2023.</div>
 </div>
 <div id="ref-lakshman2010cassandra" class="csl-entry" role="doc-biblioentry">
-<div class="csl-left-margin">[35] </div><div class="csl-right-inline">A.
+<div class="csl-left-margin">[36] </div><div class="csl-right-inline">A.
 Lakshman and P. Malik, <span>“Cassandra: A decentralized structured
 storage system,”</span> <em>SIGOPS Oper. Syst. Rev.</em>, vol. 44, no.
 2, pp. 35–40, Apr. 2010, doi: <a href="https://doi.org/10.1145/1773912.1773922">10.1145/1773912.1773922</a>.</div>
 </div>
 <div id="ref-grabowski2021scylladb" class="csl-entry" role="doc-biblioentry">
-<div class="csl-left-margin">[36] </div><div class="csl-right-inline">P.
+<div class="csl-left-margin">[37] </div><div class="csl-right-inline">P.
 Grabowski, J. Stasiewicz, and K. Baryla, <span>“Apache cassandra 4.0
 performance benchmark: Comparing cassandra 4.0, cassandra 3.11 and
 scylla open source 4.4,”</span> ScyllaDB Inc, 2021.Available: <a href="https://www.scylladb.com/wp-content/uploads/wp-apache-cassandra-4-performance-benchmark-3.pdf">https://www.scylladb.com/wp-content/uploads/wp-apache-cassandra-4-performance-benchmark-3.pdf</a></div>

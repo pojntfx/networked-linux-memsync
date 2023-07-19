@@ -1,3 +1,9 @@
+commit 66d5a6cb34a2d6c8572a8aac08bbbea440674e6e
+Author: Felicitas Pojtinger <felicitas@pojtinger.com>
+Date:   Wed Jul 19 21:47:49 2023 +0200
+
+    feat: Elaborate on FUSE
+
 commit fb6489866da4f1ee03a83150614ea4a2cd2422cf
 Author: Felicitas Pojtinger <felicitas@pojtinger.com>
 Date:   Wed Jul 19 18:28:35 2023 +0200
