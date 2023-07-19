@@ -1,3 +1,9 @@
+commit 6d1a1a64cfa6a00ba5e9efa1c890a19e4543e0eb
+Author: Felicitas Pojtinger <felicitas@pojtinger.com>
+Date:   Wed Jul 19 04:03:20 2023 +0200
+
+    feat: Add prose for tech sections
+
 commit ba1b648da14e2a05638b0292fffeaa346d6d12c0
 Author: Felicitas Pojtinger <felicitas@pojtinger.com>
 Date:   Wed Jul 19 03:27:38 2023 +0200
