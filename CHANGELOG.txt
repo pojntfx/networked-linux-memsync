@@ -1,3 +1,9 @@
+commit ba1b648da14e2a05638b0292fffeaa346d6d12c0
+Author: Felicitas Pojtinger <felicitas@pojtinger.com>
+Date:   Wed Jul 19 03:27:38 2023 +0200
+
+    feat: Link citations to their uses
+
 commit 07eb1d1860b04fb8ae7dc0ad37655f738c791c66
 Author: Felicitas Pojtinger <felicitas@pojtinger.com>
 Date:   Tue Jul 18 23:56:52 2023 +0200

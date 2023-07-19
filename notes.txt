@@ -85,17 +85,24 @@ Technology
 The Linux Kernel
 
 -   Open-Source kernel created by Linus Torvals in 1991
+-   Written in C, with recently Rust being added as an additional
+    allowed language[1]
 -   Powers millions of devices worldwide (servers, desktops, phones,
     embedded devices)
 -   Is a bridge between applications and hardware
     -   Provides an abstraction layer
     -   Compatible with many architectures (ARM, x86, RISC-V etc.)
+-   Is not an operating system in itself, but is usually made an
+    operating system by a distribution[2]
+-   Distributions add userspace tools (e.g. GNU coreutils or BusyBox),
+    desktop environments and more, turning into a full operating system
 -   Is a good fit for this thesis due to it’s open-source nature (allows
     anyone to view, modify and contribute to the source code)
 
 Linux Kernel Modules
 
--   Linux kernel is monolithic, but extensible thanks to kernel modules
+-   Linux kernel is monolithic, but extensible thanks to kernel
+    modules[2]
 -   Small pieces of kernel-level code that can be loaded and unloaded as
     kernel modules
 -   Can extend the kernel functionality without reboots
@@ -105,7 +112,7 @@ Linux Kernel Modules
 -   Interact with kernel through APIs
 -   Poorly written modules can cause signficant kernel instability
 -   Modules can be loaded at boot time or dynamically (modprobe, rmmod
-    etc.)
+    etc.)[3]
 -   Module lifecycle can be implemented with initialization and cleanup
     functions
 
@@ -118,11 +125,11 @@ UNIX Signals and Handlers
     -   Function as an asynchronous communication mechanism between
         processes or the kernel and a process
     -   Have default actions, i.e. terminating the process or ignoring a
-        signal
+        signal[4]
 -   Handlers
     -   Can be used to customize how a process should respond to a
         signal
-    -   Can be installed with sigaction()
+    -   Can be installed with sigaction()[5]
 -   Signals are not designed as an IPC mechanism, since they can only
     alert of an event, but not of any additional data for it
 
@@ -131,7 +138,7 @@ Memory Hierarchy
 -   Memory in computers can be classified based on size, speed, cost and
     proximity to the CPU
 -   Principle of locality: The most frequently accessed data and
-    instructions should be in the closest memory
+    instructions should be in the closest memory[6]
 -   Locality is important mostly due to the “speed of the cable” -
     throughput (due to dampening) and latency (due to being limited by
     the speed of light) decreases as distance increases
@@ -159,7 +166,8 @@ Memory Hierarchy
     -   Typically used for archives or physical data transport
         (e.g. import from personal infrastructure to AWS)
 -   Evolution of the hierarchy
-    -   Technological advancements continue to blur this clear hierarchy
+    -   Technological advancements continue to blur this clear
+        hierarchy[7]
     -   E.g. NVMe rivals RAM speeds but can store larger amounts of data
     -   This thesis also blurs the hierarchy by exposing e.g. tertiary
         or secondary storage with the same interfae as main memory
@@ -176,9 +184,9 @@ Memory Management in Linux
     -   Managed by the kernel memory module
     -   Uses slab allocation (groups objects of the same size into
         caches, speeds up memory allocation, reduces fragmentation of
-        the memory)
+        the memory)[8]
 -   User space
-    -   Applications (and some drivers) store their memory here
+    -   Applications (and some drivers) store their memory here[9]
     -   Managed through a paging system
     -   Each application has it’s own private virtual address space
     -   Virtual address space divided into pages of 4 KB
@@ -186,7 +194,7 @@ Memory Management in Linux
 
 Swap Space
 
--   A portion of the secondary storage is for virtual memory
+-   A portion of the secondary storage is for virtual memory[9]
 -   Essential for systems running multiple applications
 -   Moves inactive parts of ram to secondary storage to free up space
     for other processes
@@ -212,7 +220,7 @@ Page Faults
 
 -   Page faults occur when the process tries to access a page not
     available in primary memory, which ause the OS to swap the required
-    page from secondary storage into primary memory
+    page from secondary storage into primary memory[10]
 -   Types
     -   Minor page faults: Page is already in memory, but not linked to
         the process that needs it
@@ -222,15 +230,8 @@ Page Faults
     -   Prefetching: Anticipating future page requests and loading them
         into memory in advance
     -   Page compression: Compressing inactive pages and storing them in
-        memory pre-emptively (so that less major faults happen)
--   By listening to these page faults, we know when a process wants to
-    access a specific piece of memory
--   We can use this to then pull the chunk of memory from a remote, map
-    it to the address on which the page fault occured, thus only
-    fetching data when it is required
+        memory pre-emptively (so that less major faults happen)[11]
 -   Usually, handling page faults is something that the kernel does
--   In the past, this used to be possible from userspace by handling the
-    SIGSEGV signal in the process
 
 mmap
 
@@ -242,7 +243,7 @@ mmap
     -   Is a “power tool”, needs to be used carefully and intentionally
 -   Functionality
     -   Establishes direct link (memory mapping) between a file and a
-        memory region
+        memory region[12]
     -   When the system reads from the mapped memory region, it reads
         from the file directly and vice versa
     -   Reduces overhead since no or less context switches are needed
@@ -251,13 +252,13 @@ mmap
         though it were in memory, without having to copy it from disk
         first
     -   Can be used to share memory between processes without having to
-        go through the kernel with syscalls
+        go through the kernel with syscalls[4]
 -   Drawback: Bypasses the file system cache, which can lead to stale
     data if multiple processes read/write at the same time
 
 inotify
 
--   Event-driven notification system of the Linux kernel
+-   Event-driven notification system of the Linux kernel[13]
 -   Monitors file system for events (i.e. modifications, access etc.)
 -   Uses a watch feature for monitoring specific events, e.g. only
     watching writes
@@ -285,7 +286,7 @@ Linux Kernel Disk and File Caching
         Aggressive writebacks lead to reduced performance, delays risk
         data loss
     -   Release of cached data under memory pressure: Cache eviction
-        requires intelligent algorithms, i.e. LRU
+        requires intelligent algorithms, i.e. LRU[3]
 
 TCP, UDP and QUIC
 
@@ -295,13 +296,13 @@ TCP, UDP and QUIC
     -   Guaranteed delivery and maintained data order
     -   Includes error checking, lost packet retransmission, and
         congestion control mechanisms
-    -   Powers the majority of the web
+    -   Powers the majority of the web[14]
 -   UDP
     -   Connectionless
     -   No reliability or ordered packet delivery guarantees
     -   Faster than TCP due to less guarantees
     -   Suitable for applications that require speed over reliability
-        (i.e. online gaming, video calls etc.)
+        (i.e. online gaming, video calls etc.)postel1980udp?
 -   QUIC
     -   Modern transport layer protocol developed by Google and
         standardized by the IETF in 2020
@@ -310,7 +311,7 @@ TCP, UDP and QUIC
     -   Reduces connection establishment times/initial latency by
         combining connection and security handshakes
     -   Avoids head-of-line blocking by allowing independent delivery of
-        separate streams
+        separate streams[15]
 
 Delta Synchronization
 
@@ -321,9 +322,9 @@ Delta Synchronization
 -   Can lead to reduced network and I/O overhead
 -   The probably most popular tool for file synchronization like this is
     rsync
--   When the delta-transfer algorithm for rsync is active, it computes
-    the difference between the local and the remote file, and then
-    synchronizes the changes
+-   When a delta-transfer algorithm is used, it computes the difference
+    between the local and the remote file, and then synchronizes the
+    changes
 -   The delta sync algorithm first does file block division
 -   The file on the destination is divided into fixed-size blocks
 -   For each block in the destination, a weak and fast checksum is
@@ -336,7 +337,7 @@ Delta Synchronization
     of each block and the changed block’s data to the destination
 -   When a block is received, the destination writes the chunk to the
     specified offset, reconstructing the file
--   Once one polling interval is done, the process begins again
+-   Once one polling interval is done, the process begins again[16]
 
 File Systems In Userspace (FUSE)
 
@@ -364,7 +365,7 @@ File Systems In Userspace (FUSE)
     indirection makes the file system portable, since it only needs to
     communicate with the FUSE module
 -   Does have significant performance overhead due to the context
-    switching between the kernel and the file system in userspace
+    switching between the kernel and the file system in userspace[17]
 -   Is used for many high-level interfaces to extenal services, i.e. to
     mount S3 buckets or a remote system’s disk via SSH
 
@@ -372,11 +373,11 @@ Network Block Device (NBD)
 
 -   NBD uses a protocol to communicate between a server (provided by
     user space) and a client (provided by the NBD kernel module)
--   The protocol can run over WAN, but is really mostly meant for LAN or
-    localhost usage
--   It has two phases: Handshake and transmission
--   There are two actors in the protocol: One or multiple clients, the
-    server and the virtual concept of an export
+-   The protocol can run over WAN, but is really mostly designed for LAN
+    or localhost usage
+-   It has two phases: Handshake and transmission[18]
+-   There are multiple actors in the protocol: One or multiple clients,
+    the server and the virtual concept of an export
 -   When the client connects to the server, the server sends a greeting
     message with the server’s flags
 -   The client responds with its own flags and an export name (a single
@@ -454,7 +455,7 @@ Pre-Copy
 -   If the VM (or app etc.) is however changing too many chunks on the
     source during the migration, the maximum acceptable downtime
     criteria might never get reached, and the maximum acceptable
-    downtime is also somewhat limited by the available RTT
+    downtime is also somewhat limited by the available RTT[19]
 
 Post-Copy
 
@@ -470,13 +471,13 @@ Post-Copy
     tolerable downtime is reached
 -   The big drawback of post-copy migration is that it can result in
     longer migration times, because the chunks need to be fetched from
-    the network on-demand, which is very latency/RTT-sensitive
+    the network on-demand, which is very latency/RTT-sensitive[19]
 
 Workload Analysis
 
 -   “Reducing Virtual Machine Live Migration Overhead via Workload
     Analysis” provides an interesting analysis of options on how this
-    decision of when to migrate can be made
+    decision of when to migrate can be made[20]
 -   While being designed mostly for use with virtual machines, it could
     serve as a basis for other applications or migration scenarios, too
 -   The proposed method identifies workload cycles of VMs and uses this
@@ -515,10 +516,10 @@ Streams and Pipelines
     -   Allow processing of data as it becomes available
     -   Minimized memory consumption
     -   Especially well suited for long-running processes (where data
-        gets streamed in for a extended time)
+        gets streamed in for a extended time)[21]
 -   Pipelines
     -   Series of data processing stages: Output of one stage serves as
-        input to the next
+        input to the next[22]
     -   Stages can often be run in parallel, improving performance due
         to a higher degree of concurrency
     -   Example: Instruction pipeline in CPU, were the stages of
@@ -540,7 +541,7 @@ gRPC
     -   Supports unary RPCs, server-streaming RPCs, client-streaming
         RPCs and bidirectional RPCs
     -   Has pluggable support for load balancing, tracing, health
-        checking and authentication
+        checking and authentication[23]j
 -   Supports many languages (Go, Rust, JS etc.)
 -   Developed by the CNCF
 
@@ -551,13 +552,14 @@ Redis
 -   Created by S. Sanfilippo in 2009
 -   Different from other NoSQL databases by supporting various data
     structures like lists, sets, hashes or bitmaps
--   Uses in-memory data storage for maximum speed and efficiency
+-   Uses in-memory data storage for maximum speed and efficiency[24]
 -   Allows for low-latency reads/writes
 -   While not intended for persistance, it is possible to store data on
     disk
 -   Has a non-blocking I/O model and offers near real-time data
     processing capabilities
--   Includes a pub-sub system to be able to function as a message broker
+-   Includes a pub-sub system to be able to function as a message
+    broker[25]
 
 S3 and Minio
 
@@ -568,13 +570,13 @@ S3 and Minio
         anywhere on the globe
     -   Range of storage classes with different requirements
     -   Includes authentication and authorization
-    -   Exposes HTTP API for accessing the stored folders and files
+    -   Exposes HTTP API for accessing the stored folders and files[26]
 -   Minio
     -   Open-source storage server compatible wiht S3
     -   Lightweight and simple, written in Go
     -   Can be hosted on-prem and is open source
     -   Allows horizontal scalability to storage large amounts of data
-        across nodes
+        across nodes[27]
 
 Cassandra and ScylllaDB
 
@@ -589,22 +591,30 @@ Cassandra and ScylllaDB
     -   Doesn’t use master nodes due to it’s use of a P2P protocol and
         distributed hash ring design
     -   Does have high latency under heavy load and requires fairly
-        complex configuration
+        complex configuration[28]
 -   ScyllaDB
     -   Launched in 2015
     -   Written in C++ and has a shared-nothing architecture, unlike
         Cassandra which is written in Java
-    -   Compatible with Cassandra’s API and data model
+    -   Compatible with Cassandra’s API and data model[29]
     -   Designed to overcome Cassandra’s limitations esp. around
         latency, esp. P99 latency
     -   Performance improvements were confirmed with various
-        benchmarking studies
+        benchmarking studies[30]
 
 Planning
 
 Pull-Based Synchronization With userfaultfd
 
+-   By listening to these page faults, we know when a process wants to
+    access a specific piece of memory
+-   We can use this to then pull the chunk of memory from a remote, map
+    it to the address on which the page fault occured, thus only
+    fetching data when it is required
+-   Usually, handling page faults is something that the kernel does
 -   In our case, we want to handle page faults in userspace
+-   In the past, this used to be possible from userspace by handling the
+    SIGSEGV signal in the process
 -   In our case however, we can use a recent system called userfaultfd
     to do this in a more elegant way (available since kernel 4.11)
 -   userfaultfd allows handling these page faults in userspace
@@ -816,19 +826,6 @@ Push-Pull Synchronization with Mounts
     -   This integrates with the callbacks supplied by the syncer, which
         ensures that we don’t sync back changes that have been pulled
         but not modified, only the ones that have been changed locally
--   Comparing the managed mounts API to RegionFS
-    -   Unlike the managed mounts API however, the system proposed in
-        Remote Regions is mostly intended for private usecases with a
-        limited amount of hosts and in LAN, with low-RTT connections
-    -   It is also not designed to be used for a potential migration
-        scenarios, which the modular approach of r3map allows for
-    -   While Remote Regions’ file system approach does allow for
-        authorization based on permissions, it doesn’t specify how
-        authentication could work
-    -   In terms of the wire protocol, Remote Regions also seems to
-        target mostly LAN with protocols like RDMA comm modules, while
-        r3map targets mostly WAN with a pluggable transport protocol
-        interface
 
 Pull-Based Synchronization with Migrations
 
@@ -1729,6 +1726,8 @@ Latency
 
 Throughput
 
+-   Throughput of different Go hashing algorithms
+
 -   Throughput of dudirekta, gRPC and fRPC as RTT increases
 
 -   Throughput of dudirekta, gRPC and fRPC as number of workers
@@ -1915,9 +1914,8 @@ Mounts and Live Migration
         compared to the single-phase mount API
     -   The mounts API should have a shorter total latency, but a higher
         “downtime” since it needs to initialize the device first
--   Comparing it to regionFS, An existing remote memory system
-    -   A similar approach was made in RegionFS (reference
-        atc18-aguilera)
+-   Comparing it to RegionFS, An existing remote memory system
+    -   A similar approach was made in RegionFS[31]
     -   RegionFS is implemented as a kernel module, but it is
         functionally similar to how this API exposes a NBD device for
         memory interaction
@@ -1929,6 +1927,18 @@ Mounts and Live Migration
         region to set permissions
     -   By using standard utilities like open and chmod, this API usable
         from different programming languages with ease
+    -   Unlike the managed mounts API however, the system proposed in
+        Remote Regions is mostly intended for private usecases with a
+        limited amount of hosts and in LAN, with low-RTT connections
+    -   It is also not designed to be used for a potential migration
+        scenarios, which the modular approach of r3map allows for
+    -   While Remote Regions’ file system approach does allow for
+        authorization based on permissions, it doesn’t specify how
+        authentication could work
+    -   In terms of the wire protocol, Remote Regions also seems to
+        target mostly LAN with protocols like RDMA comm modules, while
+        r3map targets mostly WAN with a pluggable transport protocol
+        interface
 -   Issues with the implementation
     -   While the managed mounts API mostly works, there are some issues
         with it being implemented in Go
@@ -2309,188 +2319,200 @@ Structure
 
 Sources
 
+-   https://www.kernel.org/doc/html/next/rust/quick-start.html (Linux &
+    Rust) [1]
 -   FluidMem: Full, Flexible, and Fast Memory Disaggregation for the
-    Cloud (userfaultfd) [1]
+    Cloud (userfaultfd) [32]
 -   Memory Disaggregation: Advances and Open Challenges (general memory
-    hierarchy etc.) [2]
+    hierarchy etc.) [7]
 -   User Level Page Faults (sigaction & signal-based page fault
-    handlers) [3]
+    handlers) [10]
 -   Towards Web-based Delta Synchronization for Cloud Storage Services
-    (rsync) [4]
+    (rsync) [16]
 -   To FUSE or Not to FUSE: Performance of User-Space File Systems
-    (implementing a FUSE) [5]
+    (implementing a FUSE) [17]
 -   The NBD protocol (NBD protocol documentation from the sources; info
-    on implementing a NBD server and client) [6]
+    on implementing a NBD server and client) [18]
 -   Remote regions: a simple abstraction for remote memory (Kernel
-    filesystem for remote memory access) [7]
+    filesystem for remote memory access) [31]
 -   Reducing Virtual Machine Live Migration Overhead via Workload
     Analysis (when to trigger the finalization process for a live VM
-    migration) [8]
--   Cache Memories, Alan Jay Smith (Memory hierarchy) [9]
+    migration) [20]
+-   Cache Memories, Alan Jay Smith (Memory hierarchy) [6]
 -   A RAM cache approach using Host Memory Buffer of the NVMe interface
-    (JuHyung Hong) [10]
+    (JuHyung Hong) [33]
 -   The Slab Allocator: An Object-Caching Kernel Memory Allocator (Linux
-    kernel memory management) [11]
--   Understanding the Linux Virtual Memory Manager (Mel Gorman) [12]
+    kernel memory management) [8]
+-   Understanding the Linux Virtual Memory Manager (Mel Gorman) [9]
 -   Operating Systems Design And Implementation: Design and
-    Implementation (Tanenbaum, Woodhull) (Page faults) [3]
+    Implementation (Tanenbaum, Woodhull) (Page faults) [10]
 -   Operating System Concepts (Silberschatz, A., Galvin, P. B., &
-    Gagne, G. 2018) (memory compression) [13]
+    Gagne, G. 2018) (memory compression) [11]
 -   Efficient Memory Mapped File I/O for In-Memory File Systems (Jungsik
-    Choi) (mmap) [14]
+    Choi) (mmap) [12]
 -   Advanced Programming in the UNIX Environment (W. Stevens) (mmap,
-    signals) [15]
+    signals) [4]
 -   Professional Linux Kernel Architecture (Wolfgang Mauerer) (kernel
-    modules) [16]
--   Linux Kernel Development (Robert Love) (kernel modules) [17]
+    modules) [3]
+-   Linux Kernel Development (Robert Love) (kernel modules) [2]
 -   UNIX systems programming: communication, concurrency, and threads
-    (Robbins, Kay A) (signals) [18]
--   Modeling the Linux page cache for accurate simulation of
-    data-intensive applications (Hoang-Dung Do) (Linux page cache) [19]
--   Transmission Control Protocol (Postel, J) (TCP) [20]
--   User Datagram Protocol (Postel, J) (UDP) [21]
+    (Robbins, Kay A) (signals) [5]
+-   Transmission Control Protocol (Postel, J) (TCP) [14]
+-   User Datagram Protocol (Postel, J) (UDP) postel1980udp?
 -   The QUIC Transport Protocol: Design and Internet-Scale Deployment
-    (Langley) (QUIC) [22]
+    (Langley) (QUIC) [15]
 -   Streaming Systems - The What, Where, When, and How of Large-Scale
-    Data Processing (Akidau) (Streams) [23]
--   UNIX Power Tools (Peek) (Pipelines, UNIX pipes) [24]
--   grpc.io/docs/what-is-grpc/introduction/ (gRPC) [25]j
--   protobuf.dev (Protobuf) [26]
--   redis.io/docs/about/ (Redis) [27]
--   redis.io/docs/interact/pubsub/ (Redis) [28]
+    Data Processing (Akidau) (Streams) [21]
+-   UNIX Power Tools (Peek) (Pipelines, UNIX pipes) [22]
+-   grpc.io/docs/what-is-grpc/introduction/ (gRPC) [23]j
+-   protobuf.dev (Protobuf) [34]
+-   redis.io/docs/about/ (Redis) [24]
+-   redis.io/docs/interact/pubsub/ (Redis) [25]
 -   https://docs.aws.amazon.com/AmazonS3/latest/userguide/Welcome.html
-    (AWS) [29]
+    (AWS) [26]
 -   https://min.io/docs/minio/kubernetes/upstream/administration/concepts.html
-    (Minio) [30]
+    (Minio) [27]
 -   Cassandra - A Decentralized Structured Storage System (Lakshman)
-    (Cassandra) [31]
+    (Cassandra) [28]
 -   Apache Cassandra 4.0 Performance Benchmark Whitepaper (ScyllaDB)
-    [32]
+    [30]
 -   opensource.docs.scylladb.com/stable/architecture/index.html
-    (ScyllaDB) [33]
+    (ScyllaDB) [29]
+-   https://www.infoq.com/articles/inotify-linux-file-system-event-monitoring/
+    (Inotify) [13]
+-   Optimizing Virtual Machine Live Migration without Shared Storage in
+    Hybrid Clouds [19]
 
 Citations
 
-[1] B. Caldwell et al., “FluidMem: Full, flexible, and fast memory
-disaggregation for the cloud,” in 2020 IEEE 40th international
-conference on distributed computing systems (ICDCS), 2020, pp. 665–677.
-doi: 10.1109/ICDCS47774.2020.00090.
+[1] T. kernel development community, “Quick start.”
+https://www.kernel.org/doc/html/next/rust/quick-start.html, 2023.
 
-[2] H. A. Maruf and M. Chowdhury, “Memory disaggregation: Advances and
-open challenges.” 2023.Available: https://arxiv.org/abs/2305.03943
+[2] R. Love, Linux kernel development, 3rd ed. Pearson Education, Inc.,
+2010.
 
-[3] Q. Li, “User level page faults,” Master's thesis, Carnegie Mellon
-University, School of Computer Science, Pittsburgh, PA 15213, 2020.
+[3] W. Mauerer, Professional linux kernel architecture. Indianapolis,
+IN: Wiley Publishing, Inc., 2008.
 
-[4] H. Xiao et al., “Towards web-based delta synchronization for cloud
-storage services,” in 16th USENIX conference on file and storage
-technologies (FAST 18), Feb. 2018, pp. 155–168.Available:
-https://www.usenix.org/conference/fast18/presentation/xiao
+[4] W. R. Stevens, Advanced programming in the UNIX environment. Delhi:
+Addison Wesley Logman (Singapore) Pte Ltd., Indian Branch, 2000.
 
-[5] B. K. R. Vangoor, V. Tarasov, and E. Zadok, “To FUSE or not to FUSE:
-Performance of User-Space file systems,” in 15th USENIX conference on
-file and storage technologies (FAST 17), Feb. 2017, pp. 59–72.Available:
-https://www.usenix.org/conference/fast17/technical-sessions/presentation/vangoor
+[5] K. A. Robbins and S. Robbins, Unix™ systems programming:
+Communication, concurrency, and threads. Prentice Hall PTR, 2003.
 
-[6] E. Blake, W. Verhelst, and other NBD maintainers, “The NBD
-protocol.”
-https://github.com/NetworkBlockDevice/nbd/blob/master/doc/proto.md, Apr.
-2023.
-
-[7] M. K. Aguilera et al., “Remote regions: A simple abstraction for
-remote memory,” in Proceedings of the 2018 USENIX conference on usenix
-annual technical conference, 2018, pp. 775–787.
-
-[8] A. Baruchi, E. Toshimi Midorikawa, and L. Matsumoto Sato, “Reducing
-virtual machine live migration overhead via workload analysis,” IEEE
-Latin America Transactions, vol. 13, no. 4, pp. 1178–1186, 2015, doi:
-10.1109/TLA.2015.7106373.
-
-[9] A. J. Smith, “Cache memories,” ACM Comput. Surv., vol. 14, no. 3,
+[6] A. J. Smith, “Cache memories,” ACM Comput. Surv., vol. 14, no. 3,
 pp. 473–530, Sep. 1982, doi: 10.1145/356887.356892.
 
-[10] J. Hong, S. Han, and E.-Y. Chung, “A RAM cache approach using host
-memory buffer of the NVMe interface,” in 2016 international SoC design
-conference (ISOCC), 2016, pp. 109–110. doi: 10.1109/ISOCC.2016.7799757.
+[7] H. A. Maruf and M. Chowdhury, “Memory disaggregation: Advances and
+open challenges.” 2023.Available: https://arxiv.org/abs/2305.03943
 
-[11] J. Bonwick, “The slab allocator: An Object-Caching kernel,” Jun.
+[8] J. Bonwick, “The slab allocator: An Object-Caching kernel,” Jun.
 1994.Available:
 https://www.usenix.org/conference/usenix-summer-1994-technical-conference/slab-allocator-object-caching-kernel
 
-[12] M. Gorman, Understanding the linux virtual memory manager. Upper
+[9] M. Gorman, Understanding the linux virtual memory manager. Upper
 Saddle River, New Jersey 07458: Pearson Education, Inc. Publishing as
 Prentice Hall Professional Technical Reference, 2004.
 
-[13] A. Silberschatz, P. B. Galvin, and G. Gagne, Operating system
+[10] Q. Li, “User level page faults,” Master's thesis, Carnegie Mellon
+University, School of Computer Science, Pittsburgh, PA 15213, 2020.
+
+[11] A. Silberschatz, P. B. Galvin, and G. Gagne, Operating system
 concepts, 10th ed. Hoboken, NJ: Wiley, 2018.Available:
 https://lccn.loc.gov/2017043464
 
-[14] J. Choi, J. Kim, and H. Han, “Efficient memory mapped file I/O for
+[12] J. Choi, J. Kim, and H. Han, “Efficient memory mapped file I/O for
 In-Memory file systems,” Jul. 2017.Available:
 https://www.usenix.org/conference/hotstorage17/program/presentation/choi
 
-[15] W. R. Stevens, Advanced programming in the UNIX environment. Delhi:
-Addison Wesley Logman (Singapore) Pte Ltd., Indian Branch, 2000.
+[13] M. Prokop, “Inotify: Efficient, real-time linux file system event
+monitoring,” Apr. 2010.
+https://www.infoq.com/articles/inotify-linux-file-system-event-monitoring/
 
-[16] W. Mauerer, Professional linux kernel architecture. Indianapolis,
-IN: Wiley Publishing, Inc., 2008.
-
-[17] R. Love, Linux kernel development, 3rd ed. Pearson Education, Inc.,
-2010.
-
-[18] K. A. Robbins and S. Robbins, Unix™ systems programming:
-Communication, concurrency, and threads. Prentice Hall PTR, 2003.
-
-[19] H.-D. Do, V. Hayot-Sasson, R. F. da Silva, C. Steele, H. Casanova,
-and T. Glatard, “Modeling the linux page cache for accurate simulation
-of data-intensive applications.” 2021.Available:
-https://arxiv.org/abs/2101.01335
-
-[20] “Transmission Control Protocol.” RFC 793; J. Postel, Sep. 1981.
+[14] “Transmission Control Protocol.” RFC 793; J. Postel, Sep. 1981.
 doi: 10.17487/RFC0793.
 
-[21] “User Datagram Protocol.” RFC 768; J. Postel, Aug. 1980. doi:
-10.17487/RFC0768.
-
-[22] A. Langley et al., “The QUIC transport protocol: Design and
+[15] A. Langley et al., “The QUIC transport protocol: Design and
 internet-scale deployment,” in Proceedings of the conference of the ACM
 special interest group on data communication, 2017, pp. 183–196. doi:
 10.1145/3098822.3098842.
 
-[23] T. Akidau, S. Chernyak, and R. Lax, Streaming systems. Sebastopol,
+[16] H. Xiao et al., “Towards web-based delta synchronization for cloud
+storage services,” in 16th USENIX conference on file and storage
+technologies (FAST 18), Feb. 2018, pp. 155–168.Available:
+https://www.usenix.org/conference/fast18/presentation/xiao
+
+[17] B. K. R. Vangoor, V. Tarasov, and E. Zadok, “To FUSE or not to
+FUSE: Performance of User-Space file systems,” in 15th USENIX conference
+on file and storage technologies (FAST 17), Feb. 2017, pp.
+59–72.Available:
+https://www.usenix.org/conference/fast17/technical-sessions/presentation/vangoor
+
+[18] E. Blake, W. Verhelst, and other NBD maintainers, “The NBD
+protocol.”
+https://github.com/NetworkBlockDevice/nbd/blob/master/doc/proto.md, Apr.
+2023.
+
+[19] S. He, C. Hu, B. Shi, T. Wo, and B. Li, “Optimizing virtual machine
+live migration without shared storage in hybrid clouds,” in 2016 IEEE
+18th international conference on high performance computing and
+communications; IEEE 14th international conference on smart city; IEEE
+2nd international conference on data science and systems
+(HPCC/SmartCity/DSS), 2016, pp. 921–928. doi:
+10.1109/HPCC-SmartCity-DSS.2016.0132.
+
+[20] A. Baruchi, E. Toshimi Midorikawa, and L. Matsumoto Sato, “Reducing
+virtual machine live migration overhead via workload analysis,” IEEE
+Latin America Transactions, vol. 13, no. 4, pp. 1178–1186, 2015, doi:
+10.1109/TLA.2015.7106373.
+
+[21] T. Akidau, S. Chernyak, and R. Lax, Streaming systems. Sebastopol,
 CA: O’Reilly Media, Inc., 2018.
 
-[24] J. D. Peek, UNIX power tools. Sebastopol, CA; New York: O’Reilly
+[22] J. D. Peek, UNIX power tools. Sebastopol, CA; New York: O’Reilly
 Associates; Bantam Books, 1994.
 
-[25] gRPC Authors, “Introduction to gRPC.” 2023.Available:
+[23] gRPC Authors, “Introduction to gRPC.” 2023.Available:
 https://grpc.io/docs/what-is-grpc/introduction/
 
-[26] Google LLC, “Protocol buffers.” https://protobuf.dev/, 2023.
-
-[27] Redis Ltd, “Introduction to redis.” https://redis.io/docs/about/,
+[24] Redis Ltd, “Introduction to redis.” https://redis.io/docs/about/,
 2023.
 
-[28] Redis Ltd, “Redis pub/sub.” https://redis.io/docs/interact/pubsub/,
+[25] Redis Ltd, “Redis pub/sub.” https://redis.io/docs/interact/pubsub/,
 2023.
 
-[29] Amazon Web Services, Inc, “What is amazon S3?”
+[26] Amazon Web Services, Inc, “What is amazon S3?”
 https://docs.aws.amazon.com/AmazonS3/latest/userguide/Welcome.html,
 2023.
 
-[30] MinIO, Inc, “Core administration concepts.”
+[27] MinIO, Inc, “Core administration concepts.”
 https://min.io/docs/minio/kubernetes/upstream/administration/concepts.html,
 2023.
 
-[31] A. Lakshman and P. Malik, “Cassandra: A decentralized structured
+[28] A. Lakshman and P. Malik, “Cassandra: A decentralized structured
 storage system,” SIGOPS Oper. Syst. Rev., vol. 44, no. 2, pp. 35–40,
 Apr. 2010, doi: 10.1145/1773912.1773922.
 
-[32] P. Grabowski, J. Stasiewicz, and K. Baryla, “Apache cassandra 4.0
+[29] Inc. ScyllaDB, “ScyllaDB ring architecture - overview.”
+https://opensource.docs.scylladb.com/stable/architecture/ringarchitecture/index.html,
+2023.
+
+[30] P. Grabowski, J. Stasiewicz, and K. Baryla, “Apache cassandra 4.0
 performance benchmark: Comparing cassandra 4.0, cassandra 3.11 and
 scylla open source 4.4,” ScyllaDB Inc, 2021.Available:
 https://www.scylladb.com/wp-content/uploads/wp-apache-cassandra-4-performance-benchmark-3.pdf
 
-[33] Inc. ScyllaDB, “ScyllaDB ring architecture - overview.”
-https://opensource.docs.scylladb.com/stable/architecture/ringarchitecture/index.html,
-2023.
+[31] M. K. Aguilera et al., “Remote regions: A simple abstraction for
+remote memory,” in Proceedings of the 2018 USENIX conference on usenix
+annual technical conference, 2018, pp. 775–787.
+
+[32] B. Caldwell et al., “FluidMem: Full, flexible, and fast memory
+disaggregation for the cloud,” in 2020 IEEE 40th international
+conference on distributed computing systems (ICDCS), 2020, pp. 665–677.
+doi: 10.1109/ICDCS47774.2020.00090.
+
+[33] J. Hong, S. Han, and E.-Y. Chung, “A RAM cache approach using host
+memory buffer of the NVMe interface,” in 2016 international SoC design
+conference (ISOCC), 2016, pp. 109–110. doi: 10.1109/ISOCC.2016.7799757.
+
+[34] Google LLC, “Protocol buffers.” https://protobuf.dev/, 2023.
