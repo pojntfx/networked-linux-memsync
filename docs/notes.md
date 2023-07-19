@@ -36,15 +36,18 @@ csl: static/ieee.csl
 ### The Linux Kernel
 
 - Open-Source kernel created by Linus Torvals in 1991
+- Written in C, with recently Rust being added as an additional allowed language[@linux2023docs]
 - Powers millions of devices worldwide (servers, desktops, phones, embedded devices)
 - Is a bridge between applications and hardware
   - Provides an abstraction layer
   - Compatible with many architectures (ARM, x86, RISC-V etc.)
+- Is not an operating system in itself, but is usually made an operating system by a distribution[@love2010linux]
+- Distributions add userspace tools (e.g. GNU coreutils or BusyBox), desktop environments and more, turning into a full operating system
 - Is a good fit for this thesis due to it's open-source nature (allows anyone to view, modify and contribute to the source code)
 
 ### Linux Kernel Modules
 
-- Linux kernel is monolithic, but extensible thanks to kernel modules
+- Linux kernel is monolithic, but extensible thanks to kernel modules[@love2010linux]
 - Small pieces of kernel-level code that can be loaded and unloaded as kernel modules
 - Can extend the kernel functionality without reboots
 - Are dynamically linked into the running kernel
@@ -52,7 +55,7 @@ csl: static/ieee.csl
 - Kernel modules are written in C
 - Interact with kernel through APIs
 - Poorly written modules can cause signficant kernel instability
-- Modules can be loaded at boot time or dynamically (`modprobe`, `rmmod` etc.)
+- Modules can be loaded at boot time or dynamically (`modprobe`, `rmmod` etc.)[@maurer2008professional]
 - Module lifecycle can be implemented with initialization and cleanup functions
 
 ### UNIX Signals and Handlers
@@ -61,16 +64,16 @@ csl: static/ieee.csl
   - Are software interrups that notify a process of important events (exceptions etc.)
   - Can originate from the kernel, user input or different processes
   - Function as an asynchronous communication mechanism between processes or the kernel and a process
-  - Have default actions, i.e. terminating the process or ignoring a signal
+  - Have default actions, i.e. terminating the process or ignoring a signal[@stevens2000advanced]
 - Handlers
   - Can be used to customize how a process should respond to a signal
-  - Can be installed with `sigaction()`
+  - Can be installed with `sigaction()`[@robbins2003unix]
 - Signals are not designed as an IPC mechanism, since they can only alert of an event, but not of any additional data for it
 
 ### Memory Hierarchy
 
 - Memory in computers can be classified based on size, speed, cost and proximity to the CPU
-- Principle of locality: The most frequently accessed data and instructions should be in the closest memory
+- Principle of locality: The most frequently accessed data and instructions should be in the closest memory[@smith1982cache]
 - Locality is important mostly due to the "speed of the cable" - throughput (due to dampening) and latency (due to being limited by the speed of light) decreases as distance increases
 - Registers
   - Closest to the CPU
@@ -94,7 +97,7 @@ csl: static/ieee.csl
   - Tape: Can store very large amounts of data for relatively long amounts of time
   - Typically used for archives or physical data transport (e.g. import from personal infrastructure to AWS)
 - Evolution of the hierarchy
-  - Technological advancements continue to blur this clear hierarchy
+  - Technological advancements continue to blur this clear hierarchy[@maruf2023memory]
   - E.g. NVMe rivals RAM speeds but can store larger amounts of data
   - This thesis also blurs the hierarchy by exposing e.g. tertiary or secondary storage with the same interfae as main memory
 
@@ -106,9 +109,9 @@ csl: static/ieee.csl
 - Kernel space
   - Runs the kernel, kernel extensions, device drivers
   - Managed by the kernel memory module
-  - Uses slab allocation (groups objects of the same size into caches, speeds up memory allocation, reduces fragmentation of the memory)
+  - Uses slab allocation (groups objects of the same size into caches, speeds up memory allocation, reduces fragmentation of the memory)[@bonwick1994slaballoc]
 - User space
-  - Applications (and some drivers) store their memory here
+  - Applications (and some drivers) store their memory here[@gorman2004linuxmem]
   - Managed through a paging system
   - Each application has it's own private virtual address space
   - Virtual address space divided into pages of 4 KB
@@ -116,7 +119,7 @@ csl: static/ieee.csl
 
 ### Swap Space
 
-- A portion of the secondary storage is for virtual memory
+- A portion of the secondary storage is for virtual memory[@gorman2004linuxmem]
 - Essential for systems running multiple applications
 - Moves inactive parts of ram to secondary storage to free up space for other processes
 - Implementation in Linux
@@ -133,19 +136,15 @@ csl: static/ieee.csl
 
 ### Page Faults
 
-- Page faults occur when the process tries to access a page not available in primary memory, which ause the OS to swap the required page from secondary storage into primary memory
+- Page faults occur when the process tries to access a page not available in primary memory, which ause the OS to swap the required page from secondary storage into primary memory[@li2020user]
 - Types
   - Minor page faults: Page is already in memory, but not linked to the process that needs it
   - Major page fault: Needs to be loaded from secondary storage
 - The LRU (and simpler clock algorithm) can minimize page faults
 - Techniques for handling page faults
   - Prefetching: Anticipating future page requests and loading them into memory in advance
-  - Page compression: Compressing inactive pages and storing them in memory pre-emptively (so that less major faults happen)
-- By listening to these page faults, we know when a process wants to access a specific piece of memory
-- We can use this to then pull the chunk of memory from a remote, map it to the address on which the page fault occured, thus
-  only fetching data when it is required
+  - Page compression: Compressing inactive pages and storing them in memory pre-emptively (so that less major faults happen)[@silberschatz2018operating]
 - Usually, handling page faults is something that the kernel does
-- In the past, this used to be possible from userspace by handling the `SIGSEGV` signal in the process
 
 ### `mmap`
 
@@ -155,17 +154,17 @@ csl: static/ieee.csl
   - Commonly used in applications like databases
   - Is a "power tool", needs to be used carefully and intentionally
 - Functionality
-  - Establishes direct link (memory mapping) between a file and a memory region
+  - Establishes direct link (memory mapping) between a file and a memory region[@choi2017mmap]
   - When the system reads from the mapped memory region, it reads from the file directly and vice versa
   - Reduces overhead since no or less context switches are needed
 - Benefits:
   - Enables zero-copy operations: Data can be accessed directly as though it were in memory, without having to copy it from disk first
-  - Can be used to share memory between processes without having to go through the kernel with syscalls
+  - Can be used to share memory between processes without having to go through the kernel with syscalls[@stevens2000advanced]
 - Drawback: Bypasses the file system cache, which can lead to stale data if multiple processes read/write at the same time
 
 ### `inotify`
 
-- Event-driven notification system of the Linux kernel
+- Event-driven notification system of the Linux kernel[@prokop2010inotify]
 - Monitors file system for events (i.e. modifications, access etc.)
 - Uses a watch feature for monitoring specific events, e.g. only watching writes
 - Reduces overhead and ressource use compared to polling
@@ -186,7 +185,7 @@ csl: static/ieee.csl
   - File reads/writes pass through the disk cache
 - Complexities
   - Data consistency: Between the disk and cache via writebacks. Aggressive writebacks lead to reduced performance, delays risk data loss
-  - Release of cached data under memory pressure: Cache eviction requires intelligent algorithms, i.e. LRU
+  - Release of cached data under memory pressure: Cache eviction requires intelligent algorithms, i.e. LRU[@maurer2008professional]
 
 ### TCP, UDP and QUIC
 
@@ -195,18 +194,18 @@ csl: static/ieee.csl
   - Has been the reliable backbone of internet commmunication
   - Guaranteed delivery and maintained data order
   - Includes error checking, lost packet retransmission, and congestion control mechanisms
-  - Powers the majority of the web
+  - Powers the majority of the web[@postel1981tcp]
 - UDP
   - Connectionless
   - No reliability or ordered packet delivery guarantees
   - Faster than TCP due to less guarantees
-  - Suitable for applications that require speed over reliability (i.e. online gaming, video calls etc.)
+  - Suitable for applications that require speed over reliability (i.e. online gaming, video calls etc.)[@postel1980udp]
 - QUIC
   - Modern transport layer protocol developed by Google and standardized by the IETF in 2020
   - Intents to combine the best aspects of TCP and UDP
   - Provides reliability and ordered delivery guarantees
   - Reduces connection establishment times/initial latency by combining connection and security handshakes
-  - Avoids head-of-line blocking by allowing independent delivery of separate streams
+  - Avoids head-of-line blocking by allowing independent delivery of separate streams[@langley2017quic]
 
 ### Delta Synchronization
 
@@ -214,7 +213,7 @@ csl: static/ieee.csl
 - Delta synchronization is a technique that intents to instead transfer only the part of the file that has changed
 - Can lead to reduced network and I/O overhead
 - The probably most popular tool for file synchronization like this is rsync
-- When the delta-transfer algorithm for rsync is active, it computes the difference between the local and the remote file, and then synchronizes the changes
+- When a delta-transfer algorithm is used, it computes the difference between the local and the remote file, and then synchronizes the changes
 - The delta sync algorithm first does file block division
 - The file on the destination is divided into fixed-size blocks
 - For each block in the destination, a weak and fast checksum is calculated
@@ -222,7 +221,7 @@ csl: static/ieee.csl
 - On the source, the same checksum calculation process is run, and compared against the checksums that were sent over (matching block identification)
 - Once the changed blocks are known, the source sends over the offset of each block and the changed block's data to the destination
 - When a block is received, the destination writes the chunk to the specified offset, reconstructing the file
-- Once one polling interval is done, the process begins again
+- Once one polling interval is done, the process begins again[@xiao2018rsync]
 
 ### File Systems In Userspace (FUSE)
 
@@ -236,15 +235,15 @@ csl: static/ieee.csl
 - This makes it much easier to create a file system compared to writing it in the kernel, as it can run in user space
 - It is also much safer as no custom kernel module is required and an error in the FUSE or the backend can't crash the entire kernel
 - Unlike a file system implemented as a kernel module, this layer of indirection makes the file system portable, since it only needs to communicate with the FUSE module
-- Does have significant performance overhead due to the context switching between the kernel and the file system in userspace
+- Does have significant performance overhead due to the context switching between the kernel and the file system in userspace[@vangoor2017fuse]
 - Is used for many high-level interfaces to extenal services, i.e. to mount S3 buckets or a remote system's disk via SSH
 
 ### Network Block Device (NBD)
 
 - NBD uses a protocol to communicate between a server (provided by user space) and a client (provided by the NBD kernel module)
-- The protocol can run over WAN, but is really mostly meant for LAN or localhost usage
-- It has two phases: Handshake and transmission
-- There are two actors in the protocol: One or multiple clients, the server and the virtual concept of an export
+- The protocol can run over WAN, but is really mostly designed for LAN or localhost usage
+- It has two phases: Handshake and transmission[@blake2023nbd]
+- There are multiple actors in the protocol: One or multiple clients, the server and the virtual concept of an export
 - When the client connects to the server, the server sends a greeting message with the server's flags
 - The client responds with its own flags and an export name (a single NBD server can expose multiple devices) to use
 - The server sends the export's size and other metadata, after which the client acknowledges the received data and the handshake is complete
@@ -278,7 +277,7 @@ csl: static/ieee.csl
 - Once this is the case, the VM is suspended on the source, and the remaining chunks are synced over to destination
 - Once the transfer is complete, the VM is resumed on the destination
 - This process is helpful since the VM is always available in full on either the source or the destination, and it is resilient to a network outage occurring during the synchronization
-- If the VM (or app etc.) is however changing too many chunks on the source during the migration, the maximum acceptable downtime criteria might never get reached, and the maximum acceptable downtime is also somewhat limited by the available RTT
+- If the VM (or app etc.) is however changing too many chunks on the source during the migration, the maximum acceptable downtime criteria might never get reached, and the maximum acceptable downtime is also somewhat limited by the available RTT[@he2016migration]
 
 #### Post-Copy
 
@@ -287,11 +286,11 @@ csl: static/ieee.csl
 - After the VM has been moved to the destination, it is resumed
 - If the VM tries to access a chunk on the destination, a page fault is raised, and the missing page is fetched from the source, and the VM continues to execute
 - The benefit of post-copy migration is that it does not require re-transmitting dirty chunks to the destination before the maximum tolerable downtime is reached
-- The big drawback of post-copy migration is that it can result in longer migration times, because the chunks need to be fetched from the network on-demand, which is very latency/RTT-sensitive
+- The big drawback of post-copy migration is that it can result in longer migration times, because the chunks need to be fetched from the network on-demand, which is very latency/RTT-sensitive[@he2016migration]
 
 #### Workload Analysis
 
-- "Reducing Virtual Machine Live Migration Overhead via Workload Analysis" provides an interesting analysis of options on how this decision of when to migrate can be made
+- "Reducing Virtual Machine Live Migration Overhead via Workload Analysis" provides an interesting analysis of options on how this decision of when to migrate can be made[@baruchi2015workload]
 - While being designed mostly for use with virtual machines, it could serve as a basis for other applications or migration scenarios, too
 - The proposed method identifies workload cycles of VMs and uses this information to postpone the migration if doing so is beneficial
 - This works by analyzing cyclic patters that can unnecessarily delay a VM's migration, and identifies optimal cycles to migrate VMs in from this information
@@ -313,9 +312,9 @@ csl: static/ieee.csl
   - Can be a source or destination of data (i.e. files, network connections, stdin/stdout etc.)
   - Allow processing of data as it becomes available
   - Minimized memory consumption
-  - Especially well suited for long-running processes (where data gets streamed in for a extended time)
+  - Especially well suited for long-running processes (where data gets streamed in for a extended time)[@akidau2018streaming]
 - Pipelines
-  - Series of data processing stages: Output of one stage serves as input to the next
+  - Series of data processing stages: Output of one stage serves as input to the next[@peek1994unix]
   - Stages can often be run in parallel, improving performance due to a higher degree of concurrency
   - Example: Instruction pipeline in CPU, were the stages of instruction execution can be performend in parallel
   - Example: UNIX pipes, where the output of a command (e.g. `curl`) can be piped into another command (e.g. `jq`) to achieve a larger goal
@@ -328,7 +327,7 @@ csl: static/ieee.csl
   - Uses HTTP/2 as the transport protocol to benefit from header compression and request multiplexing
   - Uses protobuf as the IDL and wire format, a high-performance, polyglot mechanism for data serialization (instead of the slower and more verbose JSON of REST APIs)
   - Supports unary RPCs, server-streaming RPCs, client-streaming RPCs and bidirectional RPCs
-  - Has pluggable support for load balancing, tracing, health checking and authentication
+  - Has pluggable support for load balancing, tracing, health checking and authentication[@google2023grpc]j
 - Supports many languages (Go, Rust, JS etc.)
 - Developed by the CNCF
 
@@ -338,11 +337,11 @@ csl: static/ieee.csl
 - Used as a database, cache and/or message broker
 - Created by S. Sanfilippo in 2009
 - Different from other NoSQL databases by supporting various data structures like lists, sets, hashes or bitmaps
-- Uses in-memory data storage for maximum speed and efficiency
+- Uses in-memory data storage for maximum speed and efficiency[@redis2023introduction]
 - Allows for low-latency reads/writes
 - While not intended for persistance, it is possible to store data on disk
 - Has a non-blocking I/O model and offers near real-time data processing capabilities
-- Includes a pub-sub system to be able to function as a message broker
+- Includes a pub-sub system to be able to function as a message broker[@redis2023pubsub]
 
 ### S3 and Minio
 
@@ -352,12 +351,12 @@ csl: static/ieee.csl
   - Can be globally distributed to allow for fast access times from anywhere on the globe
   - Range of storage classes with different requirements
   - Includes authentication and authorization
-  - Exposes HTTP API for accessing the stored folders and files
+  - Exposes HTTP API for accessing the stored folders and files[@aws2023s3]
 - Minio
   - Open-source storage server compatible wiht S3
   - Lightweight and simple, written in Go
   - Can be hosted on-prem and is open source
-  - Allows horizontal scalability to storage large amounts of data across nodes
+  - Allows horizontal scalability to storage large amounts of data across nodes[@minio2023coreadmin]
 
 ### Cassandra and ScylllaDB
 
@@ -368,19 +367,24 @@ csl: static/ieee.csl
   - Can handle large amounts of data across many servers with no single point of failure
   - Consistency can be tuned according to needs (eventual to strong)
   - Doesn't use master nodes due to it's use of a P2P protocol and distributed hash ring design
-  - Does have high latency under heavy load and requires fairly complex configuration
+  - Does have high latency under heavy load and requires fairly complex configuration[@lakshman2010cassandra]
 - ScyllaDB
   - Launched in 2015
   - Written in C++ and has a shared-nothing architecture, unlike Cassandra which is written in Java
-  - Compatible with Cassandra's API and data model
+  - Compatible with Cassandra's API and data model[@scylladb2023ring]
   - Designed to overcome Cassandra's limitations esp. around latency, esp. P99 latency
-  - Performance improvements were confirmed with various benchmarking studies
+  - Performance improvements were confirmed with various benchmarking studies[@grabowski2021scylladb]
 
 ## Planning
 
 ### Pull-Based Synchronization With `userfaultfd`
 
+- By listening to these page faults, we know when a process wants to access a specific piece of memory
+- We can use this to then pull the chunk of memory from a remote, map it to the address on which the page fault occured, thus
+  only fetching data when it is required
+- Usually, handling page faults is something that the kernel does
 - In our case, we want to handle page faults in userspace
+- In the past, this used to be possible from userspace by handling the `SIGSEGV` signal in the process
 - In our case however, we can use a recent system called `userfaultfd` to do this in a more elegant way (available since kernel 4.11)
 - `userfaultfd` allows handling these page faults in userspace
 - The region that should be handled can be allocated with e.g. `mmap`
@@ -480,11 +484,6 @@ csl: static/ieee.csl
   - This push system is being started in parallel with the pull system
   - It also takes a local and a remote `ReadWriterAt`
   - This integrates with the callbacks supplied by the syncer, which ensures that we don't sync back changes that have been pulled but not modified, only the ones that have been changed locally
-- Comparing the managed mounts API to RegionFS
-  - Unlike the managed mounts API however, the system proposed in Remote Regions is mostly intended for private usecases with a limited amount of hosts and in LAN, with low-RTT connections
-  - It is also not designed to be used for a potential migration scenarios, which the modular approach of r3map allows for
-  - While Remote Regions' file system approach does allow for authorization based on permissions, it doesn't specify how authentication could work
-  - In terms of the wire protocol, Remote Regions also seems to target mostly LAN with protocols like RDMA comm modules, while r3map targets mostly WAN with a pluggable transport protocol interface
 
 ### Pull-Based Synchronization with Migrations
 
@@ -860,6 +859,8 @@ csl: static/ieee.csl
 
 ### Throughput
 
+- Throughput of different Go hashing algorithms
+
 - Throughput of dudirekta, gRPC and fRPC as RTT increases
 - Throughput of dudirekta, gRPC and fRPC as number of workers increases
 - Throughput of dudirekta, gRPC and fRPC as chunk size increases
@@ -953,12 +954,16 @@ csl: static/ieee.csl
 - Comparing mount vs. migration API performance
   - It is interesting to look at how the migration API performs compared to the single-phase mount API
   - The mounts API should have a shorter total latency, but a higher "downtime" since it needs to initialize the device first
-- Comparing it to regionFS, An existing remote memory system
-  - A similar approach was made in RegionFS (reference atc18-aguilera)
+- Comparing it to RegionFS, An existing remote memory system
+  - A similar approach was made in RegionFS[@aguilera2018remoteregions]
   - RegionFS is implemented as a kernel module, but it is functionally similar to how this API exposes a NBD device for memory interaction
   - In RegionFS, the regions file system is mounted to a path, which then exposes regions as virtual files
   - Instead of using a custom configuration (such as configuring the amount of pushers to make a mount read-only), such an approach makes it possible to use `chmod` on the virtual file for a memory region to set permissions
   - By using standard utilities like `open` and `chmod`, this API usable from different programming languages with ease
+  - Unlike the managed mounts API however, the system proposed in Remote Regions is mostly intended for private usecases with a limited amount of hosts and in LAN, with low-RTT connections
+  - It is also not designed to be used for a potential migration scenarios, which the modular approach of r3map allows for
+  - While Remote Regions' file system approach does allow for authorization based on permissions, it doesn't specify how authentication could work
+  - In terms of the wire protocol, Remote Regions also seems to target mostly LAN with protocols like RDMA comm modules, while r3map targets mostly WAN with a pluggable transport protocol interface
 - Issues with the implementation
   - While the managed mounts API mostly works, there are some issues with it being implemented in Go
   - This is mostly due to deadlocking issues; if the GC tries to release memory, it has to stop the world
@@ -1163,6 +1168,7 @@ csl: static/ieee.csl
 
 ### Sources
 
+- https://www.kernel.org/doc/html/next/rust/quick-start.html (Linux & Rust) [@linux2023docs]
 - FluidMem: Full, Flexible, and Fast Memory Disaggregation for the Cloud (userfaultfd) [@caldwell2020fluidmem]
 - Memory Disaggregation: Advances and Open Challenges (general memory hierarchy etc.) [@maruf2023memory]
 - User Level Page Faults (sigaction & signal-based page fault handlers) [@li2020user]
@@ -1182,9 +1188,8 @@ csl: static/ieee.csl
 - Professional Linux Kernel Architecture (Wolfgang Mauerer) (kernel modules) [@maurer2008professional]
 - Linux Kernel Development (Robert Love) (kernel modules) [@love2010linux]
 - UNIX systems programming: communication, concurrency, and threads (Robbins, Kay A) (signals) [@robbins2003unix]
-- Modeling the Linux page cache for accurate simulation of data-intensive applications (Hoang-Dung Do) (Linux page cache) [@do2021modeling]
 - Transmission Control Protocol (Postel, J) (TCP) [@postel1981tcp]
-- User Datagram Protocol (Postel, J) (UDP) [@postel1980rfc768]
+- User Datagram Protocol (Postel, J) (UDP) [@postel1980udp]
 - The QUIC Transport Protocol: Design and Internet-Scale Deployment (Langley) (QUIC) [@langley2017quic]
 - Streaming Systems - The What, Where, When, and How of Large-Scale Data Processing (Akidau) (Streams) [@akidau2018streaming]
 - UNIX Power Tools (Peek) (Pipelines, UNIX pipes) [@peek1994unix]
@@ -1197,5 +1202,7 @@ csl: static/ieee.csl
 - Cassandra - A Decentralized Structured Storage System (Lakshman) (Cassandra) [@lakshman2010cassandra]
 - Apache Cassandra 4.0 Performance Benchmark Whitepaper (ScyllaDB) [@grabowski2021scylladb]
 - opensource.docs.scylladb.com/stable/architecture/index.html (ScyllaDB) [@scylladb2023ring]
+- https://www.infoq.com/articles/inotify-linux-file-system-event-monitoring/ (Inotify) [@prokop2010inotify]
+- Optimizing Virtual Machine Live Migration without Shared Storage in Hybrid Clouds [@he2016migration]
 
 ### Citations
