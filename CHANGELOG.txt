@@ -1,3 +1,9 @@
+commit fb6489866da4f1ee03a83150614ea4a2cd2422cf
+Author: Felicitas Pojtinger <felicitas@pojtinger.com>
+Date:   Wed Jul 19 18:28:35 2023 +0200
+
+    feat: Implementing full technology section prose up to NBD
+
 commit 6d1a1a64cfa6a00ba5e9efa1c890a19e4543e0eb
 Author: Felicitas Pojtinger <felicitas@pojtinger.com>
 Date:   Wed Jul 19 04:03:20 2023 +0200

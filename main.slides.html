@@ -70,8 +70,7 @@ Page Faults</a></li>
 <code>mmap</code></a></li>
 <li><a href="#inotify"><span class="toc-section-number">2.9</span>
 <code>inotify</code></a></li>
-<li><a href="#linux-kernel-disk-and-file-caching"><span class="toc-section-number">2.10</span> Linux Kernel Disk and File
-Caching</a></li>
+<li><a href="#linux-kernel-caching"><span class="toc-section-number">2.10</span> Linux Kernel Caching</a></li>
 <li><a href="#tcp-udp-and-quic"><span class="toc-section-number">2.11</span> TCP, UDP and QUIC</a></li>
 <li><a href="#delta-synchronization"><span class="toc-section-number">2.12</span> Delta Synchronization</a></li>
 <li><a href="#file-systems-in-userspace-fuse"><span class="toc-section-number">2.13</span> File Systems In Userspace
@@ -106,72 +105,67 @@ S3 and Minio</a></li>
 <h1><span class="header-section-number">2</span> Technology</h1>
 <h2 id="the-linux-kernel"><span class="header-section-number">2.1</span>
 The Linux Kernel</h2>
-<p>The Linux kernel, an open-source kernel, was originally brought into
-existence by Linus Torvalds in 1991. Developed primarily in the C
-programming language, it has recently seen the addition of Rust as an
-approved language for further expansion and development<span class="citation">[1]</span>. The kernel’s influence is extensive,
-powering millions of devices across the globe, including servers,
-desktop computers, mobile phones, and a myriad of embedded devices.</p>
-<p>In essence, the Linux kernel serves as an intermediary between
-hardware and applications. Its role is to offer an abstraction layer
-that simplifies the interaction between these two entities. Moreover, it
-is engineered for compatibility with a wide array of architectures, such
-as ARM, x86, RISC-V, and others, which increases its versatility and
-broadens its reach.</p>
-<p>The Linux kernel, though foundational, does not function as a
-standalone operating system. This role is fulfilled by distributions,
-which build upon the Linux kernel to create fully-fledged operating
-systems<span class="citation">[2]</span>. Distributions supplement the
-kernel with additional userspace tools, examples being GNU coreutils or
-BusyBox. They further enhance functionality by integrating desktop
-environments and other software. This process transforms the kernel into
-a complete operating system ready for user interaction.</p>
-<p>The open-source nature of the Linux kernel signifies its suitability
-for academic exploration and usage. It offers transparency, allowing
-anyone to inspect the source code in depth. Furthermore, it encourages
-collaboration by enabling anyone to modify and contribute to the source
-code. This transparency, coupled with the potential for customization
-and improvement, underscores the value of the Linux kernel for this
-thesis.</p>
+<p>The open-source Linux kernel, was created by Linus Torvalds in 1991.
+Developed primarily in the C programming language, it has recently seen
+the addition of Rust as an approved language for further expansion and
+development, esp. of drivers<span class="citation">[1]</span>. The
+powers millions of devices across the globe, including servers, desktop
+computers, mobile phones, and embedded devices. It serves as an
+intermediary between hardware and applications, as an abstraction layer
+that simplifies the interaction between them. It is engineered for
+compatibility with a wide array of architectures, such as ARM, x86,
+RISC-V, and others.</p>
+<p>The kernel does not function as a standalone operating system. This
+role is fulfilled by distributions, which build upon the Linux kernel to
+create fully-fledged operating systems<span class="citation">[2]</span>.
+Distributions supplement the kernel with additional userspace tools,
+examples being GNU coreutils or BusyBox. Depending on their target
+audience, they further enhance functionality by integrating desktop
+environments and other software.</p>
+<p>The open-source nature of the Linux kernel makes it especially
+interesting for academic exploration and usage. It offers transparency,
+allowing anyone to inspect the source code in depth. Furthermore, it
+encourages collaboration by enabling anyone to modify and contribute to
+the source code. This transparency, coupled with the potential for
+customization and improvement, makes developing for the Linux kernel a
+good choice for this thesis.</p>
 <h2 id="linux-kernel-modules"><span class="header-section-number">2.2</span> Linux Kernel Modules</h2>
-<p>At the heart of the Linux system resides its kernel, an extensible,
-monolithic component that allows for the integration of kernel
-modules<span class="citation">[2]</span>. Kernel modules are small
-pieces of kernel-level code that can be dynamically incorporated into
-the kernel, presenting the advantage of extending kernel functionality
-without necessitating system reboots.</p>
+<p>Linux is a extensible, but not a microkernel. Despite it’s monolithic
+nature, it allows for the integration of kernel modules<span class="citation">[2]</span>. Kernel modules are small pieces of
+kernel-level code that can be dynamically incorporated into the kernel,
+presenting the advantage of extending kernel functionality without
+necessitating system reboots.</p>
 <p>The dynamism of these modules comes from their ability to be loaded
 and unloaded into the running kernel as per user needs. This
 functionality aids in keeping the kernel size both manageable and
-maintainable, thereby promoting efficiency. Kernel modules are developed
-using the C programming language, like the kernel itself, ensuring
-compatibility and consistent performance.</p>
+maintainable, thereby promoting efficiency. Kernel modules are
+traditionally developed using the C programming language, like the
+kernel itself, ensuring compatibility and consistent performance.</p>
 <p>Kernel modules interact with the kernel via APIs (Application
-Programming Interfaces), mechanisms that facilitate communication
-between software components. Despite their utility, kernel modules do
-carry a potential risk. If not written with careful attention to detail,
-they can introduce significant instability into the kernel, adversely
-affecting the overall system performance and reliability.</p>
-<p>The lifecycle of a kernel module is not strictly confined to its time
-spent inside the kernel. It can be managed and controlled at different
-stages, starting from boot time, and be manipulated dynamically when the
-system is already running. This is facilitated by utilities like
+Programming Interfaces). Despite their utility, since they run in kernel
+space, modules do carry a potential risk. If not written with careful
+attention to detail, they can introduce significant instability into the
+kernel, negatively affecting the overall system performance and
+reliability.</p>
+<p>Modules can be managed and controlled at different stages, starting
+from boot time, and be manipulated dynamically when the system is
+already running. This is facilitated by utilities like
 <code>modprobe</code> and <code>rmmod</code><span class="citation">[3]</span>.</p>
 <p>In the lifecycle of a kernel module, two key functions are of
 significance: initialization and cleanup. The initialization function is
 responsible for setting up the module when it’s loaded into the kernel.
 Conversely, the cleanup function is used to safely remove the module
 from the kernel, freeing up any resources it previously consumed. These
-lifecycle functions provide a structured approach to module management,
-further enhancing the efficiency and stability of the Linux kernel.</p>
+lifecycle functions, along with other such hooks, provide a more
+structured approach to module development.</p>
 <h2 id="unix-signals-and-handlers"><span class="header-section-number">2.3</span> UNIX Signals and Handlers</h2>
-<p>UNIX signals are an integral component of UNIX-based systems,
+<p>UNIX signals are an integral component of UNIX-like systems,
 including Linux. They function as software interrupts, notifying a
 process of significant occurrences, such as exceptions. Signals may be
 generated from various sources, including the kernel, user input, or
 other processes, making them a versatile tool for inter-process
-communication.</p>
-<p>Despite their notification role, signals also serve as an
+notifications.</p>
+<p>Aside from this notification role, signals also serve as an
 asynchronous communication mechanism between processes or between the
 kernel and a process. As such, they have an inherent ability to deliver
 important notifications without requiring the recipient process to be in
@@ -179,18 +173,19 @@ a specific state of readiness<span class="citation">[4]</span>. Each
 signal has a default action associated with it, the most common of which
 are terminating the process or simply ignoring the signal.</p>
 <p>To customize how a process should react upon receiving a specific
-signal, handlers can be utilized. Handlers are routines that dictate the
-course of action a process should take when a signal is received. Using
-the <code>sigaction()</code> function, a handler can be installed for a
-specific signal, enabling a custom response to that signal<span class="citation">[5]</span>.</p>
-<p>However, it is important to note that signals are not typically
+signal, handlers can be utilized. Handlers dictate the course of action
+a process should take when a signal is received. Using the
+<code>sigaction()</code> function, a handler can be installed for a
+specific signal, enabling a custom response to that signal such as
+reloading configuration, cleaning up ressources before exiting or
+enabling verbose logging <span class="citation">[5]</span>.</p>
+<p>It is however important to note that signals are not typically
 utilized as a primary inter-process communication (IPC) mechanism. This
 is primarily due to their limitation in carrying additional data. While
 signals effectively alert a process of an event, they are not designed
-to convey any supplementary data related to that event. Consequently,
-they are best used in scenarios where simple event-based notifications
-are sufficient, rather than for more complex data exchange
-requirements.</p>
+to convey forther information related to that event; consequently, they
+are best used in scenarios where simple event-based notifications are
+sufficient, rather than for more complex data exchange requirements.</p>
 <h2 id="memory-hierarchy"><span class="header-section-number">2.4</span>
 Memory Hierarchy</h2>
 <p>The memory hierarchy in computers is an organized structure based on
@@ -199,8 +194,8 @@ Processing Unit (CPU). It follows the principle of locality, which
 suggests that data and instructions that are accessed frequently should
 be stored as close to the CPU as possible<span class="citation">[6]</span>. This principle is crucial primarily due to
 the limitations of “the speed of the cable”, where both throughput and
-latency decrease as distance increases due to factors like dampening and
-the finite speed of light.</p>
+latency decrease as distance increases due to factors like signal
+dampening and the finite speed of light.</p>
 <p>At the top of the hierarchy are registers, which are closest to the
 CPU. They offer very high speed, but provide limited storage space,
 typically accommodating 32-64 bits of data. These registers are used by
@@ -208,23 +203,23 @@ the CPU to perform operations.</p>
 <p>Following registers in the hierarchy is cache memory, typically
 divided into L1, L2, and L3 levels. As the level increases, each layer
 becomes larger and less expensive. Cache memory serves as a buffer for
-frequently accessed data, with predictive algorithms optimizing its
-usage.</p>
-<p>Main Memory, often referred to as Random Access Memory (RAM),
-provides larger storage capacity than cache but operates at a slower
-speed. It typically stores running programs and open files.</p>
+frequently accessed data, with predictive algorithms typically
+optimizing its usage.</p>
+<p>Main Memory, i.e. Random Access Memory (RAM), provides larger storage
+capacity than cache but operates at a slower speed. It typically stores
+running programs and open files.</p>
 <p>Below main memory, we find secondary storage devices such as Solid
 State Drives (SSD) or Hard Disk Drives (HDD). Although slower than RAM,
-these devices can store larger amounts of data and typically house the
-operating system. Importantly, they are persistent, meaning they retain
-data even after power is cut.</p>
+these devices can store larger amounts of data and typically contain the
+operating system and application binary fies. Importantly, they are
+persistent, meaning they retain data even after power is cut.</p>
 <p>Tertiary storage, including optical disks and tape, is slow but very
 cost-effective. Tape storage can store very large amounts of data for
-relatively long periods of time. These types of storage are typically
-used for archiving or physically transporting data, such as importing
-data from personal infrastructure to a service like AWS.</p>
+long periods of time. These types of storage are typically used for
+archiving or physically transporting data, such as importing data from
+personal infrastructure to a service like AWS<span class="citation">[7]</span>.</p>
 <p>The memory hierarchy is not static but evolves with technological
-advancements, leading to some blurring of these distinct layers<span class="citation">[7]</span>. For instance, Non-Volatile Memory Express
+advancements, leading to some blurring of these distinct layers<span class="citation">[8]</span>. For instance, Non-Volatile Memory Express
 (NVMe) storage technologies can rival the speed of RAM while offering
 greater storage capacities. Similarly, some research, such as the work
 presented in this thesis, further challenges traditional hierarchies by
@@ -239,360 +234,337 @@ provides security guarantees, such as ensuring that only a specific
 process can access its allocated memory.</p>
 <p>Within the context of the Linux operating system, memory management
 is divided into two major segments: kernel space and user space.</p>
-<p>Kernel space is where the kernel, kernel extensions, and device
-drivers operate. The kernel memory module is responsible for managing
-this segment. Slab allocation is a technique employed in kernel space
-management. This technique groups objects of the same size into caches,
-enhancing memory allocation speed and reducing fragmentation of
-memory<span class="citation">[8]</span>.</p>
-<p>On the other hand, user space is the memory segment where
-applications and certain drivers store their memory<span class="citation">[9]</span>. User space memory management involves a
-paging system, offering each application its unique private virtual
-address space.</p>
+<p>Kernel space is where the kernel itself and kernel modules operate.
+The kernel memory module is responsible for managing this segment. Slab
+allocation is a technique employed in kernel space management; this
+technique groups objects of the same size into caches, enhancing memory
+allocation speed and reducing fragmentation of memory<span class="citation">[9]</span>.</p>
+<p>User space is the memory segment where applications and certain
+drivers store their memory<span class="citation">[10]</span>. User space
+memory management involves a paging system, offering each application
+its unique private virtual address space.</p>
 <p>This virtual address space is divided into units known as pages, each
 typically 4 KB in size. These pages can be mapped to any location in
 physical memory, providing flexibility and optimizing memory
-utilization. The use of a virtual address space further adds a layer of
-abstraction between the application and the physical memory, enhancing
-the security and isolation of processes.</p>
+utilization. The use of this virtual address space further adds a layer
+of abstraction between the application and the physical memory,
+enhancing the security and isolation of processes.</p>
 <h2 id="swap-space"><span class="header-section-number">2.6</span> Swap
 Space</h2>
 <p>Swap space refers to a designated portion of the secondary storage
-utilized as virtual memory in a computer system<span class="citation">[9]</span>. This feature plays a crucial role in
+utilized as virtual memory in a computer system<span class="citation">[10]</span>. This feature plays a crucial role in
 systems that run multiple applications simultaneously. When memory
 resources are strained, swap space comes into play, relocating inactive
 parts of the RAM to secondary storage. This action frees up space in
-primary memory for other processes, enabling smoother operation.</p>
-<p>In the Linux operating system, swap space implementation aligns with
-a demand paging system. This means that memory is allocated only when
-required. The swap space in Linux can be a swap partition, which is a
-distinct area within the secondary storage, or it can take the form of a
-swap file, which is a standard file that can be expanded or truncated
-based on need. The usage of swap partitions and files is transparent to
-the user.</p>
+primary memory for other processes, enabling smoother operation and
+preventing a potential system crash.</p>
+<p>In the case of Linux, swap space implementation aligns with a demand
+paging system. This means that memory is allocated only when required.
+The swap space in Linux can be a swap partition, which is a distinct
+area within the secondary storage, or it can take the form of a swap
+file, which is a standard file that can be expanded or truncated based
+on need. The usage of swap partitions and files is transparent to the
+user.</p>
 <p>The Linux kernel employs a Least Recently Used (LRU) algorithm to
 determine which memory pages should be moved to swap space. This
-algorithm effectively prioritizes memory pages based on their usage,
+algorithm effectively prioritizes pages based on their usage,
 transferring those that have not been recently used to swap space.</p>
 <p>Swap space also plays a significant role in system hibernation.
 Before the system enters hibernation, the content of RAM is stored in
 the swap space, where it remains persistent even without power. When the
 system is resumed, the memory content is read back from swap space,
-restoring the system to its pre-hibernation state.</p>
+restoring the system to its pre-hibernation state<span class="citation">[11]</span>.</p>
 <p>However, the use of swap space can impact system performance. Since
 secondary storage devices are usually slower than primary memory, heavy
 reliance on swap space can cause significant system slowdowns. To
-mitigate this, Linux allows for the adjustment of ‘swappiness’, a
+mitigate this, Linux allows for the adjustment of “swappiness”, a
 parameter that controls the system’s propensity to swap memory pages.
 Adjusting this setting can balance the use of swap space to maintain
-system performance while preserving the benefits of virtual memory
+system performance while still preserving the benefits of virtual memory
 management.</p>
 <h2 id="page-faults"><span class="header-section-number">2.7</span> Page
 Faults</h2>
 <p>Page faults are instances in which a process attempts to access a
 page that is not currently available in primary memory. This situation
 triggers the operating system to swap the necessary page from secondary
-storage into primary memory<span class="citation">[10]</span>. These are
-significant events in memory management, as they determine how
-efficiently an operating system utilizes its resources.</p>
+storage into primary memory. These are significant events in memory
+management, as they determine how efficiently an operating system
+utilizes its resources.</p>
 <p>Page faults can be broadly categorized into two types: minor and
 major. Minor page faults occur when the desired page resides in memory
 but isn’t linked to the process that requires it. On the other hand, a
 major page fault takes place when the page has to be loaded from
 secondary storage, a process that typically takes more time and
-resources.</p>
+resources<span class="citation">[3]</span>.</p>
 <p>To minimize the occurrence of page faults, memory management
-algorithms such as Least Recently Used (LRU) and the more
-straightforward clock algorithm are often employed. These algorithms
-effectively manage the order and priority of memory pages, helping to
-ensure that frequently used pages are readily available in primary
-memory.</p>
+algorithms such as the afore-mentioned Least Recently Used (LRU) and the
+more straightforward clock algorithm are often employed. These
+algorithms effectively manage the order and priority of memory pages,
+helping to ensure that frequently used pages are readily available in
+primary memory.</p>
 <p>Handling page faults involves certain techniques to ensure smooth
 operation. One such technique is prefetching, which anticipates future
 page requests and proactively loads these pages into memory. Another
 approach involves page compression, where inactive pages are compressed
-and stored in memory preemptively<span class="citation">[11]</span>.
+and stored in memory preemptively<span class="citation">[12]</span>.
 This reduces the likelihood of major page faults by conserving memory
 space, allowing more pages to reside in primary memory.</p>
 <p>In general, handling page faults is a task delegated to the kernel.
-This critical function is part of the kernel’s memory management duties,
-ensuring that processes can access the pages they require while
-maintaining efficient use of system memory. This balance between
-resource availability and system performance underscores the importance
-of sophisticated page fault management in an operating system’s
-design.</p>
+This critical balance between resource availability and system
+performance is part of the kernel’s memory management duties, ensuring
+that processes can access the pages they require while maintaining
+efficient use of system memory.</p>
 <h2 id="mmap"><span class="header-section-number">2.8</span>
 <code>mmap</code></h2>
-<p>The <code>mmap</code> is a versatile UNIX system call, used for
-mapping files or devices into memory, enabling a variety of core tasks
-like shared memory, file I/O, and fine-grained memory allocation. Due to
-its powerful nature, it is commonly harnessed in applications like
-databases. It is indeed a “power tool”, mandating the careful and
-intentional use to avoid issues or inefficiencies.</p>
-<p>One standout feature of <code>mmap</code> is its ability to function
-by creating a direct memory mapping between a file and a region of
-memory<span class="citation">[12]</span>. This connection means that
+<p><code>mmap</code> is a versatile UNIX system call, used for mapping
+files or devices into memory, enabling a variety of core tasks like
+shared memory, file I/O, and fine-grained memory allocation. Due to its
+powerful nature, it is commonly harnessed in applications like
+databases.</p>
+<p>One standout feature of <code>mmap</code> is its ability to create
+what is essentially a direct memory mapping between a file and a region
+of memory<span class="citation">[13]</span>. This connection means that
 read operations performed on the mapped memory region directly
 correspond to reading the file and vice versa, enhancing efficiency by
-reducing the overhead as the necessity for context switches
+reducing the overhead as the necessity for context switches (compared to
+i.e. the <code>read</code> or <code>write</code> system calls)
 diminishes.</p>
-<p>A key advantage that <code>mmap</code> provides is the capacity to
+<p>The key advantage that <code>mmap</code> provides is the capacity to
 facilitate zero-copy operations. In practical terms, this signifies data
 can be accessed directly as if it were positioned in memory, eliminating
 the need to copy it from the disk first. This direct memory access saves
 time and reduces processing requirements, offering substantial
 performance improvements.</p>
-<p>The <code>mmap</code> is also proficient in sharing memory between
+<p><code>mmap</code> is also proficient in sharing memory between
 processes without having to pass through the kernel with system
 calls<span class="citation">[4]</span>. With this feature,
 <code>mmap</code> can create shared memory spaces where multiple
 processes can read and write, enhancing interprocess communication and
 data transfer efficiency.</p>
-<p>However, <code>mmap</code> does come with a notable drawback: it
-bypasses the file system cache. That can potentially result in stale
-data when multiple processes are reading and writing simultaneously.
-This bypass may lead to a scenario where one process modifies data in
-the <code>mmap</code> region, and another process that is not monitoring
-for changes via the <code>mmap</code> might remain unaware and continue
-to work with outdated data.</p>
-<p>Despite the potential for stale data, the benefits of using
-<code>mmap</code> are substantial, affording the implementation of
-highly efficient applications. Its ability to directly map memory to
-files and vice versa, avoiding costly file system operations, the
-potential for zero-copy operations, and memory sharing capabilities make
-it a significant instrument in the UNIX system call arsenal. Yet, users
-must always account for the trade-off with the bypass of the cache
-system and mitigate possible stale data issues. Responsible use of
-<code>mmap</code> can be a game changer for optimizing memory and file
-management operations in UNIX-based systems.</p>
+<p>The potential speed improvement does however come with a notable
+drawback: It bypasses the file system cache, which can potentially
+result in stale data when multiple processes are reading and writing
+simultaneously. This bypass may lead to a scenario where one process
+modifies data in the <code>mmap</code> region, and another process that
+is not monitoring for changes might remain unaware and continue to work
+with outdated data.</p>
 <h2 id="inotify"><span class="header-section-number">2.9</span>
 <code>inotify</code></h2>
 <p>The <code>inotify</code> is an event-driven notification system of
-the Linux kernel, designed to monitor the file system for a multitude of
-events, such as modifications and accesses, among others<span class="citation">[13]</span>. It’s unique for its intrinsic ability to
-heed to specific events through a watch feature. For instance, it can be
-configured to watch only write operations on certain files. This level
-of control can offer considerable benefits in cases where there is a
-need to focus system resources on certain file system events, and not on
-others.</p>
+the Linux kernel, designed to monitor the file system for different
+events, such as modifications and accesses, among others<span class="citation">[14]</span>. Its particularly useful because it can be
+configured to watch only write operations on certain files, i.e. only
+<code>write</code> operations. This level of control can offer
+considerable benefits in cases where there is a need to focus system
+resources on certain file system events, and not on others.</p>
 <p>Naturally, <code>inotify</code> comes with some recognizable
 advantages. Significantly, it diminishes overhead and resource use when
 compared to polling strategies. Polling is an operation-heavy approach
 as it continuously checks the status of the file system, regardless of
 whether any changes have occurred. In contrast, <code>inotify</code>
 works in a more event-driven way, where it only takes action when a
-specific event occurs. This differential action is inherently more
-efficient, reducing overhead where there are infrequent changes to the
-file system.</p>
+specific event actually occurs. This is usually more efficient, reducing
+overhead especially where there are infrequent changes to the file
+system.</p>
 <p>Thanks to its efficiency and flexibility, <code>inotify</code> has
-found its utilization across many applications, including Dropbox, a
-widely used file synchronization service. In such applications, its
-capability to instantly notify the system of file changes aids in
-instant synchronization of files, demonstrating how critical its role
-can be in real-time or near real-time systems that are dependent on
-keeping data up-to-date.</p>
+found its utilization across many applications, especially in file
+synchronization services. In this usecase, the ability to instantly
+notify the system of file changes aids in instant synchronization of
+files, demonstrating how critical its role can be in real-time or near
+real-time systems that are dependent on keeping data up-to-date.</p>
 <p>However, as is the case with many system calls, there is a limit to
 its scalability. <code>inotify</code> is constrained by a limit on how
 many watches can be established. This limitation can pose challenges in
 intricate systems where there is a high quantity of files or directories
 to watch for, and might warrant additional management or fallback to
 heavier polling mechanisms for some parts of the system.</p>
-<h2 id="linux-kernel-disk-and-file-caching"><span class="header-section-number">2.10</span> Linux Kernel Disk and File
-Caching</h2>
-<p>Linux Kernel Disk and File Caching are key elements of the Linux
-operating system that work to boost efficiency and performance. Within
-this framework, there are two broad categories: disk caching and file
-caching.</p>
+<h2 id="linux-kernel-caching"><span class="header-section-number">2.10</span> Linux Kernel Caching</h2>
+<p>Caching is a key feature of the Linux kernel that work to boost
+efficiency and performance. Within this framework, there are two broad
+categories: disk caching and file caching.</p>
 <p>Disk caching in Linux is a strategic method that temporarily stores
-frequently accessed data in Random Access Memory (RAM). It is
-implemented through the page cache subsystem in Linux. This approach
-leverages the principle of locality, which states that odds are good
-that data situated near data that has already been accessed will be
-needed soon. This method of retaining data close to the CPU where it may
-be swiftly accessed without costly disk reads greatly reduces overall
-access time. The data within the cache is managed using the Least
-Recently Used (LRU) algorithm, which prunes the least recently used
-items first when space is needed.</p>
-<p>File caching, on the other hand, is where Linux caches file system
-metadata in specialized structures known as the <code>dentry</code> and
-<code>inode</code> caches. This metadata encompasses varied information
-such as file names, attributes, and locations. The key benefit of this
-caching is that it expedites the resolution of path names and file
-attributes, such as tracking when files were last changed for polling.
-Notably, file read/write operations are also channeled through the disk
-cache, further illustrating the intricate interconnectedness of disk and
-file caching mechanisms in the Linux Kernel.</p>
-<p>However, even as disk and file caching improve performance, they also
+frequently accessed data in RAM. It is implemented through the page
+cache subsystem, and operates under the assumption that data situated
+near data that has already been accessed will be needed soon. By
+retaining data close to the CPU where it may be swiftly accessed without
+costly disk reads can greatly reduce overall access time. The data
+within the cache is also managed using the LRU algorithm, which prunes
+the least recently used items first when space is needed.</p>
+<p>Linux also caches file system metadata in specialized structures
+known as the <code>dentry</code> and <code>inode</code> caches. This
+metadata encompasses varied information such as file names, attributes,
+and locations. The key benefit of this is that it expedites the
+resolution of path names and file attributes, such as tracking when
+files were last changed for polling. Notably, file read/write operations
+are also channeled through the disk cache, further illustrating the
+intricate interconnectedness of disk and file caching mechanisms in the
+Linux Kernel.</p>
+<p>While such caching mechanisms can improve performance, they also
 introduce complexities. One such complexity involves maintaining data
 consistency between the disk and cache through the process known as
-writebacks. A delicate balance needs to be maintained here: aggressive
-writebacks, where data is copied back to disk frequently, can lead to
-reduced performance, while excessive delays may risk data loss if the
-system crashes before data has been saved.</p>
+writebacks; aggressive writebacks, where data is copied back to disk
+frequently, can lead to reduced performance, while excessive delays may
+risk data loss if the system crashes before data has been saved.</p>
 <p>Another complexity arises from the necessity to release cached data
-under memory pressure, known as cache eviction. It necessitates
-sophisticated algorithms, such as the LRU, to ensure effective
-utilization of available cache space<span class="citation">[3]</span>.
-Prioritizing what to keep in cache when memory pressure builds is no
-trivial task, as the decision will directly impact the overall system
-performance.</p>
+under memory pressure, known as cache eviction. This requires
+sophisticated algorithms, such as LRU, to ensure effective utilization
+of available cache space<span class="citation">[3]</span>. Prioritizing
+what to keep in cache when memory pressure builds does directly impact
+the overall system performance.</p>
 <h2 id="tcp-udp-and-quic"><span class="header-section-number">2.11</span> TCP, UDP and QUIC</h2>
 <p>TCP (Transmission Control Protocol), UDP (User Datagram Protocol),
-and QUIC (Quick UDP Internet Connections) are key communication
-protocols utilized in network communications, each showcasing distinct
-characteristics and use cases.</p>
+and QUIC (Quick UDP Internet Connections) are three key communication
+protocols utilized in the internet today.</p>
 <p>TCP has long been the reliable backbone for internet communication
-due to its connection-oriented nature <span class="citation">[14]</span>. This protocol ensures the guaranteed
-delivery of data packets and their correct order, rendering it a highly
-dependable means for data transmission. Significantly, TCP incorporates
-error checking, allowing the detection and subsequent retransmission of
-lost packets. Moreover, TCP includes a congestion control mechanism to
-manage data transmission seamlessly during high traffic. Owing to these
-features, TCP is widely used to power the majority of the web where
-reliable, ordered, and error-checked data transmission is paramount.</p>
-<p>Alternatively, UDP is a connectionless protocol that does not make
+due to its connection-oriented nature <span class="citation">[15]</span>. It ensures the guaranteed delivery of data
+packets and their correct order, rendering it a highly dependable means
+for data transmission. Significantly, TCP incorporates error checking,
+allowing the detection and subsequent retransmission of lost packets.
+TCP also includes a congestion control mechanism to manage data
+transmission seamlessly during high traffic. Due to to these features
+and it’s long legacy, TCP is widely used to power the majority of the
+web where reliable, ordered, and error-checked data transmission is
+required.</p>
+<p>UDP is a connectionless protocol that does not make the same
 guarantees about the reliability or ordered delivery of data packets
-<span class="citation">[15]</span>. This lends UDP a speed advantage
-over TCP since fewer protocols are in place, resulting in less
-communication overhead. Although it lacks TCP’s robustness in handling
-errors and maintaining data order, UDP finds use in applications where
-speed takes precedence over reliability. This includes online gaming,
-video calls, and other real-time communication modes where quick data
-transmission is crucial even if occasional data packets go astray.</p>
-<p>QUIC, a modern transport layer protocol, was created by Google and
-ratified by the IETF in 2020. It aspires to amalgamate the best
-qualities of TCP and UDP <span class="citation">[16]</span>. Unlike UDP,
-QUIC ensures the reliability of data transmission and guarantees the
-ordered delivery of data packets. Simultaneously, it draws inspiration
-from UDP’s speed qualities. One of QUIC’s standout features is its
-ability to reduce connection establishment times, which effectively
-lowers initial latency. It achieves this by amalgamating connection and
-security handshakes, reducing the time taken for a connection to be
-established and secured. Additionally, QUIC is designed to prevent the
-issue of “head-of-line blocking”, allowing for the independent delivery
-of separate data streams. This means it can handle the delivery of
-separate data streams without one stream blocking another, resulting in
-smoother and more efficient transmission.</p>
+<span class="citation">[16]</span>. This lends UDP a speed advantage
+over TCP, resulting in less communication overhead. Although it lacks
+TCP’s robustness in handling errors and maintaining data order, UDP
+finds use in applications where speed and latency take precedence over
+reliability. This includes online gaming, video calls, and other
+real-time communication modes where quick data transmission is crucial
+even if temporary packet loss occurs.</p>
+<p>QUIC, a modern UDP-base transport layer protocol, was originally
+created by Google and standardized by the IETF in 2021<span class="citation">[17]</span>. It aspires to combine the best qualities
+of TCP and UDP <span class="citation">[18]</span>. Unlike raw UDP, QUIC
+ensures the reliability of data transmission and guarantees the ordered
+delivery of data packets similarly to TCP, while intending to keep UDP’s
+speed advantages. One of QUIC’s standout features is its ability to
+reduce connection establishment times, which effectively lowers initial
+latency. It achieves this by merging the typically separate connection
+and security handshakes, reducing the time taken for a connection to be
+established. Additionally, QUIC is designed to prevent the issue of
+“head-of-line blocking”, allowing for the independent delivery of
+separate data streams. This means it can handle the delivery of separate
+data streams without one stream blocking another, resulting in smoother
+and more efficient transmission, a feature which is especially important
+for applications with lots of concurrent transmissions.</p>
 <h2 id="delta-synchronization"><span class="header-section-number">2.12</span> Delta Synchronization</h2>
-<p>Delta synchronization is an innovative technique that allows for
-efficient synchronization of files between hosts, aiming to transfer
-only those parts of the file that have undergone changes instead of the
-entire file. This incremental approach can remarkably reduce network and
-I/O overhead, optimally utilizing system resources.</p>
-<p>Perhaps the most recognized tool employing this method of
-synchronization is <code>rsync</code>, an open-source data
-synchronization utility in Unix-like operating systems. The elixir
-offered by <code>rsync</code> lies in its usage of a delta-transfer
-algorithm, which astutely computes the difference between local and
-remote files, thereafter synchronizing the changes.</p>
-<p>Fundamentally, the algorithm embarks on file block division,
-dissecting the file on the destination side into fixed-size blocks. For
-each of these blocks, a quick albeit weak checksum calculation is
-performed, and these checksums are transferred to the source system.</p>
-<p>Concurrently, the source initiates the same checksum calculation
-process. These checksums are then compared to those received from the
-destination, a step recognized as matching block identification. The
-outcome of this comparison allows the source to discern the blocks which
-have transformed since the last synchronization.</p>
+<p>Delta synchronization is a technique that allows for efficient
+synchronization of files between hosts, aiming to transfer only those
+parts of the file that have undergone changes instead of the entire file
+in order to reduce network and I/O overhead. Perhaps the most recognized
+tool employing this method of synchronization is <code>rsync</code>, an
+open-source data synchronization utility in Unix-like operating
+systems<span class="citation">[19]</span>.</p>
+<p>TODO: Add sequence diagram of the delta sync protocol from
+https://blog.acolyer.org/2018/03/02/towards-web-based-delta-synchronization-for-cloud-storage-systems/</p>
+<p>While there are many applications of such an algorithm, it typically
+starts on file block division, dissecting the file on the destination
+side into fixed-size blocks. For each of these blocks, a quick albeit
+weak checksum calculation is performed, and these checksums are
+transferred to the source system.</p>
+<p>The source initiates the same checksum calculation process. These
+checksums are then compared to those received from the destination
+(matching block identification). The outcome of this comparison allows
+the source to detect the blocks which have transformed since the last
+synchronization.</p>
 <p>Once the altered blocks are identified, the source proceeds to send
 the offset of each block alongside the data of the changed block to the
-destination. Upon receiving a block, the destination writes the chunk to
-the specific offset in the file. This process results in the
-reconstruction of the file in accordance with the modifications
-undertaken at the source.</p>
-<p>Finally, after one polling interval is complete, the process
-reinitiates, perpetuating the cycle of efficient, incremental
-synchronization<span class="citation">[17]</span>.</p>
+destination. Upon receiving a block, the destination writes it to the
+specific offset in the file. This process results in the reconstruction
+of the file in accordance with the modifications undertaken at the
+source, after which the next synchronization cycle can start.</p>
 <h2 id="file-systems-in-userspace-fuse"><span class="header-section-number">2.13</span> File Systems In Userspace
 (FUSE)</h2>
 <p>File Systems in Userspace (FUSE) is a software interface that enables
 the creation of custom file systems in the userspace, as opposed to
-developing them as kernel modules. It liberates developers from the
-obligatory low-level kernel development normally associated with
+developing them as kernel modules. This reduces the need for the
+low-level kernel development skills that are usually associated with
 creating new file systems.</p>
-<p>FUSE is available on various platforms. Though mostly deployed on
-Linux, it can also be found on macOS and FreeBSD. The secret to
-developing file systems in userspace lies in the FUSE Application
-Programming Interface (API). In this setup, a userspace program aligns
-itself with the FUSE kernel module and provides callbacks for the file
-system operations. These operations can include tasks like
-<code>open</code>, <code>read</code>, <code>write</code>, and many
-others.</p>
-<p>So, when a user performs a file system operation on a mounted FUSE
-file system, the kernel module sends a request for executing that
-operation to the userspace program. This is followed by the userspace
-program returning a response, which the FUSE kernel module conveys back
-to the user. As such, FUSE circumvents the complexity of coding directly
-in the kernel. It runs comfortably in userspace and does not require a
-custom kernel module. This approach enhances safety, preventing entire
-kernel crashes due to errors within the FUSE or the backend.</p>
-<p>One commendable attribute of FUSE is its inherent portability. Unlike
-a file system created as a kernel module, its interaction with the FUSE
-module rather than the kernel itself grants it this portability. Despite
-the benefits of FUSE, there is a noticeable performance overhead
-associated with it. This is largely due to the context switching between
-the kernel and the userspace that occurs during its operation<span class="citation">[18]</span>.</p>
-<p>Fundamentally, FUSE is widely utilized to mount high-level interfaces
-to external services. For instance, it can be used to mount S3 buckets
-in an AWS environment or mount a remote system’s disk via Secure Shell
-(SSH). This functionality goes a long way in facilitating smooth and
-adaptable access to various resources, lending FUSE its unique
-versatility in the diverse world of file systems.</p>
+<p>The FUSE APIs are available on various platforms; though mostly
+deployed on Linux, it can also be found on macOS and FreeBSD. In FUSE, a
+userspace program registers itself with the FUSE kernel module and
+provides callbacks for the file system operations. These operations can
+include tasks like <code>open</code>, <code>read</code>,
+<code>write</code>, and many others.</p>
+<p>When a user performs a file system operation on a mounted FUSE file
+system, the kernel module sends a request for executing that operation
+to the userspace program. This is followed by the userspace program
+returning a response, which the FUSE kernel module conveys back to the
+user. As such, FUSE circumvents the complexity of coding the file system
+implementation directly in the kernel. This approach enhances safety,
+preventing entire kernel crashes due to errors within the implementation
+being limited to user instead of kernel space.</p>
+<p>Another benefit of a file system implemented as a FUSE is its
+inherent portability. Unlike a file system created as a kernel module,
+its interaction with the FUSE module rather than the kernel itself
+creates a stronger contract between the two, and allows shipping the
+file system as a plain binary instead of a binary kernel module, which
+typically need to be built from source on the target machine unless they
+are vendored by a distribution. Despite these benefits of FUSE, there is
+a noticeable performance overhead associated with it. This is largely
+due to the context switching between the kernel and the userspace that
+occurs during its operation<span class="citation">[20]</span>.</p>
+<p>Today, FUSE is widely utilized to mount high-level external services
+as file sysems. For instance, it can be used to mount remote AWS S3
+buckets with <code>s3fs</code><span class="citation">[21]</span> or to
+mount a remote system’s disk via Secure Shell (SSH) with SSHFS <span class="citation">[22]</span>.</p>
 <h2 id="network-block-device-nbd"><span class="header-section-number">2.14</span> Network Block Device
 (NBD)</h2>
-<p>Network Block Device (NBD) embodies a protocol that enables
-communication between a user space-provided server and a Kernel-provided
-client. Though potentially deployable over Wide Area Networks (WAN), it
-is primarily designed for Local Area Networks (LAN) or localhost usage.
-The protocol is divided into two phases: the handshake and the
-transmission<span class="citation">[19]</span>.</p>
-<p>The execution of the NBD protocol involves multiple participants,
-notably one or several clients, a server, and the virtual concept of an
-export. It initiates with a client establishing a connection with the
-server. The server reciprocates by delivering a greeting message
-highlighting various server flags. The client responds by transmitting
-its own flags along with the name of an export to use; a single NBD
-server can expose multiple devices.</p>
-<p>Upon receiving this, the server sends the size of the export and
+<p>Network Block Device (NBD) is a protocol for connecting to a remote
+Linux block device. It typically works by communicating between a user
+space-provided server and a Kernel-provided client. Though potentially
+deployable over Wide Area Networks (WAN), it is primarily designed for
+Local Area Networks (LAN) or localhost usage. The protocol is divided
+into two phases: the handshake and the transmission<span class="citation">[23]</span>.</p>
+<p>TODO: Add sequence diagram of the NBD protocol</p>
+<p>The NBD protocol involves multiple participants, notably one or
+several clients, a server, and the concept of an export. It starts with
+a client establishing a connection with the server. The server
+reciprocates by delivering a greeting message highlighting various
+server flags. The client responds by transmitting its own flags along
+with the name of an export to use; a single NBD server can expose
+multiple devices.</p>
+<p>After receiving this, the server sends the size of the export and
 other metadata. The client acknowledges this data, completing the
 handshake. Post handshake, the client and server exchange commands and
-replies. A command can embody any of the basic actions needed to access
-a block device, for instance read, write or flush. These commands might
-also contain data such as a chunk for writing, offsets, and lengths
-among other elements. Replies may contain error messages, success
-status, or data contingent on the reply type.</p>
-<p>While powerful in many regards, NBD does exhibit some limitations.
-Its maximum message size is capped at 32 MB, and the maximum block or
-chunk size supported by the Kernel is a mere 4096 KB. Thus, it might not
-be the most optimal protocol for WAN usage, especially in scenarios with
-high latency.</p>
-<p>NBD, being a seasoned protocol, comes with its own set of operational
-quirks such as multiple different handshake versions and legacy
-features. As a result, it is advisable to only implement the latest
-recommended versions and the foundational feature set when considering
-the NBD for minimal use.</p>
+replies. A command can correspond to any of the basic actions needed to
+access a block device, for instance read, write or flush. These commands
+might also contain data such as a chunk for writing, offsets, and
+lengths among other elements. Replies may contain error messages,
+success status, or data contingent on the reply type.</p>
+<p>While powerful in many regards, NBD has some limitations. Its maximum
+message size is capped at 32 MB<span class="citation">[24]</span>, and
+the maximum block or chunk size supported by the Kernel’s NBD client is
+a mere 4KB<span class="citation">[25]</span>. Thus, it might not be the
+most optimal protocol for WAN usage, especially in scenarios with high
+latency.</p>
+<p>NBD, being a protocol with a long legacy, comes with its own set of
+operational quirks such as multiple different handshake versions and
+legacy features. As a result, it is advisable to only implement the
+latest recommended versions and the foundational feature set when
+considering it NBD for a narrow usecase.</p>
 <p>Despite the simplicity of the protocol, there are certain scenarios
-where NBD falls short. It has limitations when dealing with backing
-devices that operate drastically different from random-access storage
-devices, like a tape drive, since it lacks the ability to work with
-high-level abstractions such as files or directories. For example, it
-does not support shared access to the same file for multiple clients.
-However, this shortcoming can be considered as an advantage for narrow
-memory synchronization, given that it operates on a block level - a case
-where simplicity and focused functionality triumph over holistic
-versatility.</p>
+where NBD falls short. Compared to FUSE, it has limitations when dealing
+with backing devices that operate drastically different from
+random-access storage devices like a tape drive, since it lacks the
+ability to work with high-level abstractions such as files or
+directories. For example, it does not support shared access to the same
+file for multiple clients. However, this shortcoming can be considered
+as an advantage for narrow usecases like memory synchronization, given
+that it operates on a block level, where such features are not needed or
+implemented at a higher layer.</p>
 <h2 id="virtual-machine-live-migration"><span class="header-section-number">2.15</span> Virtual Machine Live
 Migration</h2>
+<p>Virtual machine live migration involves the shifting of a virtual
+machine, its state, and its connected devices from one host to another,
+with the objective to minimize disrupted service by minimizing downtime
+during data transfer processes.</p>
+<p>Algorithms that intent to implement this usecase can be categorized
+into two broad types: pre-copy migration and post-copy migration.</p>
 <h3 id="pre-copy"><span class="header-section-number">2.15.1</span>
 Pre-Copy</h3>
-<p>Virtual Machine Live Migration has emerged as a key strategy to
-optimize systems involving WAN, with a focus on minimizing downtime
-during data transfer processes. It essentially involves the shifting of
-a virtual machine, its state, and its connected devices from one host to
-another, with the objective to minimize disrupted service.</p>
-<p>Live migration algorithms can be categorized into two broad types:
-pre-copy migration and post-copy migration. Here we delve into the
-specifics of the pre-copy migration technique.</p>
 <p>The foremost characteristic of pre-copy migration is its
 ‘run-while-copy’ nature. In other words, the copying of data from the
 source to the destination occurs concurrently while the virtual machine
@@ -619,7 +591,7 @@ in full either at the source or the destination.</p>
 application alters too many chunks on the source during migration, it
 may not be possible to meet the maximum acceptable downtime criteria.
 Furthermore, maximum permissible downtime is inherently restricted by
-the available round-trip time (RTT)<span class="citation">[20]</span>.</p>
+the available round-trip time (RTT)<span class="citation">[26]</span>.</p>
 <p>Despite these constraints, the pre-copy migration strategy offers
 viable benefits in terms of consistent VM availability and resilience
 against network disconnections, underlining its potential effectiveness
@@ -655,11 +627,11 @@ primarily as a consequence of its ‘fetch-on-demand’ model for retrieving
 chunks, a model highly sensitive to network latency and round-trip time
 (RTT). This essentially means that the time taken for data to travel to
 the destination and then for an acknowledgement of receipt to return to
-the source can affect the overall efficiency of the migration<span class="citation">[20]</span>.</p>
+the source can affect the overall efficiency of the migration<span class="citation">[26]</span>.</p>
 <h3 id="workload-analysis"><span class="header-section-number">2.15.3</span> Workload Analysis</h3>
 <p>The research article “Reducing Virtual Machine Live Migration
 Overhead via Workload Analysis” explores strategies to determine the
-most suitable timing for virtual machine (VM) migration<span class="citation">[21]</span>. Even though the study chiefly focuses on
+most suitable timing for virtual machine (VM) migration<span class="citation">[27]</span>. Even though the study chiefly focuses on
 virtual machines, the methodologies proposed could be adapted for use
 with various other applications or migration circumstances.</p>
 <p>The method proposed in the study identifies cyclical workload
@@ -695,7 +667,7 @@ power of streams comes from their ability to process data as it becomes
 available. This aspect allows for minimization of memory consumption,
 making streams particularly impactful for scenarios involving
 long-running processes where data is streamed over extended periods of
-time<span class="citation">[22]</span>.</p>
+time<span class="citation">[28]</span>.</p>
 <p>On the other hand, a pipeline comprises a series of data processing
 stages, wherein the output of one stage directly serves as the input to
 the next. It’s this chain of processing stages that forms a ‘pipeline.’
@@ -712,7 +684,7 @@ fundamental part of UNIX and Linux command-line interfaces. Here, the
 output of a command can be ‘piped’ into another for further processing.
 For instance, the results from a <code>curl</code> command fetching data
 from an API could be piped into the <code>jq</code> tool for JSON
-manipulation<span class="citation">[23]</span>.</p>
+manipulation<span class="citation">[29]</span>.</p>
 <h2 id="grpc"><span class="header-section-number">2.17</span> gRPC</h2>
 <p>The gRPC is an open-source, high-performance remote procedure call
 (RPC) framework developed by Google in 2015. The gRPC framework is
@@ -747,7 +719,7 @@ other.</p>
 <p>What distinguishes gRPC is its pluggable structure that allows for
 added functionalities such as load balancing, tracing, health checking,
 and authentication. These features make it a comprehensive solution for
-efficient and effective communication mechanisms<span class="citation">[24]</span>.</p>
+efficient and effective communication mechanisms<span class="citation">[30]</span>.</p>
 <h2 id="redis"><span class="header-section-number">2.18</span>
 Redis</h2>
 <p>Redis, an acronym for ‘REmote DIctionary Server,’ is an in-memory
@@ -761,7 +733,7 @@ multitude of data structures, including lists, sets, hashes, and
 bitmaps. These differing data types allow for versatile data
 manipulation capabilities. Thus, in scenarios where a diverse set of
 data types need to be managed concurrently, Redis supplies a fitting
-solution<span class="citation">[25]</span>.</p>
+solution<span class="citation">[31]</span>.</p>
 <p>One of the primary drivers for Redis’s speed is its reliance on
 in-memory data storage. By storing data in memory rather than on disk,
 Redis enables low-latency reads and writes, contributing to the
@@ -783,7 +755,7 @@ message broker, where messages are published to ‘channels’ and delivered
 to all the ‘subscribers’ interested in those channels. This feature is
 particularly useful when it comes to real-time event notifications in
 web applications or the distribution of tasks among worker nodes in
-high-performance computing setups<span class="citation">[26]</span>.</p>
+high-performance computing setups<span class="citation">[32]</span>.</p>
 <h2 id="s3-and-minio"><span class="header-section-number">2.19</span> S3
 and Minio</h2>
 <p>Amazon’s Simple Storage Service (S3) and Minio are two contemporary
@@ -808,7 +780,7 @@ and access control.</p>
 <p>Communication with S3 is facilitated through an exposed HTTP API.
 Users and applications can interact with the stored data—including files
 and folders—via this API, allowing for seamless data manipulation and
-retrieval<span class="citation">[27]</span>.</p>
+retrieval<span class="citation">[33]</span>.</p>
 <p>On the contrary, Minio represents a different approach towards
 storage solutions. It is an open-source storage server, underlining
 compatibility with Amazon S3’s API. Written in the Go programming
@@ -823,7 +795,7 @@ preferring to maintain direct control over their data could find Minio a
 fitting choice. Moreover, Minio supports horizontal scalability,
 designed to distribute large quantities of data across multiple nodes.
 This feature aids in optimizing storage efficiency, data access times,
-and overall capability to handle growing data volumes<span class="citation">[28]</span>.</p>
+and overall capability to handle growing data volumes<span class="citation">[34]</span>.</p>
 <h2 id="cassandra-and-scyllladb"><span class="header-section-number">2.20</span> Cassandra and ScylllaDB</h2>
 <p>Apache Cassandra and ScyllaDB are compelling wide-column NoSQL
 databases, each tailored for large-scale, distributed data management
@@ -843,7 +815,7 @@ bottleneck and failure risks associated with master nodes.</p>
 <p>Despite its robust capabilities, Cassandra does come with certain
 limitations. Under heavy load, it experiences high latency that can
 negatively affect system performance. Besides, it demands complex
-configuration to correctly fine-tune according to specific needs<span class="citation">[29]</span>.</p>
+configuration to correctly fine-tune according to specific needs<span class="citation">[35]</span>.</p>
 <p>In response to the perceived shortcomings of Cassandra, ScyllaDB was
 launched in 2015. It shares design principles with
 Cassandra—compatibility with Cassandra’s API and data model—but boasts
@@ -855,7 +827,7 @@ that aims to minimize contention and enhance performance.</p>
 around latency, specifically the 99th percentile latency that impacts
 system reliability and predictability. In fact, ScyllaDB’s design
 improvements and performance gains over Cassandra have been endorsed by
-various benchmarking studies<span class="citation">[30]</span>.</p>
+various benchmarking studies<span class="citation">[36]</span>.</p>
 <div id="refs" class="references csl-bib-body">
 <div id="ref-linux2023docs" class="csl-entry">
 <div class="csl-left-margin">[1] </div><div class="csl-right-inline">T.
@@ -888,81 +860,112 @@ concurrency, and threads</em>. Prentice Hall PTR, 2003.</div>
 J. Smith, <span>“Cache memories,”</span> <em>ACM Comput. Surv.</em>,
 vol. 14, no. 3, pp. 473–530, Sep. 1982, doi: <a href="https://doi.org/10.1145/356887.356892">10.1145/356887.356892</a>.</div>
 </div>
+<div id="ref-barr2021offline" class="csl-entry">
+<div class="csl-left-margin">[7] </div><div class="csl-right-inline">J.
+Barr, <span>“New - offline tape migration using AWS snowball
+edge.”</span> <a href="https://aws.amazon.com/blogs/aws/new-offline-tape-migration-using-aws-snowball-edge/" class="uri">https://aws.amazon.com/blogs/aws/new-offline-tape-migration-using-aws-snowball-edge/</a>,
+2021.</div>
+</div>
 <div id="ref-maruf2023memory" class="csl-entry">
-<div class="csl-left-margin">[7] </div><div class="csl-right-inline">H.
+<div class="csl-left-margin">[8] </div><div class="csl-right-inline">H.
 A. Maruf and M. Chowdhury, <span>“Memory disaggregation: Advances and
 open challenges.”</span> 2023.Available: <a href="https://arxiv.org/abs/2305.03943">https://arxiv.org/abs/2305.03943</a></div>
 </div>
 <div id="ref-bonwick1994slaballoc" class="csl-entry">
-<div class="csl-left-margin">[8] </div><div class="csl-right-inline">J.
+<div class="csl-left-margin">[9] </div><div class="csl-right-inline">J.
 Bonwick, <span>“The slab allocator: An <span>Object-Caching</span>
 kernel,”</span> Jun. 1994.Available: <a href="https://www.usenix.org/conference/usenix-summer-1994-technical-conference/slab-allocator-object-caching-kernel">https://www.usenix.org/conference/usenix-summer-1994-technical-conference/slab-allocator-object-caching-kernel</a></div>
 </div>
 <div id="ref-gorman2004linuxmem" class="csl-entry">
-<div class="csl-left-margin">[9] </div><div class="csl-right-inline">M.
+<div class="csl-left-margin">[10] </div><div class="csl-right-inline">M.
 Gorman, <em>Understanding the linux virtual memory manager</em>. Upper
 Saddle River, New Jersey 07458: Pearson Education, Inc. Publishing as
 Prentice Hall Professional Technical Reference, 2004.</div>
 </div>
-<div id="ref-li2020user" class="csl-entry">
-<div class="csl-left-margin">[10] </div><div class="csl-right-inline">Q.
-Li, <span>“User level page faults,”</span> Master&#39;s thesis, Carnegie
-Mellon University, School of Computer Science, Pittsburgh, PA 15213,
-2020.</div>
+<div id="ref-kernel2023suspend" class="csl-entry">
+<div class="csl-left-margin">[11] </div><div class="csl-right-inline">T.
+K. D. Community, <span>“Swap suspend,”</span> 2023. <a href="https://www.kernel.org/doc/html/latest/power/swsusp.html">https://www.kernel.org/doc/html/latest/power/swsusp.html</a>
+(accessed Jul. 19, 2023).</div>
 </div>
 <div id="ref-silberschatz2018operating" class="csl-entry">
-<div class="csl-left-margin">[11] </div><div class="csl-right-inline">A.
+<div class="csl-left-margin">[12] </div><div class="csl-right-inline">A.
 Silberschatz, P. B. Galvin, and G. Gagne, <em>Operating system
 concepts</em>, 10th ed. Hoboken, NJ: Wiley, 2018.Available: <a href="https://lccn.loc.gov/2017043464">https://lccn.loc.gov/2017043464</a></div>
 </div>
 <div id="ref-choi2017mmap" class="csl-entry">
-<div class="csl-left-margin">[12] </div><div class="csl-right-inline">J.
+<div class="csl-left-margin">[13] </div><div class="csl-right-inline">J.
 Choi, J. Kim, and H. Han, <span>“Efficient memory mapped file
 <span>I/O</span> for <span>In-Memory</span> file systems,”</span> Jul.
 2017.Available: <a href="https://www.usenix.org/conference/hotstorage17/program/presentation/choi">https://www.usenix.org/conference/hotstorage17/program/presentation/choi</a></div>
 </div>
 <div id="ref-prokop2010inotify" class="csl-entry">
-<div class="csl-left-margin">[13] </div><div class="csl-right-inline">M.
+<div class="csl-left-margin">[14] </div><div class="csl-right-inline">M.
 Prokop, <span>“Inotify: Efficient, real-time linux file system event
 monitoring,”</span> Apr. 2010. <a href="https://www.infoq.com/articles/inotify-linux-file-system-event-monitoring/">https://www.infoq.com/articles/inotify-linux-file-system-event-monitoring/</a></div>
 </div>
 <div id="ref-postel1981tcp" class="csl-entry">
-<div class="csl-left-margin">[14] </div><div class="csl-right-inline"><span>“<span>Transmission Control
+<div class="csl-left-margin">[15] </div><div class="csl-right-inline"><span>“<span>Transmission Control
 Protocol</span>.”</span> RFC 793; J. Postel, Sep. 1981. doi: <a href="https://doi.org/10.17487/RFC0793">10.17487/RFC0793</a>.</div>
 </div>
 <div id="ref-postel1980udp" class="csl-entry">
-<div class="csl-left-margin">[15] </div><div class="csl-right-inline"><span>“<span>User Datagram
+<div class="csl-left-margin">[16] </div><div class="csl-right-inline"><span>“<span>User Datagram
 Protocol</span>.”</span> RFC 768; J. Postel, Aug. 1980. doi: <a href="https://doi.org/10.17487/RFC0768">10.17487/RFC0768</a>.</div>
 </div>
+<div id="ref-rfc2021quic" class="csl-entry">
+<div class="csl-left-margin">[17] </div><div class="csl-right-inline">J.
+Iyengar and M. Thomson, <span>“<span class="nocase">QUIC: A UDP-Based
+Multiplexed and Secure Transport</span>.”</span> RFC 9000; RFC Editor,
+May 2021. doi: <a href="https://doi.org/10.17487/RFC9000">10.17487/RFC9000</a>.</div>
+</div>
 <div id="ref-langley2017quic" class="csl-entry">
-<div class="csl-left-margin">[16] </div><div class="csl-right-inline">A.
+<div class="csl-left-margin">[18] </div><div class="csl-right-inline">A.
 Langley <em>et al.</em>, <span>“The QUIC transport protocol: Design and
 internet-scale deployment,”</span> in <em>Proceedings of the conference
 of the ACM special interest group on data communication</em>, 2017, pp.
 183–196. doi: <a href="https://doi.org/10.1145/3098822.3098842">10.1145/3098822.3098842</a>.</div>
 </div>
 <div id="ref-xiao2018rsync" class="csl-entry">
-<div class="csl-left-margin">[17] </div><div class="csl-right-inline">H.
+<div class="csl-left-margin">[19] </div><div class="csl-right-inline">H.
 Xiao <em>et al.</em>, <span>“Towards web-based delta synchronization for
 cloud storage services,”</span> in <em>16th USENIX conference on file
 and storage technologies (FAST 18)</em>, Feb. 2018, pp.
 155–168.Available: <a href="https://www.usenix.org/conference/fast18/presentation/xiao">https://www.usenix.org/conference/fast18/presentation/xiao</a></div>
 </div>
 <div id="ref-vangoor2017fuse" class="csl-entry">
-<div class="csl-left-margin">[18] </div><div class="csl-right-inline">B.
+<div class="csl-left-margin">[20] </div><div class="csl-right-inline">B.
 K. R. Vangoor, V. Tarasov, and E. Zadok, <span>“To <span>FUSE</span> or
 not to <span>FUSE</span>: Performance of <span>User-Space</span> file
 systems,”</span> in <em>15th USENIX conference on file and storage
 technologies (FAST 17)</em>, Feb. 2017, pp. 59–72.Available: <a href="https://www.usenix.org/conference/fast17/technical-sessions/presentation/vangoor">https://www.usenix.org/conference/fast17/technical-sessions/presentation/vangoor</a></div>
 </div>
+<div id="ref-gaul2023s3fs" class="csl-entry">
+<div class="csl-left-margin">[21] </div><div class="csl-right-inline">A.
+Gaul, T. Nakatani, and @rrizun, <span>“s3fs: FUSE-based file system
+backed by amazon S3.”</span> <a href="https://github.com/s3fs-fuse/s3fs-fuse" class="uri">https://github.com/s3fs-fuse/s3fs-fuse</a>, 2023.</div>
+</div>
+<div id="ref-libfuse2022sshfs" class="csl-entry">
+<div class="csl-left-margin">[22] </div><div class="csl-right-inline">T.
+libfuse authors, <span>“SSHFS: A network filesystem client to connect to
+SSH servers.”</span> <a href="https://github.com/libfuse/sshfs" class="uri">https://github.com/libfuse/sshfs</a>, 2022.</div>
+</div>
 <div id="ref-blake2023nbd" class="csl-entry">
-<div class="csl-left-margin">[19] </div><div class="csl-right-inline">E.
+<div class="csl-left-margin">[23] </div><div class="csl-right-inline">E.
 Blake, W. Verhelst, and other NBD maintainers, <span>“The NBD
 protocol.”</span> <a href="https://github.com/NetworkBlockDevice/nbd/blob/master/doc/proto.md" class="uri">https://github.com/NetworkBlockDevice/nbd/blob/master/doc/proto.md</a>,
 Apr. 2023.</div>
 </div>
+<div id="ref-clements2013nbd" class="csl-entry">
+<div class="csl-left-margin">[24] </div><div class="csl-right-inline">P.
+Clements, <span>“[PATCH] nbd: Increase default and max request
+sizes.”</span> <a href="https://lore.kernel.org/lkml/20130402194120.54043222C0@clements/" class="uri">https://lore.kernel.org/lkml/20130402194120.54043222C0@clements/</a>,
+Apr. 02, 2013.</div>
+</div>
+<div id="ref-verhelst2023nbdclient" class="csl-entry">
+<div class="csl-left-margin">[25] </div><div class="csl-right-inline">W.
+Verhelst, <em>Nbd-client man page</em>. 2023.Available: <a href="https://manpages.ubuntu.com/manpages/lunar/en/man8/nbd-client.8.html">https://manpages.ubuntu.com/manpages/lunar/en/man8/nbd-client.8.html</a></div>
+</div>
 <div id="ref-he2016migration" class="csl-entry">
-<div class="csl-left-margin">[20] </div><div class="csl-right-inline">S.
+<div class="csl-left-margin">[26] </div><div class="csl-right-inline">S.
 He, C. Hu, B. Shi, T. Wo, and B. Li, <span>“Optimizing virtual machine
 live migration without shared storage in hybrid clouds,”</span> in
 <em>2016 IEEE 18th international conference on high performance
@@ -971,51 +974,51 @@ smart city; IEEE 2nd international conference on data science and
 systems (HPCC/SmartCity/DSS)</em>, 2016, pp. 921–928. doi: <a href="https://doi.org/10.1109/HPCC-SmartCity-DSS.2016.0132">10.1109/HPCC-SmartCity-DSS.2016.0132</a>.</div>
 </div>
 <div id="ref-baruchi2015workload" class="csl-entry">
-<div class="csl-left-margin">[21] </div><div class="csl-right-inline">A.
+<div class="csl-left-margin">[27] </div><div class="csl-right-inline">A.
 Baruchi, E. Toshimi Midorikawa, and L. Matsumoto Sato, <span>“Reducing
 virtual machine live migration overhead via workload analysis,”</span>
 <em>IEEE Latin America Transactions</em>, vol. 13, no. 4, pp. 1178–1186,
 2015, doi: <a href="https://doi.org/10.1109/TLA.2015.7106373">10.1109/TLA.2015.7106373</a>.</div>
 </div>
 <div id="ref-akidau2018streaming" class="csl-entry">
-<div class="csl-left-margin">[22] </div><div class="csl-right-inline">T.
+<div class="csl-left-margin">[28] </div><div class="csl-right-inline">T.
 Akidau, S. Chernyak, and R. Lax, <em>Streaming systems</em>. Sebastopol,
 CA: O’Reilly Media, Inc., 2018.</div>
 </div>
 <div id="ref-peek1994unix" class="csl-entry">
-<div class="csl-left-margin">[23] </div><div class="csl-right-inline">J.
+<div class="csl-left-margin">[29] </div><div class="csl-right-inline">J.
 D. Peek, <em>UNIX power tools</em>. Sebastopol, CA; New York: O’Reilly
 Associates; Bantam Books, 1994.</div>
 </div>
 <div id="ref-google2023grpc" class="csl-entry">
-<div class="csl-left-margin">[24] </div><div class="csl-right-inline">gRPC Authors, <span>“Introduction to
+<div class="csl-left-margin">[30] </div><div class="csl-right-inline">gRPC Authors, <span>“Introduction to
 gRPC.”</span> 2023.Available: <a href="https://grpc.io/docs/what-is-grpc/introduction/">https://grpc.io/docs/what-is-grpc/introduction/</a></div>
 </div>
 <div id="ref-redis2023introduction" class="csl-entry">
-<div class="csl-left-margin">[25] </div><div class="csl-right-inline">Redis Ltd, <span>“Introduction to
+<div class="csl-left-margin">[31] </div><div class="csl-right-inline">Redis Ltd, <span>“Introduction to
 redis.”</span> <a href="https://redis.io/docs/about/" class="uri">https://redis.io/docs/about/</a>, 2023.</div>
 </div>
 <div id="ref-redis2023pubsub" class="csl-entry">
-<div class="csl-left-margin">[26] </div><div class="csl-right-inline">Redis Ltd, <span>“Redis pub/sub.”</span> <a href="https://redis.io/docs/interact/pubsub/" class="uri">https://redis.io/docs/interact/pubsub/</a>, 2023.</div>
+<div class="csl-left-margin">[32] </div><div class="csl-right-inline">Redis Ltd, <span>“Redis pub/sub.”</span> <a href="https://redis.io/docs/interact/pubsub/" class="uri">https://redis.io/docs/interact/pubsub/</a>, 2023.</div>
 </div>
 <div id="ref-aws2023s3" class="csl-entry">
-<div class="csl-left-margin">[27] </div><div class="csl-right-inline">Amazon Web Services, Inc, <span>“What is amazon
+<div class="csl-left-margin">[33] </div><div class="csl-right-inline">Amazon Web Services, Inc, <span>“What is amazon
 S3?”</span> <a href="https://docs.aws.amazon.com/AmazonS3/latest/userguide/Welcome.html" class="uri">https://docs.aws.amazon.com/AmazonS3/latest/userguide/Welcome.html</a>,
 2023.</div>
 </div>
 <div id="ref-minio2023coreadmin" class="csl-entry">
-<div class="csl-left-margin">[28] </div><div class="csl-right-inline">MinIO, Inc, <span>“Core administration
+<div class="csl-left-margin">[34] </div><div class="csl-right-inline">MinIO, Inc, <span>“Core administration
 concepts.”</span> <a href="https://min.io/docs/minio/kubernetes/upstream/administration/concepts.html" class="uri">https://min.io/docs/minio/kubernetes/upstream/administration/concepts.html</a>,
 2023.</div>
 </div>
 <div id="ref-lakshman2010cassandra" class="csl-entry">
-<div class="csl-left-margin">[29] </div><div class="csl-right-inline">A.
+<div class="csl-left-margin">[35] </div><div class="csl-right-inline">A.
 Lakshman and P. Malik, <span>“Cassandra: A decentralized structured
 storage system,”</span> <em>SIGOPS Oper. Syst. Rev.</em>, vol. 44, no.
 2, pp. 35–40, Apr. 2010, doi: <a href="https://doi.org/10.1145/1773912.1773922">10.1145/1773912.1773922</a>.</div>
 </div>
 <div id="ref-grabowski2021scylladb" class="csl-entry">
-<div class="csl-left-margin">[30] </div><div class="csl-right-inline">P.
+<div class="csl-left-margin">[36] </div><div class="csl-right-inline">P.
 Grabowski, J. Stasiewicz, and K. Baryla, <span>“Apache cassandra 4.0
 performance benchmark: Comparing cassandra 4.0, cassandra 3.11 and
 scylla open source 4.4,”</span> ScyllaDB Inc, 2021.Available: <a href="https://www.scylladb.com/wp-content/uploads/wp-apache-cassandra-4-performance-benchmark-3.pdf">https://www.scylladb.com/wp-content/uploads/wp-apache-cassandra-4-performance-benchmark-3.pdf</a></div>
