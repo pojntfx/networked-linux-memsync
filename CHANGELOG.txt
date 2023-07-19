@@ -1,3 +1,9 @@
+commit 54570017b6ca1bd9e79feae627bbd74b1b44f6bf
+Author: Felicitas Pojtinger <felicitas@pojtinger.com>
+Date:   Thu Jul 20 01:22:39 2023 +0200
+
+    feat: Add planning section up to  mounts with NBD
+
 commit d10d45a9aa53cc2c7b6386c0f8cf69483ca0bb88
 Author: Felicitas Pojtinger <felicitas@pojtinger.com>
 Date:   Thu Jul 20 00:26:55 2023 +0200
