@@ -32,7 +32,7 @@ Felicitas Pojtinger (Stuttgart Media University)
     -   3.1 Pull-Based Synchronization With userfaultfd
     -   3.2 Push-Based Synchronization With mmap and Hashing
     -   3.3 Push-Pull Synchronization with FUSE
-    -   3.4 Pull-Based Synchronization With NBD
+    -   3.4 Mounts with NBD
     -   3.5 Push-Pull Synchronization with Mounts
     -   3.6 Pull-Based Synchronization with Migrations
 -   4 Implementation
@@ -605,135 +605,74 @@ Planning
 
 Pull-Based Synchronization With userfaultfd
 
--   By listening to these page faults, we know when a process wants to
-    access a specific piece of memory
--   We can use this to then pull the chunk of memory from a remote, map
-    it to the address on which the page fault occured, thus only
-    fetching data when it is required
--   Usually, handling page faults is something that the kernel does
--   In our case, we want to handle page faults in userspace
--   In the past, this used to be possible from userspace by handling the
-    SIGSEGV signal in the process
--   In our case however, we can use a recent system called userfaultfd
-    to do this in a more elegant way (available since kernel 4.11)
--   userfaultfd allows handling these page faults in userspace
--   The region that should be handled can be allocated with e.g. mmap
--   Once we have the file descriptor for the userfaultfd API, we need to
-    transfer this file descriptor to a process that should respond with
-    the chunks of memory to be put into the faulting address
--   Once we have received the socket we need to register the handler for
-    the API to use
--   If the handler receives an address that has faulted, it responds
-    with the UFFDIO_COPY ioctl and a pointer to the chunk of memory that
-    should be used on the file descriptor (code snippet from
-    https://github.com/loopholelabs/userfaultfd-go/blob/master/pkg/mapper/handler.go)
+-   An implementation of post-copy migration
+-   Memory region is created on the destination host
+-   Reads to the region by the migrated ressource trigger a page fault
+-   When we encounter such a page fault, we want to fetch the relevant
+    offset from the remote
+-   Typically, page faults are resolved by the Kernel
+-   Here, we want to handle handle the page faults in user space
+-   Traditionally, it was possible to use SIGSEGV signal handlers to use
+    handle this from the program
+-   This however is complicated and slow
+-   Instead we use a new kernel API (“Userfaults”)
+-   We register the region to be handled by userfault
+-   Then we start an handler that fetches the offsets from the remote on
+    a page fault
+-   This handler is connected to the registered region using a file
+    descriptor
+-   We can transfer the handler’s file descriptor between processes over
+    a socket
 
 Push-Based Synchronization With mmap and Hashing
 
--   File-based synchronization
-    -   This approach tries to improve on userfaultfd by switching to
-        push-based synchronization method
-    -   Instead of reacting to page faults, this uses a file to track
-        changes to a memory region
-    -   By synchronizing the file representing the memory region between
-        two systems, we can effectively synchronize the memory region
-        itself
-    -   In Linux, swap space allows Linux to move chunks of memory to
-        disk or other swap partition if the fast speed of RAM is not
-        needed (“paging out”)
-    -   Similarly to this, Linux can also load missing chunks from a
-        disk
-    -   This works similarly to how userfaultfd handled page faults,
-        except this time it doesn’t need to go through user space, which
-        can make it much faster
--   Detecting file changes
-    -   inotify allows applications to register handlers on a file’s
-        events, e.g. WRITE or SYNC. This allows for efficient file
-        synchronization, and is used by many file synchronization tools
-    -   It is also possible to filter only the events that we need to
-        sync the writes, making it the perfect choice for this use case
-    -   For technical reasons however (mostly because the file is
-        represented by a memory region), Linux doesn’t fire these events
-        for mmaped files though, so we can’t use it
-    -   The next best option are two: Either polling for file attribute
-        changes (e.g. last write), or by continously hashing the file to
-        check if it has changed
-    -   Polling on its own has a lot of downsides, like it adding a
-        guaranteed minimum latency by virtue of having to wait for the
-        next polling cycle
-    -   This negatively impacts a maximum allowed downtime scenario,
-        where the overhead of polling can make or break a system
-    -   Hashing the entire file is also a naturally IO- and
-        CPU-intensive process because the entire file needs to be read
-        at some point
-    -   Still, polling & hashing is probably the only reliable way of
-        detecting changes to a file
-    -   Instead of hashing the entire file, then syncing the entire
-        file, we can want to really sync only the parts of the file that
-        have changed between two polling iterations
+-   As mentioned before mmap allows mapping a memory region to a file
+-   We can put the migratable ressource into this memory region
+-   If we get writes to the region, we eventually get writes to the
+    region
+-   If we’re able to detect these writes and copy them to the
+    destination, we can implement a pre-copy migration system
+-   mmaped regions still using caching to speed up reads
+-   Changes from the region can be flushed to the disk with msync
+-   Usually we could use inotify to detect changes to the file, but
+    inotify doesn’t work with mmaped regions
+-   As a result, we went for a polling-based solution instead
+-   Polling has drawbacks, which we tried to work around upon in our
+    implementation
 
 Push-Pull Synchronization with FUSE
 
--   File system-based synchronization in the kernel
-    -   Since the push method requires polling and is very CPU and I/O
-        intensive, and userfaultfd-go has only low throughput, a better
-        solution is needed
-    -   What if we could still get the events for the writes and reads
-        without having to use userfaultfd-go or hashing?
-    -   We can create a custom file system in Linux and load it as a
-        kernel module
-    -   This file system could then intercept reads/writes to/from the
-        mmaped region, making it possible to respond to them with a
-        custom backend
-    -   But such a system would need to run in the kernel directly,
-        which leads to a lot of potential drawbacks
-    -   While it is possible to write kernel modules with Rust instead
-        of C these days, a lot of problems remain
-    -   Kernel modules aren’t portable; they are built for a specific
-        kernel, which makes them hard to distribute to users
-    -   A kernel file system is able to skip having to go through user
-        space and thus save on context switching, but that will also
-        mean that it will run in the kernel address space, making for a
-        poor level of isolation
-    -   Iterating on a kernel module is much harder than iterating on a
-        program running in user space
-    -   If we want the user to be able to provide their own backends
-        from/to which to pull/push, that will still require
-        communication between user space and the kernel
-    -   So while adding this implementation in the kernel would be
-        possible, it would also be very complex
+-   Can serve as the basis for a pre- or post-copy migration
+-   Similarly to the file-based synchronization we mmap a file into
+    memory
+-   The file is stored on a custom file system
+-   We then catch reads (for a post-copy migration) or writes (for a
+    pre-copy migration)
+-   Implementing a file system in the kernel is possible but cumbersome
+    as described before
+-   With FUSE we can implement the file system in user space, making
+    this much simpler, as we’ll show in the implementation
 
-Pull-Based Synchronization With NBD
+Mounts with NBD
 
--   Block Device-based synchronization
-    -   As hinted at before, a better API would be able to catch
-        reads/writes to a single mmaped file instead of having to
-        implement a complete file system
-    -   It does however not have to be an actual file, a block device
-        also works
-    -   In Linux, block devices are (typically storage) devices that
-        support reading/writing fixed chunks (blocks) of data
-    -   We can mmap a block device in the same way that we can mmap a
-        file
-    -   Similarly to how a file system can be implemented in a kernel
-        module, a block device is typically implemented as a kernel
-        module/in kernel space
-    -   However, the same security, portability and developer experience
-        issues as with the former also apply here
-    -   Instead of implementing a FUSE to solve this, we can create a
-        NBD (network block device) server that can be used by the kernel
-        NBD module similarly to how the process that connected to the
-        FUSE kernel module functioned
-    -   The difference between a FUSE and NBD is that a NBD server
-        doesn’t provide a file system
-    -   A NBD server provides the storage device that (typically) hosts
-        a file system, which means that the interface for it is much,
-        much simpler
-    -   The implementation overhead of a NBD server’s backend is much
-        more similar to how userfaultfd-go works, rather than a FUSE
+-   Another mmap-based solution for pre- and/or post-copy migration
+-   Instead of mmaping a file, a device is mmaped
+-   This device is a block device provided by a NBD client
+-   We can then connect the NBD client to a remote NBD server, which
+    contains the migratable resource
+-   Any reads to/from the region go to/from the block device and are
+    resolved by the remote NBD server
+-   Isn’t per se a synchronization methods on it’s own, but rather a
+    remote mount
+-   Unlike a FUSE this means we only need to implement a block device,
+    not a full file system
+-   Implementation and performance overhead of a NBD server is fairly
+    low as we’ll show in the implementation however
 
 Push-Pull Synchronization with Mounts
 
+-   Also tracks changes to the memory region of the migratable ressource
+    using NBD
 -   Limitations of the NBD protocol in WAN
     -   Usually, the NBD server and client don’t run on the same system
     -   NBD was originally designed to used as a LAN protocol to access
@@ -828,6 +767,8 @@ Push-Pull Synchronization with Mounts
 
 Pull-Based Synchronization with Migrations
 
+-   Also tracks changes to the memory region of the migratable ressource
+    using NBD
 -   Optimization mounts for migration scenarios
     -   We have now implemented a managed mounts API
     -   This API allows for efficient access to a remote resource
@@ -877,6 +818,33 @@ Implementation
 
 Userfaults in Go with userfaultfd
 
+-   General functionality
+    -   By listening to page faults, we know when a process wants to
+        access a specific piece of memory
+    -   We can use this to then pull the chunk of memory from a remote,
+        map it to the address on which the page fault occured, thus only
+        fetching data when it is required
+    -   Usually, handling page faults is something that the kernel does
+    -   In our case, we want to handle page faults in userspace, and
+        implement post-copy with them
+    -   In the past, this used to be possible from userspace by handling
+        the SIGSEGV signal in the process
+    -   In our case however, we can use a recent system called
+        userfaultfd to do this in a more elegant way (available since
+        kernel 4.11)
+    -   userfaultfd allows handling these page faults in userspace
+    -   The region that should be handled can be allocated with
+        e.g. mmap
+    -   Once we have the file descriptor for the userfaultfd API, we
+        need to transfer this file descriptor to a process that should
+        respond with the chunks of memory to be put into the faulting
+        address
+    -   Once we have received the socket we need to register the handler
+        for the API to use
+    -   If the handler receives an address that has faulted, it responds
+        with the UFFDIO_COPY ioctl and a pointer to the chunk of memory
+        that should be used on the file descriptor (code snippet from
+        https://github.com/loopholelabs/userfaultfd-go/blob/master/pkg/mapper/handler.go)
 -   API design for userfault-go
     -   Implementing this in Go was quite tricky, and it involves using
         unsafe
@@ -939,6 +907,31 @@ File-Based Synchronization
         your process already does caching on its own, but this flag is
         ignored by the mmap
     -   Usually, one would use inotify to watch changes to a file
+-   inotify vs. polling
+    -   inotify allows applications to register handlers on a file’s
+        events, e.g. WRITE or SYNC. This allows for efficient file
+        synchronization, and is used by many file synchronization tools
+    -   It is also possible to filter only the events that we need to
+        sync the writes, making it the perfect choice for this use case
+    -   For technical reasons however (mostly because the file is
+        represented by a memory region), Linux doesn’t fire these events
+        for mmaped files though, so we can’t use it
+    -   The next best option are two: Either polling for file attribute
+        changes (e.g. last write), or by continously hashing the file to
+        check if it has changed
+    -   Polling on its own has a lot of downsides, like it adding a
+        guaranteed minimum latency by virtue of having to wait for the
+        next polling cycle
+    -   This negatively impacts a maximum allowed downtime scenario,
+        where the overhead of polling can make or break a system
+    -   Hashing the entire file is also a naturally IO- and
+        CPU-intensive process because the entire file needs to be read
+        at some point
+    -   Still, polling & hashing is probably the only reliable way of
+        detecting changes to a file
+    -   Instead of hashing the entire file, then syncing the entire
+        file, we can want to really sync only the parts of the file that
+        have changed between two polling iterations
 -   Detecting file changes
     -   When picking algorithms for this hashing process, the most
         important metric to consider is the throughput with which it can
@@ -969,26 +962,83 @@ File-Based Synchronization
 
 FUSE Implementation in Go
 
--   It is possible to use even very complex and at first view
-    non-compatible backends as a FUSE file system’s backend
--   By using a file system abstraction API like afero.Fs, we can
-    separate the FUSE implementation from the actual file system
-    structure, making it unit testable and making it possible to add
-    caching in user space (code snippet from
-    https://github.com/pojntfx/stfs/blob/main/pkg/fs/file.go)
--   It is possible to map any afero.Fs to a FUSE backend, so it would be
-    possible to switch between different file system backends without
-    having to write FUSE-specific (code snippet from
-    https://github.com/JakWai01/sile-fystem/blob/main/pkg/filesystem/fs.go)
--   For example, STFS used a tape drive as the backend, which is not
-    random access, but instead append-only and linear
-    (https://github.com/pojntfx/stfs/blob/main/pkg/operations/update.go)
--   By using an on-disk index and access optimizations, the resulting
-    file system was still performant enough to be used, and supported
-    almost all features required for the average user
+-   File system-based synchronization in the kernel
+    -   Since the push method requires polling and is very CPU and I/O
+        intensive, and userfaultfd-go has only low throughput, a better
+        solution is needed
+    -   What if we could still get the events for the writes and reads
+        without having to use userfaultfd-go or hashing?
+    -   We can create a custom file system in Linux and load it as a
+        kernel module
+    -   This file system could then intercept reads/writes to/from the
+        mmaped region, making it possible to respond to them with a
+        custom backend
+    -   But such a system would need to run in the kernel directly,
+        which leads to a lot of potential drawbacks
+-   FUSE vs kernel filesystems
+    -   While it is possible to write kernel modules with Rust instead
+        of C these days, a lot of problems remain
+    -   Kernel modules aren’t portable; they are built for a specific
+        kernel, which makes them hard to distribute to users
+    -   A kernel file system is able to skip having to go through user
+        space and thus save on context switching, but that will also
+        mean that it will run in the kernel address space, making for a
+        poor level of isolation
+    -   Iterating on a kernel module is much harder than iterating on a
+        program running in user space
+    -   If we want the user to be able to provide their own backends
+        from/to which to pull/push, that will still require
+        communication between user space and the kernel
+    -   So while adding this implementation in the kernel would be
+        possible, it would also be very complex
+-   Implementation
+    -   It is possible to use even very complex and at first view
+        non-compatible backends as a FUSE file system’s backend
+    -   By using a file system abstraction API like afero.Fs, we can
+        separate the FUSE implementation from the actual file system
+        structure, making it unit testable and making it possible to add
+        caching in user space (code snippet from
+        https://github.com/pojntfx/stfs/blob/main/pkg/fs/file.go)
+    -   It is possible to map any afero.Fs to a FUSE backend, so it
+        would be possible to switch between different file system
+        backends without having to write FUSE-specific (code snippet
+        from
+        https://github.com/JakWai01/sile-fystem/blob/main/pkg/filesystem/fs.go)
+    -   For example, STFS used a tape drive as the backend, which is not
+        random access, but instead append-only and linear
+        (https://github.com/pojntfx/stfs/blob/main/pkg/operations/update.go)
+    -   By using an on-disk index and access optimizations, the
+        resulting file system was still performant enough to be used,
+        and supported almost all features required for the average user
 
 NBD with go-nbd
 
+-   Block Device-based synchronization
+    -   As hinted at before, a better API would be able to catch
+        reads/writes to a single mmaped file instead of having to
+        implement a complete file system
+    -   It does however not have to be an actual file, a block device
+        also works
+    -   In Linux, block devices are (typically storage) devices that
+        support reading/writing fixed chunks (blocks) of data
+    -   We can mmap a block device in the same way that we can mmap a
+        file
+    -   Similarly to how a file system can be implemented in a kernel
+        module, a block device is typically implemented as a kernel
+        module/in kernel space
+    -   However, the same security, portability and developer experience
+        issues as with the former also apply here
+    -   Instead of implementing a FUSE to solve this, we can create a
+        NBD (network block device) server that can be used by the kernel
+        NBD module similarly to how the process that connected to the
+        FUSE kernel module functioned
+    -   The difference between a FUSE and NBD is that a NBD server
+        doesn’t provide a file system
+    -   A NBD server provides the storage device that (typically) hosts
+        a file system, which means that the interface for it is much,
+        much simpler
+    -   The implementation overhead of a NBD server’s backend is much
+        more similar to how userfaultfd-go works, rather than a FUSE
 -   Implementing go-nbd
     -   Due to the lack of pre-existing libraries, a new pure Go NBD
         library was implemented

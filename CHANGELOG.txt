@@ -1,3 +1,9 @@
+commit d10d45a9aa53cc2c7b6386c0f8cf69483ca0bb88
+Author: Felicitas Pojtinger <felicitas@pojtinger.com>
+Date:   Thu Jul 20 00:26:55 2023 +0200
+
+    feat: Add more high-level descriptions to userfault, hashing, FUSE and NBD sections
+
 commit 78dc38a5a889fa6b42c04e1cbb70e3572aeeaf91
 Author: Felicitas Pojtinger <felicitas@pojtinger.com>
 Date:   Wed Jul 19 23:26:57 2023 +0200
