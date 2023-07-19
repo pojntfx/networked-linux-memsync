@@ -1,3 +1,15 @@
+commit 78dc38a5a889fa6b42c04e1cbb70e3572aeeaf91
+Author: Felicitas Pojtinger <felicitas@pojtinger.com>
+Date:   Wed Jul 19 23:26:57 2023 +0200
+
+    refactor: Rework the live migration, streams, transport and storage parts of the technology section
+
+commit 3911deea31ab85480b08a664aff2628edf828cfb
+Author: Felicitas Pojtinger <felicitas@pojtinger.com>
+Date:   Wed Jul 19 22:08:56 2023 +0200
+
+    docs: Add section on principle of locality
+
 commit 66d5a6cb34a2d6c8572a8aac08bbbea440674e6e
 Author: Felicitas Pojtinger <felicitas@pojtinger.com>
 Date:   Wed Jul 19 21:47:49 2023 +0200

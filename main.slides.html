@@ -122,41 +122,42 @@ Technology</a>
 <li><a href="#the-linux-kernel"><span class="toc-section-number">2.1</span> The Linux Kernel</a></li>
 <li><a href="#linux-kernel-modules"><span class="toc-section-number">2.2</span> Linux Kernel Modules</a></li>
 <li><a href="#unix-signals-and-handlers"><span class="toc-section-number">2.3</span> UNIX Signals and Handlers</a></li>
-<li><a href="#memory-hierarchy"><span class="toc-section-number">2.4</span> Memory Hierarchy</a></li>
-<li><a href="#memory-management-in-linux"><span class="toc-section-number">2.5</span> Memory Management in
+<li><a href="#principle-of-locality"><span class="toc-section-number">2.4</span> Principle of Locality</a></li>
+<li><a href="#memory-hierarchy"><span class="toc-section-number">2.5</span> Memory Hierarchy</a></li>
+<li><a href="#memory-management-in-linux"><span class="toc-section-number">2.6</span> Memory Management in
 Linux</a></li>
-<li><a href="#swap-space"><span class="toc-section-number">2.6</span>
+<li><a href="#swap-space"><span class="toc-section-number">2.7</span>
 Swap Space</a></li>
-<li><a href="#page-faults"><span class="toc-section-number">2.7</span>
+<li><a href="#page-faults"><span class="toc-section-number">2.8</span>
 Page Faults</a></li>
-<li><a href="#mmap"><span class="toc-section-number">2.8</span>
+<li><a href="#mmap"><span class="toc-section-number">2.9</span>
 <code>mmap</code></a></li>
-<li><a href="#inotify"><span class="toc-section-number">2.9</span>
+<li><a href="#inotify"><span class="toc-section-number">2.10</span>
 <code>inotify</code></a></li>
-<li><a href="#linux-kernel-caching"><span class="toc-section-number">2.10</span> Linux Kernel Caching</a></li>
-<li><a href="#tcp-udp-and-quic"><span class="toc-section-number">2.11</span> TCP, UDP and QUIC</a></li>
-<li><a href="#delta-synchronization"><span class="toc-section-number">2.12</span> Delta Synchronization</a></li>
-<li><a href="#file-systems-in-userspace-fuse"><span class="toc-section-number">2.13</span> File Systems In Userspace
+<li><a href="#linux-kernel-caching"><span class="toc-section-number">2.11</span> Linux Kernel Caching</a></li>
+<li><a href="#tcp-udp-and-quic"><span class="toc-section-number">2.12</span> TCP, UDP and QUIC</a></li>
+<li><a href="#delta-synchronization"><span class="toc-section-number">2.13</span> Delta Synchronization</a></li>
+<li><a href="#file-systems-in-userspace-fuse"><span class="toc-section-number">2.14</span> File Systems In Userspace
 (FUSE)</a></li>
-<li><a href="#network-block-device-nbd"><span class="toc-section-number">2.14</span> Network Block Device
+<li><a href="#network-block-device-nbd"><span class="toc-section-number">2.15</span> Network Block Device
 (NBD)</a></li>
-<li><a href="#virtual-machine-live-migration"><span class="toc-section-number">2.15</span> Virtual Machine Live
+<li><a href="#virtual-machine-live-migration"><span class="toc-section-number">2.16</span> Virtual Machine Live
 Migration</a>
 <ul>
-<li><a href="#pre-copy"><span class="toc-section-number">2.15.1</span>
+<li><a href="#pre-copy"><span class="toc-section-number">2.16.1</span>
 Pre-Copy</a></li>
-<li><a href="#post-copy"><span class="toc-section-number">2.15.2</span>
+<li><a href="#post-copy"><span class="toc-section-number">2.16.2</span>
 Post-Copy</a></li>
-<li><a href="#workload-analysis"><span class="toc-section-number">2.15.3</span> Workload Analysis</a></li>
+<li><a href="#workload-analysis"><span class="toc-section-number">2.16.3</span> Workload Analysis</a></li>
 </ul></li>
-<li><a href="#streams-and-pipelines"><span class="toc-section-number">2.16</span> Streams and Pipelines</a></li>
-<li><a href="#grpc"><span class="toc-section-number">2.17</span>
+<li><a href="#streams-and-pipelines"><span class="toc-section-number">2.17</span> Streams and Pipelines</a></li>
+<li><a href="#grpc"><span class="toc-section-number">2.18</span>
 gRPC</a></li>
-<li><a href="#redis"><span class="toc-section-number">2.18</span>
+<li><a href="#redis"><span class="toc-section-number">2.19</span>
 Redis</a></li>
-<li><a href="#s3-and-minio"><span class="toc-section-number">2.19</span>
+<li><a href="#s3-and-minio"><span class="toc-section-number">2.20</span>
 S3 and Minio</a></li>
-<li><a href="#cassandra-and-scyllladb"><span class="toc-section-number">2.20</span> Cassandra and ScylllaDB</a></li>
+<li><a href="#cassandra-and-scyllladb"><span class="toc-section-number">2.21</span> Cassandra and ScylllaDB</a></li>
 </ul></li>
 </ul>
 </div>
@@ -249,13 +250,46 @@ signals effectively alert a process of an event, they are not designed
 to convey forther information related to that event; consequently, they
 are best used in scenarios where simple event-based notifications are
 sufficient, rather than for more complex data exchange requirements.</p>
-<h2 id="memory-hierarchy"><span class="header-section-number">2.4</span>
+<h2 id="principle-of-locality"><span class="header-section-number">2.4</span> Principle of Locality</h2>
+<p>The principle of locality, or locality of reference, refers to the
+tendency of a processor in a computer system to recurrently access the
+same set of memory locations within a brief span of time. This principle
+forms the basis of a predictable pattern of behavior that is evident
+across computer systems, and can be divided into two distinct types:
+temporal locality and spatial locality<span class="citation">[6]</span>.</p>
+<p>Temporal locality revolves around the frequent use of particular data
+within a limited time period. Essentially, if a memory location is
+accessed once, it is probable that this same location will be accessed
+again in the near future. To leverage this pattern and improve
+performance, computer systems are designed to maintain a copy of this
+frequently accessed data in a faster memory storage, which in turn,
+significantly reduces the latency in subsequent references.</p>
+<p>Spatial locality, on the other hand, refers to the use of data
+elements that are stored in nearby locations. That is, once a particular
+memory location is accessed, the system assumes that other nearby
+locations are also likely to be accessed shortly. Therefore, to optimize
+performance, the system tries to anticipate these subsequent accesses by
+preparing for faster access to these nearby memory locations. Temporal
+locality is considered a unique instance of spatial locality,
+demonstrating how the two types are closely interlinked.</p>
+<p>A specific instance of spatial locality, termed sequential locality,
+occurs when the data elements are organized and accessed in a linear
+sequence. An example of this is when elements in a one-dimensional array
+are traversed systematically, accessing the elements one by one in their
+sequential order.</p>
+<p>Locality of reference can be instrumental in improving the overall
+performance of a system. To achieve this, a variety of optimization
+techniques are deployed, such as caching, which stores copies of
+frequently accessed data in quick-access memory, and prefetching for
+memory, which involves loading potential future data into cache before
+it’s actually needed.</p>
+<h2 id="memory-hierarchy"><span class="header-section-number">2.5</span>
 Memory Hierarchy</h2>
 <p>The memory hierarchy in computers is an organized structure based on
 factors such as size, speed, cost, and proximity to the Central
 Processing Unit (CPU). It follows the principle of locality, which
 suggests that data and instructions that are accessed frequently should
-be stored as close to the CPU as possible<span class="citation">[6]</span>. This principle is crucial primarily due to
+be stored as close to the CPU as possible<span class="citation">[7]</span>. This principle is crucial primarily due to
 the limitations of “the speed of the cable”, where both throughput and
 latency decrease as distance increases due to factors like signal
 dampening and the finite speed of light.</p>
@@ -281,15 +315,15 @@ persistent, meaning they retain data even after power is cut.</p>
 cost-effective. Tape storage can store very large amounts of data for
 long periods of time. These types of storage are typically used for
 archiving or physically transporting data, such as importing data from
-personal infrastructure to a service like AWS<span class="citation">[7]</span>.</p>
+personal infrastructure to a service like AWS<span class="citation">[8]</span>.</p>
 <p>The memory hierarchy is not static but evolves with technological
-advancements, leading to some blurring of these distinct layers<span class="citation">[8]</span>. For instance, Non-Volatile Memory Express
+advancements, leading to some blurring of these distinct layers<span class="citation">[9]</span>. For instance, Non-Volatile Memory Express
 (NVMe) storage technologies can rival the speed of RAM while offering
 greater storage capacities. Similarly, some research, such as the work
 presented in this thesis, further challenges traditional hierarchies by
 exposing tertiary or secondary storage with the same interface as main
 memory.</p>
-<h2 id="memory-management-in-linux"><span class="header-section-number">2.5</span> Memory Management in Linux</h2>
+<h2 id="memory-management-in-linux"><span class="header-section-number">2.6</span> Memory Management in Linux</h2>
 <p>Memory management forms a cornerstone of any operating system,
 serving as a critical buffer between applications and physical memory.
 Arguably, it can be considered one of the fundamental purposes of an
@@ -302,9 +336,9 @@ is divided into two major segments: kernel space and user space.</p>
 The kernel memory module is responsible for managing this segment. Slab
 allocation is a technique employed in kernel space management; this
 technique groups objects of the same size into caches, enhancing memory
-allocation speed and reducing fragmentation of memory<span class="citation">[9]</span>.</p>
+allocation speed and reducing fragmentation of memory<span class="citation">[10]</span>.</p>
 <p>User space is the memory segment where applications and certain
-drivers store their memory<span class="citation">[10]</span>. User space
+drivers store their memory<span class="citation">[11]</span>. User space
 memory management involves a paging system, offering each application
 its unique private virtual address space.</p>
 <p>This virtual address space is divided into units known as pages, each
@@ -313,10 +347,10 @@ physical memory, providing flexibility and optimizing memory
 utilization. The use of this virtual address space further adds a layer
 of abstraction between the application and the physical memory,
 enhancing the security and isolation of processes.</p>
-<h2 id="swap-space"><span class="header-section-number">2.6</span> Swap
+<h2 id="swap-space"><span class="header-section-number">2.7</span> Swap
 Space</h2>
 <p>Swap space refers to a designated portion of the secondary storage
-utilized as virtual memory in a computer system<span class="citation">[10]</span>. This feature plays a crucial role in
+utilized as virtual memory in a computer system<span class="citation">[11]</span>. This feature plays a crucial role in
 systems that run multiple applications simultaneously. When memory
 resources are strained, swap space comes into play, relocating inactive
 parts of the RAM to secondary storage. This action frees up space in
@@ -337,7 +371,7 @@ transferring those that have not been recently used to swap space.</p>
 Before the system enters hibernation, the content of RAM is stored in
 the swap space, where it remains persistent even without power. When the
 system is resumed, the memory content is read back from swap space,
-restoring the system to its pre-hibernation state<span class="citation">[11]</span>.</p>
+restoring the system to its pre-hibernation state<span class="citation">[12]</span>.</p>
 <p>However, the use of swap space can impact system performance. Since
 secondary storage devices are usually slower than primary memory, heavy
 reliance on swap space can cause significant system slowdowns. To
@@ -346,7 +380,7 @@ parameter that controls the system’s propensity to swap memory pages.
 Adjusting this setting can balance the use of swap space to maintain
 system performance while still preserving the benefits of virtual memory
 management.</p>
-<h2 id="page-faults"><span class="header-section-number">2.7</span> Page
+<h2 id="page-faults"><span class="header-section-number">2.8</span> Page
 Faults</h2>
 <p>Page faults are instances in which a process attempts to access a
 page that is not currently available in primary memory. This situation
@@ -370,7 +404,7 @@ primary memory.</p>
 operation. One such technique is prefetching, which anticipates future
 page requests and proactively loads these pages into memory. Another
 approach involves page compression, where inactive pages are compressed
-and stored in memory preemptively<span class="citation">[12]</span>.
+and stored in memory preemptively<span class="citation">[13]</span>.
 This reduces the likelihood of major page faults by conserving memory
 space, allowing more pages to reside in primary memory.</p>
 <p>In general, handling page faults is a task delegated to the kernel.
@@ -378,7 +412,7 @@ This critical balance between resource availability and system
 performance is part of the kernel’s memory management duties, ensuring
 that processes can access the pages they require while maintaining
 efficient use of system memory.</p>
-<h2 id="mmap"><span class="header-section-number">2.8</span>
+<h2 id="mmap"><span class="header-section-number">2.9</span>
 <code>mmap</code></h2>
 <p><code>mmap</code> is a versatile UNIX system call, used for mapping
 files or devices into memory, enabling a variety of core tasks like
@@ -387,7 +421,7 @@ powerful nature, it is commonly harnessed in applications like
 databases.</p>
 <p>One standout feature of <code>mmap</code> is its ability to create
 what is essentially a direct memory mapping between a file and a region
-of memory<span class="citation">[13]</span>. This connection means that
+of memory<span class="citation">[14]</span>. This connection means that
 read operations performed on the mapped memory region directly
 correspond to reading the file and vice versa, enhancing efficiency by
 reducing the overhead as the necessity for context switches (compared to
@@ -412,11 +446,11 @@ simultaneously. This bypass may lead to a scenario where one process
 modifies data in the <code>mmap</code> region, and another process that
 is not monitoring for changes might remain unaware and continue to work
 with outdated data.</p>
-<h2 id="inotify"><span class="header-section-number">2.9</span>
+<h2 id="inotify"><span class="header-section-number">2.10</span>
 <code>inotify</code></h2>
 <p>The <code>inotify</code> is an event-driven notification system of
 the Linux kernel, designed to monitor the file system for different
-events, such as modifications and accesses, among others<span class="citation">[14]</span>. Its particularly useful because it can be
+events, such as modifications and accesses, among others<span class="citation">[15]</span>. Its particularly useful because it can be
 configured to watch only write operations on certain files, i.e. only
 <code>write</code> operations. This level of control can offer
 considerable benefits in cases where there is a need to focus system
@@ -442,7 +476,7 @@ many watches can be established. This limitation can pose challenges in
 intricate systems where there is a high quantity of files or directories
 to watch for, and might warrant additional management or fallback to
 heavier polling mechanisms for some parts of the system.</p>
-<h2 id="linux-kernel-caching"><span class="header-section-number">2.10</span> Linux Kernel Caching</h2>
+<h2 id="linux-kernel-caching"><span class="header-section-number">2.11</span> Linux Kernel Caching</h2>
 <p>Caching is a key feature of the Linux kernel that work to boost
 efficiency and performance. Within this framework, there are two broad
 categories: disk caching and file caching.</p>
@@ -475,12 +509,12 @@ sophisticated algorithms, such as LRU, to ensure effective utilization
 of available cache space<span class="citation">[3]</span>. Prioritizing
 what to keep in cache when memory pressure builds does directly impact
 the overall system performance.</p>
-<h2 id="tcp-udp-and-quic"><span class="header-section-number">2.11</span> TCP, UDP and QUIC</h2>
+<h2 id="tcp-udp-and-quic"><span class="header-section-number">2.12</span> TCP, UDP and QUIC</h2>
 <p>TCP (Transmission Control Protocol), UDP (User Datagram Protocol),
 and QUIC (Quick UDP Internet Connections) are three key communication
 protocols utilized in the internet today.</p>
 <p>TCP has long been the reliable backbone for internet communication
-due to its connection-oriented nature <span class="citation">[15]</span>. It ensures the guaranteed delivery of data
+due to its connection-oriented nature <span class="citation">[16]</span>. It ensures the guaranteed delivery of data
 packets and their correct order, rendering it a highly dependable means
 for data transmission. Significantly, TCP incorporates error checking,
 allowing the detection and subsequent retransmission of lost packets.
@@ -491,7 +525,7 @@ web where reliable, ordered, and error-checked data transmission is
 required.</p>
 <p>UDP is a connectionless protocol that does not make the same
 guarantees about the reliability or ordered delivery of data packets
-<span class="citation">[16]</span>. This lends UDP a speed advantage
+<span class="citation">[17]</span>. This lends UDP a speed advantage
 over TCP, resulting in less communication overhead. Although it lacks
 TCP’s robustness in handling errors and maintaining data order, UDP
 finds use in applications where speed and latency take precedence over
@@ -499,8 +533,8 @@ reliability. This includes online gaming, video calls, and other
 real-time communication modes where quick data transmission is crucial
 even if temporary packet loss occurs.</p>
 <p>QUIC, a modern UDP-base transport layer protocol, was originally
-created by Google and standardized by the IETF in 2021<span class="citation">[17]</span>. It aspires to combine the best qualities
-of TCP and UDP <span class="citation">[18]</span>. Unlike raw UDP, QUIC
+created by Google and standardized by the IETF in 2021<span class="citation">[18]</span>. It aspires to combine the best qualities
+of TCP and UDP <span class="citation">[19]</span>. Unlike raw UDP, QUIC
 ensures the reliability of data transmission and guarantees the ordered
 delivery of data packets similarly to TCP, while intending to keep UDP’s
 speed advantages. One of QUIC’s standout features is its ability to
@@ -513,14 +547,14 @@ separate data streams. This means it can handle the delivery of separate
 data streams without one stream blocking another, resulting in smoother
 and more efficient transmission, a feature which is especially important
 for applications with lots of concurrent transmissions.</p>
-<h2 id="delta-synchronization"><span class="header-section-number">2.12</span> Delta Synchronization</h2>
+<h2 id="delta-synchronization"><span class="header-section-number">2.13</span> Delta Synchronization</h2>
 <p>Delta synchronization is a technique that allows for efficient
 synchronization of files between hosts, aiming to transfer only those
 parts of the file that have undergone changes instead of the entire file
 in order to reduce network and I/O overhead. Perhaps the most recognized
 tool employing this method of synchronization is <code>rsync</code>, an
 open-source data synchronization utility in Unix-like operating
-systems<span class="citation">[19]</span>.</p>
+systems<span class="citation">[20]</span>.</p>
 <p>TODO: Add sequence diagram of the delta sync protocol from
 https://blog.acolyer.org/2018/03/02/towards-web-based-delta-synchronization-for-cloud-storage-systems/</p>
 <p>While there are many applications of such an algorithm, it typically
@@ -539,7 +573,7 @@ destination. Upon receiving a block, the destination writes it to the
 specific offset in the file. This process results in the reconstruction
 of the file in accordance with the modifications undertaken at the
 source, after which the next synchronization cycle can start.</p>
-<h2 id="file-systems-in-userspace-fuse"><span class="header-section-number">2.13</span> File Systems In Userspace
+<h2 id="file-systems-in-userspace-fuse"><span class="header-section-number">2.14</span> File Systems In Userspace
 (FUSE)</h2>
 <p>File Systems in Userspace (FUSE) is a software interface that enables
 the creation of custom file systems in the userspace, as opposed to
@@ -576,7 +610,7 @@ data into the provided buffer:</p>
 passed to <code>fuse_main</code>, which takes care of registering the
 operations with the FUSE kernel module and mounts the FUSE to a
 directory. Similarly to this, callbacks for handling writes etc. can be
-provided to the operation struct for a read-write capable FUSE<span class="citation">[20]</span>.</p>
+provided to the operation struct for a read-write capable FUSE<span class="citation">[21]</span>.</p>
 <p>When a user then performs a file system operation on a mounted FUSE
 file system, the kernel module sends a request for executing that
 operation to the userspace program. This is followed by the userspace
@@ -596,19 +630,19 @@ typically need to be built from source on the target machine unless they
 are vendored by a distribution. Despite these benefits of FUSE, there is
 a noticeable performance overhead associated with it. This is largely
 due to the context switching between the kernel and the userspace that
-occurs during its operation<span class="citation">[21]</span>.</p>
+occurs during its operation<span class="citation">[22]</span>.</p>
 <p>Today, FUSE is widely utilized to mount high-level external services
 as file systems. For instance, it can be used to mount remote AWS S3
-buckets with <code>s3fs</code><span class="citation">[22]</span> or to
-mount a remote system’s disk via Secure Shell (SSH) with SSHFS <span class="citation">[23]</span>.</p>
-<h2 id="network-block-device-nbd"><span class="header-section-number">2.14</span> Network Block Device
+buckets with <code>s3fs</code><span class="citation">[23]</span> or to
+mount a remote system’s disk via Secure Shell (SSH) with SSHFS <span class="citation">[24]</span>.</p>
+<h2 id="network-block-device-nbd"><span class="header-section-number">2.15</span> Network Block Device
 (NBD)</h2>
 <p>Network Block Device (NBD) is a protocol for connecting to a remote
 Linux block device. It typically works by communicating between a user
 space-provided server and a Kernel-provided client. Though potentially
 deployable over Wide Area Networks (WAN), it is primarily designed for
 Local Area Networks (LAN) or localhost usage. The protocol is divided
-into two phases: the handshake and the transmission<span class="citation">[24]</span>.</p>
+into two phases: the handshake and the transmission<span class="citation">[25]</span>.</p>
 <p>TODO: Add sequence diagram of the NBD protocol</p>
 <p>The NBD protocol involves multiple participants, notably one or
 several clients, a server, and the concept of an export. It starts with
@@ -626,9 +660,9 @@ might also contain data such as a chunk for writing, offsets, and
 lengths among other elements. Replies may contain error messages,
 success status, or data contingent on the reply type.</p>
 <p>While powerful in many regards, NBD has some limitations. Its maximum
-message size is capped at 32 MB<span class="citation">[25]</span>, and
+message size is capped at 32 MB<span class="citation">[26]</span>, and
 the maximum block or chunk size supported by the Kernel’s NBD client is
-a mere 4KB<span class="citation">[26]</span>. Thus, it might not be the
+a mere 4KB<span class="citation">[27]</span>. Thus, it might not be the
 most optimal protocol for WAN usage, especially in scenarios with high
 latency.</p>
 <p>NBD, being a protocol with a long legacy, comes with its own set of
@@ -646,7 +680,7 @@ file for multiple clients. However, this shortcoming can be considered
 as an advantage for narrow usecases like memory synchronization, given
 that it operates on a block level, where such features are not needed or
 implemented at a higher layer.</p>
-<h2 id="virtual-machine-live-migration"><span class="header-section-number">2.15</span> Virtual Machine Live
+<h2 id="virtual-machine-live-migration"><span class="header-section-number">2.16</span> Virtual Machine Live
 Migration</h2>
 <p>Virtual machine live migration involves the shifting of a virtual
 machine, its state, and its connected devices from one host to another,
@@ -654,271 +688,238 @@ with the objective to minimize disrupted service by minimizing downtime
 during data transfer processes.</p>
 <p>Algorithms that intent to implement this usecase can be categorized
 into two broad types: pre-copy migration and post-copy migration.</p>
-<h3 id="pre-copy"><span class="header-section-number">2.15.1</span>
+<h3 id="pre-copy"><span class="header-section-number">2.16.1</span>
 Pre-Copy</h3>
-<p>The foremost characteristic of pre-copy migration is its
-‘run-while-copy’ nature. In other words, the copying of data from the
-source to the destination occurs concurrently while the virtual machine
-(VM) continues to operate. This method is also applicable in a generic
-migration context where an application or another data state is being
-updated.</p>
-<p>In the case of a VM, the pre-copy migration procedure commences with
-the transference of the initial state of VM’s memory to the destination
-host. During this operation, if modifications occur to any chunks of
-data, they are flagged as ‘dirty’. These modified or ‘dirty’ chunks of
-data are then transferred to the destination until only a small number
-remain - an amount small enough to stay within the allowable maximum
-downtime criteria.</p>
-<p>Following this, the VM operation is suspended at the source, enabling
-the synchronization of the remaining chunks of data to the destination.
-Once this synchronization process is completed, the operation of the VM
-is resumed at the destination host.</p>
-<p>The pre-copy migration process represents a remarkably resilient
-strategy, especially in instances where there might be network
-disruption during synchronization. This resilience arises from the fact
-that, at any given point during migration, the VM is readily available
-in full either at the source or the destination.</p>
-<p>However, a limitation in the approach is that, if the VM or
-application alters too many chunks on the source during migration, it
+<p>The primary characteristic of pre-copy migration is its
+“run-while-copy” nature, meaning that the copying of data from the
+source to the destination occurs concurrently while the VM continues to
+operate. This method is also applicable in a generic migration context
+where an application or another data state is being updated.</p>
+<p>In the case of a VM, the pre-copy migration procedure starts with
+transfering the initial state of VM’s memory to the destination host.
+During this operation, if modifications occur to any chunks of data,
+they are flagged as “dirty”. These modified or “dirty” chunks of data
+are then transferred to the destination until only a small number remain
+- an amount small enough to stay within the allowable maximum downtime
+criteria.</p>
+<p>Following this, the VM is suspended at the source, enabling the
+synchronization of the remaining chunks of data to the destination
+without having to continue tracking dirty chunks. Once this
+synchronization process is completed, the VM is resumed at the
+destination host.</p>
+<p>The pre-copy migration process is fairly robust, especially in
+instances where there might be network disruption during
+synchronization. This is because of fact that, at any given point during
+migration, the VM is readily available in full either at the source or
+the destination. A limitation to the approach however is that, if the VM
+or application alters too many chunks on the source during migration, it
 may not be possible to meet the maximum acceptable downtime criteria.
-Furthermore, maximum permissible downtime is inherently restricted by
-the available round-trip time (RTT)<span class="citation">[27]</span>.</p>
-<p>Despite these constraints, the pre-copy migration strategy offers
-viable benefits in terms of consistent VM availability and resilience
-against network disconnections, underlining its potential effectiveness
-in managing more complex operations incorporating WAN.</p>
-<h3 id="post-copy"><span class="header-section-number">2.15.2</span>
+Maximum permissible downtime is also inherently restricted by the
+available round-trip time (RTT)<span class="citation">[28]</span>.</p>
+<h3 id="post-copy"><span class="header-section-number">2.16.2</span>
 Post-Copy</h3>
-<p>Post-copy migration is an alternative approach to pre-copy migration
-in Virtual Machine Live Migration. While pre-copy migration operates by
-copying data before the VM halt, post-copy migration opts for another
-strategy: it immediately suspends the VM operation on the source, moves
-it to the destination, and resumes it – all with only a minimal subset
-of data or ‘chunks’.</p>
-<p>The process initiates with the prompt suspension of the VM on the
-source system. It is then relocated to the destination with only some
-essential chunks of data involved in the transfer. Upon reaching the
-destination, the VM operation is resumed.</p>
+<p>Post-copy migration is an alternative live migration approach. While
+pre-copy migration operates by copying data before the VM halt,
+post-copy migration opts for another strategy: it immediately suspends
+the VM operation on the source and resumes it on the destination – all
+with only a minimal subset of the VM’s data.</p>
 <p>During this resumed operation, whenever the VM attempts to access a
 chunk of data not initially transferred during the move, a page fault
 arises. A page fault, in this context, is a type of interrupt generated
 when the VM tries to read or write a chunk that is not currently present
-in its address space. This triggers the system to retrieve the missing
+on the destination. This triggers the system to retrieve the missing
 chunk from the source host, enabling the VM to continue its
-operations.</p>
-<p>The main advantage post-copy migration offers centers around the fact
-that it eliminates the necessity of re-transmitting chunks of ‘dirty’ or
-changed data before hitting the maximum tolerable downtime – quite
-unlike the pre-copy strategy. This process not only prevents wasteful
-re-transmission but also economizes data traffic between source and
-destination to some extent.</p>
-<p>However, this approach is not without its drawbacks. Post-copy
-migration could potentially lead to extended migration times. This is
-primarily as a consequence of its ‘fetch-on-demand’ model for retrieving
-chunks, a model highly sensitive to network latency and round-trip time
-(RTT). This essentially means that the time taken for data to travel to
-the destination and then for an acknowledgement of receipt to return to
-the source can affect the overall efficiency of the migration<span class="citation">[27]</span>.</p>
-<h3 id="workload-analysis"><span class="header-section-number">2.15.3</span> Workload Analysis</h3>
-<p>The research article “Reducing Virtual Machine Live Migration
-Overhead via Workload Analysis” explores strategies to determine the
-most suitable timing for virtual machine (VM) migration<span class="citation">[28]</span>. Even though the study chiefly focuses on
-virtual machines, the methodologies proposed could be adapted for use
-with various other applications or migration circumstances.</p>
-<p>The method proposed in the study identifies cyclical workload
-patterns of VMs and leverages this knowledge to delay migration when
-beneficial. This is achieved by analyzing recurring patterns that may
-unnecessarily postpone VM migration, and identifying optimal cycles
-within which VMs can be migrated. For instance, in the realm of VM
-usage, such cycles could be triggered by a large application’s Garbage
-Collection (GC) that results in numerous changes to VM memory.</p>
+operations<span class="citation">[28]</span>.</p>
+<p>The main advantage of post-copy migration centers around the fact
+that it eliminates the necessity of re-transmitting chunks of “dirty” or
+changed data before hitting the maximum tolerable downtime. This process
+can thus decrease the necessary downtime and also reduces the amount of
+network traffic between source and destination.</p>
+<p>However, this approach is also not without its drawbacks. Post-copy
+migration could potentially lead to extended migration times, as a
+consequence of its “fetch-on-demand” model for retrieving chunks. This
+model is highly sensitive to network latency and round-trip time (RTT).
+Unlike the pre-copy model, this also means that the VM is not available
+in full on either the source or the destination during migration,
+requiring potential recovery solutions if network connectivity is lost
+during the migration.</p>
+<h3 id="workload-analysis"><span class="header-section-number">2.16.3</span> Workload Analysis</h3>
+<p>Recent studies have explored different strategies to determine the
+most suitable timing for virtual machine migration. Even though these
+mostly focus on virtual machines, the methodologies proposed could be
+adapted for use with various other applications or migration
+circumstances, too.</p>
+<p>One method<span class="citation">[29]</span> proposed identifies
+cyclical workload patterns of VMs and leverages this knowledge to delay
+migration when it is beneficial. This is achieved by analyzing recurring
+patterns that may unnecessarily postpone VM migration, and then
+constructing a model of optimal cycles within which VMs can be migrated.
+In the context of VM migration, such cycles could for example be
+triggered by a large application’s garbage collector that results in
+numerous changes to VM memory.</p>
 <p>When migration is proposed, the system verifies whether it is in an
-optimal cycle that is conducive to migration. If it is, the migration
-proceeds; if not, the migration is postponed until the next cycle. This
-process employs a Bayesian classifier to distinguish between favorable
-and unfavorable cycles.</p>
+optimal cycle for migration. If it is, the migration proceeds; if not,
+the migration is postponed until the next cycle. The proposed process
+employs a Bayesian classifier to distinguish between favorable and
+unfavorable cycles.</p>
 <p>Compared to the popular alternative method which usually involves
 waiting for a significant amount of unchanged chunks to synchronize
 first, the proposed pattern recognition-based approach potentially
 offers substantial improvements. The study found that this method
 yielded an enhancement of up to 74% in terms of live migration
-time/downtime and a 43% improvement concerning the volume of data
+time/downtime and a 43% reduction concerning the volume of data
 transferred over the network.</p>
-<h2 id="streams-and-pipelines"><span class="header-section-number">2.16</span> Streams and Pipelines</h2>
+<h2 id="streams-and-pipelines"><span class="header-section-number">2.17</span> Streams and Pipelines</h2>
 <p>Streams and pipelines are fundamental constructs in computer science,
 enabling efficient, sequential processing of large datasets without the
-need for loading the entire dataset into memory. They form the backbone
-of modular and efficient data processing techniques, each concept having
-its unique characteristics and use cases.</p>
+need for loading an entire dataset into memory. They form the backbone
+of modular and efficient data processing techniques, with each concept
+having its unique characteristics and use cases.</p>
 <p>A stream represents a continuous sequence of data, serving as a
-conduit between different points in a system. Streams can be either a
+connector between different points in a system. Streams can be either a
 source or a destination for data. Examples include files, network
-connections, and standard input/output devices, amongst others. The
+connections, and standard input/output devices and many others. The
 power of streams comes from their ability to process data as it becomes
-available. This aspect allows for minimization of memory consumption,
+available; this aspect allows for minimization of memory consumption,
 making streams particularly impactful for scenarios involving
 long-running processes where data is streamed over extended periods of
-time<span class="citation">[29]</span>.</p>
-<p>On the other hand, a pipeline comprises a series of data processing
-stages, wherein the output of one stage directly serves as the input to
-the next. It’s this chain of processing stages that forms a ‘pipeline.’
-Pipelines allow for stages to often run concurrently—this parallel
-execution often results in a significant performance improvement due to
-a higher degree of concurrency.</p>
+time<span class="citation">[30]</span>.</p>
+<p>Pipelines comprise a series of data processing stages, wherein the
+output of one stage directly serves as the input to the next. It’s this
+chain of processing stages that forms a “pipeline”. Often, these stages
+can run concurrently; this parallel execution can result in a
+significant performance improvement due to a higher degree of
+concurrency.</p>
 <p>One of the classic examples of pipelines is the instruction pipeline
-in CPUs, where different stages of instruction execution—fetch, decode,
-execute, and writeback—are performed in parallel. This design increases
-the instruction throughput of the CPU, allowing it to process multiple
-instructions simultaneously at different stages of the pipeline.</p>
+in CPUs, where different stages of instruction execution - fetch,
+decode, execute, and writeback - are performed in parallel. This design
+increases the instruction throughput of the CPU, allowing it to process
+multiple instructions simultaneously at different stages of the
+pipeline.</p>
 <p>Another familiar implementation is observed in UNIX pipes, a
-fundamental part of UNIX and Linux command-line interfaces. Here, the
-output of a command can be ‘piped’ into another for further processing.
-For instance, the results from a <code>curl</code> command fetching data
-from an API could be piped into the <code>jq</code> tool for JSON
-manipulation<span class="citation">[30]</span>.</p>
-<h2 id="grpc"><span class="header-section-number">2.17</span> gRPC</h2>
-<p>The gRPC is an open-source, high-performance remote procedure call
-(RPC) framework developed by Google in 2015. The gRPC framework is
-central to numerous data communication processes and is recognized for
-its cross-platform compatibility, supporting a variety of languages
-including Go, Rust, JavaScript and more. The gRPC maintains its
-development under the auspices of the Cloud Native Computing Foundation
-(CNCF), further emphasizing its integration within the realm of cloud
-services.</p>
+fundamental part of shells such as GNU Bash or POSIX <code>sh</code>.
+Here, the output of a command can be “piped” into another for further
+processing; for instance, the results from a <code>curl</code> command
+fetching data from an API could be piped into the <code>jq</code> tool
+for JSON manipulation<span class="citation">[31]</span>.</p>
+<h2 id="grpc"><span class="header-section-number">2.18</span> gRPC</h2>
+<p>gRPC is an open-source, high-performance remote procedure call (RPC)
+framework developed by Google in 2015. It is recognized for its
+cross-platform compatibility, supporting a variety of languages
+including Go, Rust, JavaScript and more. gRPC is being maintained by the
+Cloud Native Computing Foundation (CNCF), which ensures vendor
+neutrality.</p>
 <p>One of the notable features of the gRPC is its usage of HTTP/2 as the
-transport protocol. This allows it to exploit beneficial capabilities of
-HTTP/2 such as header compression, which minimizes bandwidth usage, and
-request multiplexing, enabling multiple requests to be sent concurrently
-over a single TCP connection.</p>
-<p>In addition to HTTP/2, gRPC utilizes Protocol Buffers (protobuf) as
-the Interface Definition Language (IDL) and wire format. Protobuf is a
-compact, high-performing, and language-neutral mechanism for data
-serialization. This makes it preferable over the more verbose and slower
-JSON format often employed in REST APIs. Protobuf’s performance and
-universality facilitate faster data exchange, making it a prime choice
-for the gRPC framework.</p>
-<p>One of the fundamental strengths of the gRPC framework is its support
-for various types of RPCs. It accommodates unary RPCs where the client
+transport protocol. This allows it to exploit features of HTTP/2 such as
+header compression, which minimizes bandwidth usage, and request
+multiplexing, enabling multiple requests to be sent concurrently over a
+single connection. In addition to HTTP/2, gRPC utilizes Protocol Buffers
+(protobuf) as the Interface Definition Language (IDL) and wire format.
+Protobuf is a compact, high-performance, and language-neutral mechanism
+for data serialization. This makes it preferable over the more dynamic,
+but more verbose and slower JSON format often used in REST APIs.</p>
+<p>One of the strengths of the gRPC framework is its support for various
+types of RPCs. Not only does it support unary RPCs where the client
 sends a single request to the server and receives a single response in
-return, mirroring the functionality of a traditional function call. It
-also supports server-streaming RPCs, wherein the client sends a request,
-and the server responds with a stream of messages. Conversely, in
+return, mirroring the functionality of a traditional function call, but
+also server-streaming RPCs, wherein the client sends a request, and the
+server responds with a stream of messages. Conversely, in
 client-streaming RPCs, the client sends a stream of messages to a server
-in response to a request. Further, it also supports bidirectional RPCs,
-wherein both client and server can read and write independently of the
-other.</p>
+in response to a request. It also supports bidirectional RPCs, wherein
+both client and server can send messages to each other.</p>
 <p>What distinguishes gRPC is its pluggable structure that allows for
 added functionalities such as load balancing, tracing, health checking,
-and authentication. These features make it a comprehensive solution for
-efficient and effective communication mechanisms<span class="citation">[31]</span>.</p>
-<h2 id="redis"><span class="header-section-number">2.18</span>
+and authentication, which make it a comprehensive solution for
+developing distributed systems<span class="citation">[32]</span>.</p>
+<h2 id="redis"><span class="header-section-number">2.19</span>
 Redis</h2>
-<p>Redis, an acronym for ‘REmote DIctionary Server,’ is an in-memory
-data structure store, primarily utilized as a database, cache, or
-message broker. Introduced by Salvatore Sanfilippo in 2009, Redis lends
-itself to high-speed and efficient data management, thus positioning
-itself as a key resource in numerous applications demanding rapid data
-processing.</p>
-<p>Setting it apart from other NoSQL databases, Redis supports a
-multitude of data structures, including lists, sets, hashes, and
-bitmaps. These differing data types allow for versatile data
-manipulation capabilities. Thus, in scenarios where a diverse set of
-data types need to be managed concurrently, Redis supplies a fitting
-solution<span class="citation">[32]</span>.</p>
-<p>One of the primary drivers for Redis’s speed is its reliance on
-in-memory data storage. By storing data in memory rather than on disk,
-Redis enables low-latency reads and writes, contributing to the
-technology’s overall capacity for swift, efficient data operations.</p>
-<p>But while the primary domain of Redis resides in in-memory
-operations, the technology also accommodates persistence—it can store
-data on disk. This feature broadens the use cases for Redis, allowing it
-to handle applications that require long-term data storage, albeit not
-being its initial intent.</p>
-<p>Another noteworthy aspect of Redis is its non-blocking I/O model.
-This paradigm facilitates efficient data transfer operations,
-eliminating the necessity for waiting times during data-processing
-tasks. As such, Redis can offer near real-time data processing
-capabilities—a key attribute in many modern digital contexts, especially
-those involving stream data processing and live analytics.</p>
-<p>Further expanding on its versatility, Redis incorporates a
-publish-subscribe (pub-sub) system. This empowers it to function as a
-message broker, where messages are published to ‘channels’ and delivered
-to all the ‘subscribers’ interested in those channels. This feature is
-particularly useful when it comes to real-time event notifications in
-web applications or the distribution of tasks among worker nodes in
-high-performance computing setups<span class="citation">[33]</span>.</p>
-<h2 id="s3-and-minio"><span class="header-section-number">2.19</span> S3
+<p>Redis (Remote Dictionary Server) is an in-memory data structure
+store, primarily utilized as an ephemeral database, cache, and message
+broker introduced by Salvatore Sanfilippo in 2009. Compared to other
+key-value stores and NoSQL databases, Redis supports a multitude of data
+structures, including lists, sets, hashes, and bitmaps, making it a good
+choice for caching or storing data that does not fit well into a
+traditional SQL architecture<span class="citation">[33]</span>.</p>
+<p>One of the primary reasons for Redis’s speed is its reliance on
+in-memory data storage rather than on disk, enabling very low-latency
+reads and writes. While the primary usecase of Redis is in in-memory
+operations, it also supports persistence by flushing data to disk. This
+feature broadens the use cases for Redis, allowing it to handle
+applications that require longer-term data storage in addition to a
+caching mechanism. In addition to it being mostly in-memory, Redis also
+supports quick concurrent reads/writes thanks to its non-blocking I/O
+model, making it a good choice for systems that require the store to be
+available to many workers or clients.</p>
+<p>Redis also includes a publish-subscribe (pub-sub) system. This
+enables it to function as a message broker, where messages are published
+to channels and delivered to all the subscribers interested in those
+channels. This makes it a particularly compelling choice for systems
+that require both caching and a memory broker, such as queue
+systems<span class="citation">[34]</span>.</p>
+<h2 id="s3-and-minio"><span class="header-section-number">2.20</span> S3
 and Minio</h2>
-<p>Amazon’s Simple Storage Service (S3) and Minio are two contemporary
-solutions providing storage functionality, each with unique
-characteristics and use cases.</p>
-<p>S3 is a scalable object storage service crafted for data-intensive
-tasks, befitting anything from small deployments to large-scale
-applications. It is one of the prominent services offered by Amazon Web
-Services, a leading provider of cloud computing resources. S3’s design
+<p>S3 is a scalable object storage service, especially designed for
+large-scale applications with frequent reads and writes. It is one of
+the prominent services offered by Amazon Web Services. S3’s design
 allows for global distribution, which means the data can be stored
 across multiple geographically diverse servers. This permits fast access
 times from virtually any location on the globe, crucial for globally
 distributed services or applications with users spread across different
 continents.</p>
-<p>S3 offers a variety of storage classes catering to different needs,
-whether the requirement is for frequent data access, infrequent data
-retrieval, or long-term archival. This flexibility ensures the service
-can meet a wide array of business and application demands. S3 also comes
-equipped with comprehensive security provisions. This includes
-authentication and authorization mechanisms, critical for data privacy
-and access control.</p>
-<p>Communication with S3 is facilitated through an exposed HTTP API.
-Users and applications can interact with the stored data—including files
-and folders—via this API, allowing for seamless data manipulation and
-retrieval<span class="citation">[34]</span>.</p>
-<p>On the contrary, Minio represents a different approach towards
-storage solutions. It is an open-source storage server, underlining
-compatibility with Amazon S3’s API. Written in the Go programming
-language, Minio is lightweight and straightforward, tailored for
-deployments requiring simplicity without sacrificing core functionality.
-Being open-source, users have the ability to view, modify, and
-distribute Minio’s source code, fostering community-driven development
-and innovation.</p>
+<p>S3 offers a variety of storage classes for to different needs,
+i.e. for whether the requirement is for frequent data access, infrequent
+data retrieval, or long-term archival. This ensures that it can meet a
+wide array of demands through the same API. S3 also comes equipped with
+comprehensive security features, including authentication and
+authorization mechanisms.</p>
+<p>Communication with S3 is done through a HTTP API. Users and
+applications can interact with the stored data - including files and
+folders - via this API.<span class="citation">[35]</span>.</p>
+<p>Minio is an open-source storage server that is compatible Amazon S3’s
+API. Due to it being written in the Go programming language, Minio is
+very lightweight and even ships as single static binary. Unlike with AWS
+S3, which is only offered as a service, Minio’s open-source nature means
+that users have the ability to view, modify, and distribute Minio’s
+source code, allowing community-driven development and innovation.</p>
 <p>A critical distinction of Minio is its suitability for on-premises
-hosting. Organizations with specific security regulations or those
-preferring to maintain direct control over their data could find Minio a
-fitting choice. Moreover, Minio supports horizontal scalability,
-designed to distribute large quantities of data across multiple nodes.
-This feature aids in optimizing storage efficiency, data access times,
-and overall capability to handle growing data volumes<span class="citation">[35]</span>.</p>
-<h2 id="cassandra-and-scyllladb"><span class="header-section-number">2.20</span> Cassandra and ScylllaDB</h2>
-<p>Apache Cassandra and ScyllaDB are compelling wide-column NoSQL
-databases, each tailored for large-scale, distributed data management
-tasks. They blend Amazon’s Dynamo model’s distributed nature with
-Google’s Bigtable model’s structure, leading to a highly available,
-heavy-duty database system.</p>
-<p>Apache Cassandra is lauded for its scalability and eventual
-consistency, designed to handle vast amounts of data spread across
-numerous servers. Unique to Cassandra is the absence of a single point
-of failure, thus ensuring continuous availability and
-robustness—critical for systems requiring high uptime.</p>
+hosting, making it a good fit for organizations with specific security
+regulations, those preferring to maintain direct control over their data
+and developers prefering to work on the local system. It also supports
+horizontal scalability, designed to distribute large quantities of data
+across multiple nodes, meaning that it can be used in large-scale
+deployments similarly to AWS S3<span class="citation">[36]</span>.</p>
+<h2 id="cassandra-and-scyllladb"><span class="header-section-number">2.21</span> Cassandra and ScylllaDB</h2>
+<p>Apache Cassandra is a wide-column NoSQL database tailored for
+large-scale, distributed data management tasks. It blends the
+distributed nature of Amazon’s Dynamo model with the structure of
+Google’s Bigtable model, leading to a highly available database system.
+It is known for its scalability, designed to handle vast amounts of data
+spread across numerous servers. Unique to Cassandra is the absence of a
+single point of failure, thus ensuring continuous availability and
+robustness, which is critical for systems requiring high uptime.</p>
 <p>Cassandra’s consistency model is tunable according to needs, ranging
 from eventual to strong consistency. It distinguishes itself by not
 employing master nodes due to its usage of a peer-to-peer protocol and a
 distributed hash ring design. These design choices eradicate the
-bottleneck and failure risks associated with master nodes.</p>
-<p>Despite its robust capabilities, Cassandra does come with certain
+bottleneck and failure risks associated with master nodes<span class="citation">[37]</span>.</p>
+<p>Despite these robust capabilities, Cassandra does come with certain
 limitations. Under heavy load, it experiences high latency that can
-negatively affect system performance. Besides, it demands complex
-configuration to correctly fine-tune according to specific needs<span class="citation">[36]</span>.</p>
+negatively affect system performance. Besides this, it also demands
+complex configuration and fine-tuning to peform optimally.</p>
 <p>In response to the perceived shortcomings of Cassandra, ScyllaDB was
-launched in 2015. It shares design principles with
-Cassandra—compatibility with Cassandra’s API and data model—but boasts
-architectural differences intended to overcome Cassandra’s limitations.
-It’s primarily written in C++, contrary to Cassandra’s Java-based code.
-This contributes to ScyllaDB’s shared-nothing architecture, a design
-that aims to minimize contention and enhance performance.</p>
-<p>ScyllaDB was particularly engineered to address Cassandra’s issues
-around latency, specifically the 99th percentile latency that impacts
-system reliability and predictability. In fact, ScyllaDB’s design
-improvements and performance gains over Cassandra have been endorsed by
-various benchmarking studies<span class="citation">[37]</span>.</p>
+launched in 2015. It shares design principles with Cassandra, such as
+compatibility with Cassandra’s API and data model, but has architectural
+differences intended to overcome Cassandra’s limitations. It’s primarily
+written in C++, contrary to Cassandra’s Java-based code. This
+contributes to ScyllaDB’s shared-nothing architecture, a design that
+aims to minimize contention and enhance performance.</p>
+<p>ScyllaDB was particularly engineered to address one shortcoming of
+Cassandra - issues around latency, specifically the 99th percentile
+latency that impacts system reliability and predictability. ScyllaDB’s
+design improvements and performance gains over Cassandra have been
+endorsed by various benchmarking studies<span class="citation">[38]</span>.</p>
+<p>TODO: Add graph of the Cassandra vs. ScyllaDB benchmark from the
+benchmarking study</p>
 <div id="refs" class="references csl-bib-body">
 <div id="ref-linux2023docs" class="csl-entry">
 <div class="csl-left-margin">[1] </div><div class="csl-right-inline">T.
@@ -946,123 +947,129 @@ Delhi: Addison Wesley Logman (Singapore) Pte Ltd., Indian Branch,
 A. Robbins and S. Robbins, <em>Unix™ systems programming: Communication,
 concurrency, and threads</em>. Prentice Hall PTR, 2003.</div>
 </div>
+<div id="ref-stallings2010architecture" class="csl-entry">
+<div class="csl-left-margin">[6] </div><div class="csl-right-inline">W.
+Stallings, <em>Computer organization and architecture: Designing for
+performance</em>. Upper Saddle River, New Jersey, 07458: Pearson
+Education, Inc., 2010.</div>
+</div>
 <div id="ref-smith1982cache" class="csl-entry">
-<div class="csl-left-margin">[6] </div><div class="csl-right-inline">A.
+<div class="csl-left-margin">[7] </div><div class="csl-right-inline">A.
 J. Smith, <span>“Cache memories,”</span> <em>ACM Comput. Surv.</em>,
 vol. 14, no. 3, pp. 473–530, Sep. 1982, doi: <a href="https://doi.org/10.1145/356887.356892">10.1145/356887.356892</a>.</div>
 </div>
 <div id="ref-barr2021offline" class="csl-entry">
-<div class="csl-left-margin">[7] </div><div class="csl-right-inline">J.
+<div class="csl-left-margin">[8] </div><div class="csl-right-inline">J.
 Barr, <span>“New - offline tape migration using AWS snowball
 edge.”</span> <a href="https://aws.amazon.com/blogs/aws/new-offline-tape-migration-using-aws-snowball-edge/" class="uri">https://aws.amazon.com/blogs/aws/new-offline-tape-migration-using-aws-snowball-edge/</a>,
 2021.</div>
 </div>
 <div id="ref-maruf2023memory" class="csl-entry">
-<div class="csl-left-margin">[8] </div><div class="csl-right-inline">H.
+<div class="csl-left-margin">[9] </div><div class="csl-right-inline">H.
 A. Maruf and M. Chowdhury, <span>“Memory disaggregation: Advances and
 open challenges.”</span> 2023.Available: <a href="https://arxiv.org/abs/2305.03943">https://arxiv.org/abs/2305.03943</a></div>
 </div>
 <div id="ref-bonwick1994slaballoc" class="csl-entry">
-<div class="csl-left-margin">[9] </div><div class="csl-right-inline">J.
+<div class="csl-left-margin">[10] </div><div class="csl-right-inline">J.
 Bonwick, <span>“The slab allocator: An <span>Object-Caching</span>
 kernel,”</span> Jun. 1994.Available: <a href="https://www.usenix.org/conference/usenix-summer-1994-technical-conference/slab-allocator-object-caching-kernel">https://www.usenix.org/conference/usenix-summer-1994-technical-conference/slab-allocator-object-caching-kernel</a></div>
 </div>
 <div id="ref-gorman2004linuxmem" class="csl-entry">
-<div class="csl-left-margin">[10] </div><div class="csl-right-inline">M.
+<div class="csl-left-margin">[11] </div><div class="csl-right-inline">M.
 Gorman, <em>Understanding the linux virtual memory manager</em>. Upper
 Saddle River, New Jersey 07458: Pearson Education, Inc. Publishing as
 Prentice Hall Professional Technical Reference, 2004.</div>
 </div>
 <div id="ref-kernel2023suspend" class="csl-entry">
-<div class="csl-left-margin">[11] </div><div class="csl-right-inline">T.
+<div class="csl-left-margin">[12] </div><div class="csl-right-inline">T.
 K. D. Community, <span>“Swap suspend,”</span> 2023. <a href="https://www.kernel.org/doc/html/latest/power/swsusp.html">https://www.kernel.org/doc/html/latest/power/swsusp.html</a>
 (accessed Jul. 19, 2023).</div>
 </div>
 <div id="ref-silberschatz2018operating" class="csl-entry">
-<div class="csl-left-margin">[12] </div><div class="csl-right-inline">A.
+<div class="csl-left-margin">[13] </div><div class="csl-right-inline">A.
 Silberschatz, P. B. Galvin, and G. Gagne, <em>Operating system
 concepts</em>, 10th ed. Hoboken, NJ: Wiley, 2018.Available: <a href="https://lccn.loc.gov/2017043464">https://lccn.loc.gov/2017043464</a></div>
 </div>
 <div id="ref-choi2017mmap" class="csl-entry">
-<div class="csl-left-margin">[13] </div><div class="csl-right-inline">J.
+<div class="csl-left-margin">[14] </div><div class="csl-right-inline">J.
 Choi, J. Kim, and H. Han, <span>“Efficient memory mapped file
 <span>I/O</span> for <span>In-Memory</span> file systems,”</span> Jul.
 2017.Available: <a href="https://www.usenix.org/conference/hotstorage17/program/presentation/choi">https://www.usenix.org/conference/hotstorage17/program/presentation/choi</a></div>
 </div>
 <div id="ref-prokop2010inotify" class="csl-entry">
-<div class="csl-left-margin">[14] </div><div class="csl-right-inline">M.
+<div class="csl-left-margin">[15] </div><div class="csl-right-inline">M.
 Prokop, <span>“Inotify: Efficient, real-time linux file system event
 monitoring,”</span> Apr. 2010. <a href="https://www.infoq.com/articles/inotify-linux-file-system-event-monitoring/">https://www.infoq.com/articles/inotify-linux-file-system-event-monitoring/</a></div>
 </div>
 <div id="ref-postel1981tcp" class="csl-entry">
-<div class="csl-left-margin">[15] </div><div class="csl-right-inline"><span>“<span>Transmission Control
+<div class="csl-left-margin">[16] </div><div class="csl-right-inline"><span>“<span>Transmission Control
 Protocol</span>.”</span> RFC 793; J. Postel, Sep. 1981. doi: <a href="https://doi.org/10.17487/RFC0793">10.17487/RFC0793</a>.</div>
 </div>
 <div id="ref-postel1980udp" class="csl-entry">
-<div class="csl-left-margin">[16] </div><div class="csl-right-inline"><span>“<span>User Datagram
+<div class="csl-left-margin">[17] </div><div class="csl-right-inline"><span>“<span>User Datagram
 Protocol</span>.”</span> RFC 768; J. Postel, Aug. 1980. doi: <a href="https://doi.org/10.17487/RFC0768">10.17487/RFC0768</a>.</div>
 </div>
 <div id="ref-rfc2021quic" class="csl-entry">
-<div class="csl-left-margin">[17] </div><div class="csl-right-inline">J.
+<div class="csl-left-margin">[18] </div><div class="csl-right-inline">J.
 Iyengar and M. Thomson, <span>“<span class="nocase">QUIC: A UDP-Based
 Multiplexed and Secure Transport</span>.”</span> RFC 9000; RFC Editor,
 May 2021. doi: <a href="https://doi.org/10.17487/RFC9000">10.17487/RFC9000</a>.</div>
 </div>
 <div id="ref-langley2017quic" class="csl-entry">
-<div class="csl-left-margin">[18] </div><div class="csl-right-inline">A.
+<div class="csl-left-margin">[19] </div><div class="csl-right-inline">A.
 Langley <em>et al.</em>, <span>“The QUIC transport protocol: Design and
 internet-scale deployment,”</span> in <em>Proceedings of the conference
 of the ACM special interest group on data communication</em>, 2017, pp.
 183–196. doi: <a href="https://doi.org/10.1145/3098822.3098842">10.1145/3098822.3098842</a>.</div>
 </div>
 <div id="ref-xiao2018rsync" class="csl-entry">
-<div class="csl-left-margin">[19] </div><div class="csl-right-inline">H.
+<div class="csl-left-margin">[20] </div><div class="csl-right-inline">H.
 Xiao <em>et al.</em>, <span>“Towards web-based delta synchronization for
 cloud storage services,”</span> in <em>16th USENIX conference on file
 and storage technologies (FAST 18)</em>, Feb. 2018, pp.
 155–168.Available: <a href="https://www.usenix.org/conference/fast18/presentation/xiao">https://www.usenix.org/conference/fast18/presentation/xiao</a></div>
 </div>
 <div id="ref-libfuse2020example" class="csl-entry">
-<div class="csl-left-margin">[20] </div><div class="csl-right-inline">T.
+<div class="csl-left-margin">[21] </div><div class="csl-right-inline">T.
 libfuse authors, <span>“FUSE minimal example filesystem using high-level
 API.”</span> <a href="https://github.com/libfuse/libfuse/blob/master/example/hello.c" class="uri">https://github.com/libfuse/libfuse/blob/master/example/hello.c</a>,
 2020.</div>
 </div>
 <div id="ref-vangoor2017fuse" class="csl-entry">
-<div class="csl-left-margin">[21] </div><div class="csl-right-inline">B.
+<div class="csl-left-margin">[22] </div><div class="csl-right-inline">B.
 K. R. Vangoor, V. Tarasov, and E. Zadok, <span>“To <span>FUSE</span> or
 not to <span>FUSE</span>: Performance of <span>User-Space</span> file
 systems,”</span> in <em>15th USENIX conference on file and storage
 technologies (FAST 17)</em>, Feb. 2017, pp. 59–72.Available: <a href="https://www.usenix.org/conference/fast17/technical-sessions/presentation/vangoor">https://www.usenix.org/conference/fast17/technical-sessions/presentation/vangoor</a></div>
 </div>
 <div id="ref-gaul2023s3fs" class="csl-entry">
-<div class="csl-left-margin">[22] </div><div class="csl-right-inline">A.
+<div class="csl-left-margin">[23] </div><div class="csl-right-inline">A.
 Gaul, T. Nakatani, and @rrizun, <span>“s3fs: FUSE-based file system
 backed by amazon S3.”</span> <a href="https://github.com/s3fs-fuse/s3fs-fuse" class="uri">https://github.com/s3fs-fuse/s3fs-fuse</a>, 2023.</div>
 </div>
 <div id="ref-libfuse2022sshfs" class="csl-entry">
-<div class="csl-left-margin">[23] </div><div class="csl-right-inline">T.
+<div class="csl-left-margin">[24] </div><div class="csl-right-inline">T.
 libfuse authors, <span>“SSHFS: A network filesystem client to connect to
 SSH servers.”</span> <a href="https://github.com/libfuse/sshfs" class="uri">https://github.com/libfuse/sshfs</a>, 2022.</div>
 </div>
 <div id="ref-blake2023nbd" class="csl-entry">
-<div class="csl-left-margin">[24] </div><div class="csl-right-inline">E.
+<div class="csl-left-margin">[25] </div><div class="csl-right-inline">E.
 Blake, W. Verhelst, and other NBD maintainers, <span>“The NBD
 protocol.”</span> <a href="https://github.com/NetworkBlockDevice/nbd/blob/master/doc/proto.md" class="uri">https://github.com/NetworkBlockDevice/nbd/blob/master/doc/proto.md</a>,
 Apr. 2023.</div>
 </div>
 <div id="ref-clements2013nbd" class="csl-entry">
-<div class="csl-left-margin">[25] </div><div class="csl-right-inline">P.
+<div class="csl-left-margin">[26] </div><div class="csl-right-inline">P.
 Clements, <span>“[PATCH] nbd: Increase default and max request
 sizes.”</span> <a href="https://lore.kernel.org/lkml/20130402194120.54043222C0@clements/" class="uri">https://lore.kernel.org/lkml/20130402194120.54043222C0@clements/</a>,
 Apr. 02, 2013.</div>
 </div>
 <div id="ref-verhelst2023nbdclient" class="csl-entry">
-<div class="csl-left-margin">[26] </div><div class="csl-right-inline">W.
+<div class="csl-left-margin">[27] </div><div class="csl-right-inline">W.
 Verhelst, <em>Nbd-client man page</em>. 2023.Available: <a href="https://manpages.ubuntu.com/manpages/lunar/en/man8/nbd-client.8.html">https://manpages.ubuntu.com/manpages/lunar/en/man8/nbd-client.8.html</a></div>
 </div>
 <div id="ref-he2016migration" class="csl-entry">
-<div class="csl-left-margin">[27] </div><div class="csl-right-inline">S.
+<div class="csl-left-margin">[28] </div><div class="csl-right-inline">S.
 He, C. Hu, B. Shi, T. Wo, and B. Li, <span>“Optimizing virtual machine
 live migration without shared storage in hybrid clouds,”</span> in
 <em>2016 IEEE 18th international conference on high performance
@@ -1071,51 +1078,51 @@ smart city; IEEE 2nd international conference on data science and
 systems (HPCC/SmartCity/DSS)</em>, 2016, pp. 921–928. doi: <a href="https://doi.org/10.1109/HPCC-SmartCity-DSS.2016.0132">10.1109/HPCC-SmartCity-DSS.2016.0132</a>.</div>
 </div>
 <div id="ref-baruchi2015workload" class="csl-entry">
-<div class="csl-left-margin">[28] </div><div class="csl-right-inline">A.
+<div class="csl-left-margin">[29] </div><div class="csl-right-inline">A.
 Baruchi, E. Toshimi Midorikawa, and L. Matsumoto Sato, <span>“Reducing
 virtual machine live migration overhead via workload analysis,”</span>
 <em>IEEE Latin America Transactions</em>, vol. 13, no. 4, pp. 1178–1186,
 2015, doi: <a href="https://doi.org/10.1109/TLA.2015.7106373">10.1109/TLA.2015.7106373</a>.</div>
 </div>
 <div id="ref-akidau2018streaming" class="csl-entry">
-<div class="csl-left-margin">[29] </div><div class="csl-right-inline">T.
+<div class="csl-left-margin">[30] </div><div class="csl-right-inline">T.
 Akidau, S. Chernyak, and R. Lax, <em>Streaming systems</em>. Sebastopol,
 CA: O’Reilly Media, Inc., 2018.</div>
 </div>
 <div id="ref-peek1994unix" class="csl-entry">
-<div class="csl-left-margin">[30] </div><div class="csl-right-inline">J.
+<div class="csl-left-margin">[31] </div><div class="csl-right-inline">J.
 D. Peek, <em>UNIX power tools</em>. Sebastopol, CA; New York: O’Reilly
 Associates; Bantam Books, 1994.</div>
 </div>
 <div id="ref-google2023grpc" class="csl-entry">
-<div class="csl-left-margin">[31] </div><div class="csl-right-inline">gRPC Authors, <span>“Introduction to
+<div class="csl-left-margin">[32] </div><div class="csl-right-inline">gRPC Authors, <span>“Introduction to
 gRPC.”</span> 2023.Available: <a href="https://grpc.io/docs/what-is-grpc/introduction/">https://grpc.io/docs/what-is-grpc/introduction/</a></div>
 </div>
 <div id="ref-redis2023introduction" class="csl-entry">
-<div class="csl-left-margin">[32] </div><div class="csl-right-inline">Redis Ltd, <span>“Introduction to
+<div class="csl-left-margin">[33] </div><div class="csl-right-inline">Redis Ltd, <span>“Introduction to
 redis.”</span> <a href="https://redis.io/docs/about/" class="uri">https://redis.io/docs/about/</a>, 2023.</div>
 </div>
 <div id="ref-redis2023pubsub" class="csl-entry">
-<div class="csl-left-margin">[33] </div><div class="csl-right-inline">Redis Ltd, <span>“Redis pub/sub.”</span> <a href="https://redis.io/docs/interact/pubsub/" class="uri">https://redis.io/docs/interact/pubsub/</a>, 2023.</div>
+<div class="csl-left-margin">[34] </div><div class="csl-right-inline">Redis Ltd, <span>“Redis pub/sub.”</span> <a href="https://redis.io/docs/interact/pubsub/" class="uri">https://redis.io/docs/interact/pubsub/</a>, 2023.</div>
 </div>
 <div id="ref-aws2023s3" class="csl-entry">
-<div class="csl-left-margin">[34] </div><div class="csl-right-inline">Amazon Web Services, Inc, <span>“What is amazon
+<div class="csl-left-margin">[35] </div><div class="csl-right-inline">Amazon Web Services, Inc, <span>“What is amazon
 S3?”</span> <a href="https://docs.aws.amazon.com/AmazonS3/latest/userguide/Welcome.html" class="uri">https://docs.aws.amazon.com/AmazonS3/latest/userguide/Welcome.html</a>,
 2023.</div>
 </div>
 <div id="ref-minio2023coreadmin" class="csl-entry">
-<div class="csl-left-margin">[35] </div><div class="csl-right-inline">MinIO, Inc, <span>“Core administration
+<div class="csl-left-margin">[36] </div><div class="csl-right-inline">MinIO, Inc, <span>“Core administration
 concepts.”</span> <a href="https://min.io/docs/minio/kubernetes/upstream/administration/concepts.html" class="uri">https://min.io/docs/minio/kubernetes/upstream/administration/concepts.html</a>,
 2023.</div>
 </div>
 <div id="ref-lakshman2010cassandra" class="csl-entry">
-<div class="csl-left-margin">[36] </div><div class="csl-right-inline">A.
+<div class="csl-left-margin">[37] </div><div class="csl-right-inline">A.
 Lakshman and P. Malik, <span>“Cassandra: A decentralized structured
 storage system,”</span> <em>SIGOPS Oper. Syst. Rev.</em>, vol. 44, no.
 2, pp. 35–40, Apr. 2010, doi: <a href="https://doi.org/10.1145/1773912.1773922">10.1145/1773912.1773922</a>.</div>
 </div>
 <div id="ref-grabowski2021scylladb" class="csl-entry">
-<div class="csl-left-margin">[37] </div><div class="csl-right-inline">P.
+<div class="csl-left-margin">[38] </div><div class="csl-right-inline">P.
 Grabowski, J. Stasiewicz, and K. Baryla, <span>“Apache cassandra 4.0
 performance benchmark: Comparing cassandra 4.0, cassandra 3.11 and
 scylla open source 4.4,”</span> ScyllaDB Inc, 2021.Available: <a href="https://www.scylladb.com/wp-content/uploads/wp-apache-cassandra-4-performance-benchmark-3.pdf">https://www.scylladb.com/wp-content/uploads/wp-apache-cassandra-4-performance-benchmark-3.pdf</a></div>
