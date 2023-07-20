@@ -1,3 +1,9 @@
+commit 272d664f2ac99b1b94a672205f0c3b82784cfc09
+Author: Felicitas Pojtinger <felicitas@pojtinger.com>
+Date:   Thu Jul 20 23:08:06 2023 +0200
+
+    feat: Add section on the synchronization protocol
+
 commit a4a04832f474d6ec1ecefaeb64f5d8631c58371b
 Author: Felicitas Pojtinger <felicitas@pojtinger.com>
 Date:   Thu Jul 20 20:22:46 2023 +0200

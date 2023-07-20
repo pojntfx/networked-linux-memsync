@@ -48,7 +48,13 @@ Felicitas Pojtinger (Stuttgart Media University)
     -   4.2 File-Based Synchronization
         -   4.2.1 Caching Restrictions
         -   4.2.2 Detecting File Changes
-        -   Synchronization Protocol
+        -   4.2.3 Synchronization Protocol
+        -   4.2.4 Multiplexer Hub
+        -   4.2.5 File Advertisement
+        -   4.2.6 File Receiver
+        -   4.2.7 File Transmission
+        -   4.2.8 Hash Calculation
+        -   4.2.9 File Reception
 
 Introduction
 
@@ -1451,6 +1457,402 @@ changes, since a small change in the backing file leads to the transfer
 of a smaller chunk.
 
 Synchronization Protocol
+
+The delta synchronization protocol for this approach is similar to the
+one used by rsync, but simplifie. It supports synchronizing multiple
+files at the same time by using the file names as IDs, and also supports
+a central forwarding hub instead of requiring peer-to-peer connectivity
+between all hosts, which also reduces network traffic since this central
+hub could also be used to forward one stream to all other peers instead
+of having to send it multiple times. The protocol defines three actors:
+The multiplexer, file advertiser and file receiver.
+
+TODO: Add sequence diagram for the protocol
+
+Multiplexer Hub
+
+The multiplexer hub accepts mTLS connections from peers. When a peer
+connects, the client certificate is parsed to read the common name,
+which is then being used as the synchronization ID. The multiplexer
+spawns a goroutine to allow for more peers to connection. In the
+goroutine, it reads the type of the peer. If the type is src-control, it
+starts by reading a file name from the connection, and registers the
+connection as the one providing a file with this name, after which it
+broadcasts the file as now being available. For the dst-control peer
+type, it listens to the broadcasted files from the src-control peers,
+and relays and newly advertised and previously registered file names to
+the dst-control peers so that it can start receiving them:
+
+    case "src-control":
+      // Decoding the file name
+        file := ""
+        utils.DecodeJSONFixedLength(conn, &file)
+      // ...
+
+        syncerSrcControlConns[file] = conn
+
+        syncerSrcControlConnsBroadcaster.Broadcast(file)
+      // ...
+    case "dst-control":
+        var wg sync.WaitGroup
+        wg.Add(1)
+
+        go func() {
+        // Subscription to send all future file names
+            l := syncerSrcControlConnsBroadcaster.Listener(0)
+
+            for file := range l.Ch() {
+                utils.EncodeJSONFixedLength(conn, file)
+          // ...
+            }
+        }()
+
+      // Sending the previously known file names
+        for file := range syncerSrcControlConns {
+            utils.EncodeJSONFixedLength(conn, file)
+        // ...
+        }
+
+        wg.Wait()
+
+For the dst type, the multiplexer hub decodes a file name from the
+connection, looks for a corresponding src-control peer, and if it has
+found a matching one, it creates and sends a new ID for this connection
+to the src-control peer. After this, it waits until a src-control peer
+has connected to the hub with this ID as well as a new src-data peer by
+listening for broadcasts of src-data peer IDs. After this has occured,
+it spawns two new goroutines that copy data to and from this newly
+created synchronization connection and the connection of the dst peer,
+effectively relaying all packets between the two. For the src-data peer
+type, it decodes the ID for the peer, and broadcasts the ID, which
+allows the dst peer to continue operating:
+
+    case "dst":
+      // Decoding the file name
+      file := ""
+      utils.DecodeJSONFixedLength(conn, &file)
+
+      // Finding the `src-control` peer
+      controlConn, ok := syncerSrcControlConns[file]
+      // ...
+
+      // Sending the ID and waiting for a data connection
+      id := uuid.NewString()
+      utils.EncodeJSONFixedLength(controlConn, id)
+
+      l := dataConnsBroadcaster.Listener(0)
+
+      var dataConn net.Conn
+      for candidate := range l.Ch() {
+        if candidate.id == id {
+            dataConn = candidate.conn
+
+            l.Close()
+
+            break
+        }
+      }
+
+      // Copying data between both connections
+      go func() {
+        io.Copy(dataConn, conn)
+        // ...
+      }()
+
+      go func() {
+        io.Copy(conn, dataConn)
+        // ...
+      }()
+
+    case "src-data":
+      // Receiving the ID
+      id := ""
+      utils.DecodeJSONFixedLength(conn, &id)
+
+      // Broadcasting the ID
+      dataConnsBroadcaster.Broadcast(connWithID{id, conn})
+      // ...
+
+File Advertisement
+
+The file advertisement system connects to the multiplexer hub and
+registers itself a src-control peer, after which it sends the advertised
+file name. It starts a loop that handles dst peer types, which, as
+mentioned earlier, send an ID. Once such an ID is received, it spawns a
+new goroutine, which connects to the hub again and registers itself as a
+src-data peer, and sends the ID it has received earlier to allow
+connecting it to the matching dst peer:
+
+    // ...
+    f, err := os.OpenFile(src, os.O_RDONLY, os.ModePerm)
+
+    utils.EncodeJSONFixedLength(dataConn, "src-data")
+
+    utils.EncodeJSONFixedLength(dataConn, id)
+    // ...
+
+After this initial handshake is complete, the main synchronization loop
+is started, which initiates the file transmission to the dst peer
+through the multiplexer hub. In order to allow for termination, it
+checks if the syncStopped flag has been set by a context cancellation
+which case it returns:
+
+    syncStopped := false
+    go func() {
+        <-ctx.Done() // Context is supplied by the caller
+
+        syncStopped = true
+    }()
+
+If this is not the case, it waits for the specified polling interval,
+after which it restarts the transmission:
+
+    done := false
+    for {
+        if done {
+            // ...
+            return
+        }
+
+        if syncStopped {
+        // Finish the synchronization
+            SendFile(parallel, f, src, blocksize, dataConn, verbose)
+        //  ...
+            done = true
+        }
+
+      // Start the synchronization
+        SendFile(parallel, f, src, blocksize, dataConn, verbose)
+
+      // Wait until the next polling cycle starts
+        time.Sleep(pollDuration)
+    }
+
+File Receiver
+
+The file receiver also connects to the multiplexer hub, this time
+registering itself as a dst-control peer. After it has received a file
+name from the multiplexer hub, it connects to the multiplexer hub
+again - this time registering itself as a dst peer, which creates
+leading directories, opens up the destination file and registers itself:
+
+    // Connection and registration
+    syncerConn, err := d.DialContext(ctx, "tcp", syncerRaddr)
+    // ...
+    utils.EncodeJSONFixedLength(syncerConn, "dst-control")
+
+    for {
+      file := ""
+      utils.DecodeJSONFixedLength(syncerConn, &file)
+
+      go func() {
+        // Connection and registration
+        dataConn, err := d.DialContext(ctx, "tcp", syncerRaddr)
+        // ..
+        utils.EncodeJSONFixedLength(dataConn, "dst")
+
+        // Destination directory and file setup
+        dst := getDstPath(file)
+        os.MkdirAll(filepath.Dir(dst), os.ModePerm)
+
+        f, err := os.OpenFile(dst, os.O_WRONLY|os.O_CREATE, os.ModePerm)
+        // ...
+      }()
+    }
+
+The file name is now sent to the multiplexer again, causing it to look
+for a peer that advertises the requested file. If such a peer is found,
+it starts the file receiver process in a loop, exiting only once the
+file has been completely synced:
+
+    // Sending the file name
+    utils.EncodeJSONFixedLength(dataConn, file)
+
+    for {
+      // Receiving one set of delta changes
+      ReceiveFile(parallel, f, dst, blocksize, dataConn, verbose)
+
+      // Termination
+      if once(file) {
+        return
+      }
+    }
+
+File Transmission
+
+This component does the actual transmission in each iteration of the
+delta synchronization algorithm. It receives the remote hashes from the
+multiplexer hub, calculates the matching local hashes and compares them,
+which it sends the hashes that don’t match back to the file receiver via
+the multiplexer hub:
+
+    // Receiving remote hashes
+    remoteHashes := []string{}
+    utils.DecodeJSONFixedLength(conn, &remoteHashes)
+    // ...
+
+    // Calculating the hashes
+    localHashes, cutoff, err := GetHashesForBlocks(parallel, path, blocksize)
+
+    // Comparing the hashes
+    blocksToSend := []int64{}
+    for i, localHash := range localHashes {
+        j := int64(i)
+
+        if len(remoteHashes) <= i {
+            blocksToSend = append(blocksToSend, j)
+
+            continue
+        }
+
+        if localHash != remoteHashes[i] {
+            blocksToSend = append(blocksToSend, j)
+
+            continue
+        }
+    }
+
+    // Sending the non-matching hashes
+    utils.EncodeJSONFixedLength(conn, blocksToSend)
+
+If the remote has sent less hashes than were calculated locally, it asks
+the remote to truncate it’s file to the size of the local file that is
+being synchronized, after which it sends the updated data for the file
+in the order that the changed hashes were sent:
+
+    // Local file is empty, truncate remote file to zero
+    if len(remoteHashes) > 0 && len(localHashes) <= 0 {
+        utils.EncodeJSONFixedLength(conn, -1)
+
+      return // ...
+    }
+
+    // Grow/shrink remote file
+    utils.EncodeJSONFixedLength(conn, cutoff)
+
+    // Read changed chunks from file and copy them to the remote connection
+    for i, blockToSend := range blocksToSend {
+        backset := int64(0)
+        if i == len(blocksToSend)-1 {
+            backset = cutoff
+        }
+
+        b := make([]byte, blocksize-backset)
+        file.ReadAt(b, blockToSend*(blocksize))
+
+        m, err := conn.Write(b)
+      // ...
+    }
+
+Hash Calculation
+
+The hash calculation implements the concurrent hashing of both the file
+transmitter and receiver. It uses a semaphore to limit the amount of
+concurrent access to the file that is being hashed, and a wait group to
+detect that the calculation has finished:
+
+    // The lock and semaphore
+    var wg sync.WaitGroup
+    wg.Add(int(blocks))
+
+    lock := semaphore.NewWeighted(parallel)
+
+    // ...
+
+    // Concurrent hash calculation
+    for i := int64(0); i < blocks; i++ {
+        j := i
+
+        go calculateHash(j)
+    }
+    wg.Wait()
+
+Worker goroutines acquire a lock of this semaphore and calculate a CRC32
+hash, which is a weak but fast hashing algorithm. For easier
+transmission, the hashes are hex-encoded and collected:
+
+    calculateHash := func(j int64) {
+        _ = lock.Acquire(context.Background(), 1)
+        // ...
+
+        checkFile, err := os.Open(file)
+
+
+      // Hash calculation of the specific chunk
+        hash := crc32.NewIEEE()
+        io.CopyN(hash, io.NewSectionReader(checkFile, j*(blocksize), blocksize), blocksize)
+        // ...
+
+      // Hash encoding
+        hashes[j] = hex.EncodeToString(hash.Sum(nil))
+      // ...
+    }
+
+File Reception
+
+This is the receiving component of one delta synchronization iteration.
+It starts by calculating hashes for the existing local copy of the file,
+which it then sends to the remote before it waits to receive the
+remote’s hashes and potential truncation request:
+
+    // Local hash calculation
+    localHashes, _, err := GetHashesForBlocks(parallel, path, blocksize)
+
+    // Sending the hashes to the remote
+    utils.EncodeJSONFixedLength(conn, localHashes)
+
+    // Receiving the remote hashes and the truncation request
+    blocksToFetch := []int64{}
+    utils.DecodeJSONFixedLength(conn, &blocksToFetch)
+    // ...
+
+    cutoff := int64(0)
+    utils.DecodeJSONFixedLength(conn, &cutoff)
+
+If the remote detected that the file needs to be cleared (by sending a
+negative cutoff value), the receiver truncates the file; similarly so,
+if it has detected that the file has grown or shrunk since the last
+synchronization cycle, it shortens or extends it, after which the chunks
+are read from the connection and written to the local file:
+
+    // Clearing the file
+    if cutoff == -1 {
+        file.Truncate(0)
+
+        return nil
+    }
+
+    /// ...
+
+    // Shrinking or growing the file
+    s, err := os.Stat(path)
+
+    newSize := (((blocksToFetch[len(blocksToFetch)-1] + 1) * blocksize) - cutoff)
+    diff := s.Size() - newSize
+
+    if diff > 0 {
+        // If the file on the server got smaller, truncate the local file accordingly
+        file.Truncate(newSize)
+    } else {
+        // If the file on the server grew, grow the local file accordingly
+        file.Seek(0, 2)
+
+        io.CopyN(file, nopReader{}, -diff)
+    }
+
+    for i, blockToFetch := range blocksToFetch {
+        backset := int64(0)
+        if i == len(blocksToFetch)-1 {
+            backset = cutoff
+        }
+
+      // Receiving the chunk
+        b := make([]byte, blocksize-backset)
+        io.ReadFull(conn, b)
+
+      // Writing the chunk to the local file
+        file.WriteAt(b, blockToFetch*(blocksize))
+    }
 
 [1] T. kernel development community, “Quick start.”
 https://www.kernel.org/doc/html/next/rust/quick-start.html, 2023.

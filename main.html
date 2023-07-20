@@ -1662,8 +1662,390 @@ decrease the amount of network traffic that is required to sync the
 changes, since a small change in the backing file leads to the transfer
 of a smaller chunk.</p>
 </section>
-<h4 class="unnumbered" id="synchronization-protocol">Synchronization
+<section id="synchronization-protocol" data-number="0.4.2.3">
+<h4 data-number="1.4.2.3"><span class="header-section-number">1.4.2.3</span> Synchronization
 Protocol</h4>
+<p>The delta synchronization protocol for this approach is similar to
+the one used by <code>rsync</code>, but simplifie. It supports
+synchronizing multiple files at the same time by using the file names as
+IDs, and also supports a central forwarding hub instead of requiring
+peer-to-peer connectivity between all hosts, which also reduces network
+traffic since this central hub could also be used to forward one stream
+to all other peers instead of having to send it multiple times. The
+protocol defines three actors: The multiplexer, file advertiser and file
+receiver.</p>
+<p>TODO: Add sequence diagram for the protocol</p>
+</section>
+<section id="multiplexer-hub" data-number="0.4.2.4">
+<h4 data-number="1.4.2.4"><span class="header-section-number">1.4.2.4</span> Multiplexer Hub</h4>
+<p>The multiplexer hub accepts mTLS connections from peers. When a peer
+connects, the client certificate is parsed to read the common name,
+which is then being used as the synchronization ID. The multiplexer
+spawns a goroutine to allow for more peers to connection. In the
+goroutine, it reads the type of the peer. If the type is
+<code>src-control</code>, it starts by reading a file name from the
+connection, and registers the connection as the one providing a file
+with this name, after which it broadcasts the file as now being
+available. For the <code>dst-control</code> peer type, it listens to the
+broadcasted files from the <code>src-control</code> peers, and relays
+and newly advertised and previously registered file names to the
+<code>dst-control</code> peers so that it can start receiving them:</p>
+<div class="sourceCode" id="cb13"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a><span class="cf">case</span> <span class="st">&quot;src-control&quot;</span><span class="op">:</span></span>
+<span id="cb13-2"><a href="#cb13-2" aria-hidden="true" tabindex="-1"></a>  <span class="co">// Decoding the file name</span></span>
+<span id="cb13-3"><a href="#cb13-3" aria-hidden="true" tabindex="-1"></a>    file <span class="op">:=</span> <span class="st">&quot;&quot;</span></span>
+<span id="cb13-4"><a href="#cb13-4" aria-hidden="true" tabindex="-1"></a>    utils<span class="op">.</span>DecodeJSONFixedLength<span class="op">(</span>conn<span class="op">,</span> <span class="op">&amp;</span>file<span class="op">)</span></span>
+<span id="cb13-5"><a href="#cb13-5" aria-hidden="true" tabindex="-1"></a>  <span class="co">// ...</span></span>
+<span id="cb13-6"><a href="#cb13-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb13-7"><a href="#cb13-7" aria-hidden="true" tabindex="-1"></a>    syncerSrcControlConns<span class="op">[</span>file<span class="op">]</span> <span class="op">=</span> conn</span>
+<span id="cb13-8"><a href="#cb13-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb13-9"><a href="#cb13-9" aria-hidden="true" tabindex="-1"></a>    syncerSrcControlConnsBroadcaster<span class="op">.</span>Broadcast<span class="op">(</span>file<span class="op">)</span></span>
+<span id="cb13-10"><a href="#cb13-10" aria-hidden="true" tabindex="-1"></a>  <span class="co">// ...</span></span>
+<span id="cb13-11"><a href="#cb13-11" aria-hidden="true" tabindex="-1"></a><span class="cf">case</span> <span class="st">&quot;dst-control&quot;</span><span class="op">:</span></span>
+<span id="cb13-12"><a href="#cb13-12" aria-hidden="true" tabindex="-1"></a>    <span class="kw">var</span> wg sync<span class="op">.</span>WaitGroup</span>
+<span id="cb13-13"><a href="#cb13-13" aria-hidden="true" tabindex="-1"></a>    wg<span class="op">.</span>Add<span class="op">(</span><span class="dv">1</span><span class="op">)</span></span>
+<span id="cb13-14"><a href="#cb13-14" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb13-15"><a href="#cb13-15" aria-hidden="true" tabindex="-1"></a>    <span class="cf">go</span> <span class="kw">func</span><span class="op">()</span> <span class="op">{</span></span>
+<span id="cb13-16"><a href="#cb13-16" aria-hidden="true" tabindex="-1"></a>    <span class="co">// Subscription to send all future file names</span></span>
+<span id="cb13-17"><a href="#cb13-17" aria-hidden="true" tabindex="-1"></a>        l <span class="op">:=</span> syncerSrcControlConnsBroadcaster<span class="op">.</span>Listener<span class="op">(</span><span class="dv">0</span><span class="op">)</span></span>
+<span id="cb13-18"><a href="#cb13-18" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb13-19"><a href="#cb13-19" aria-hidden="true" tabindex="-1"></a>        <span class="cf">for</span> file <span class="op">:=</span> <span class="kw">range</span> l<span class="op">.</span>Ch<span class="op">()</span> <span class="op">{</span></span>
+<span id="cb13-20"><a href="#cb13-20" aria-hidden="true" tabindex="-1"></a>            utils<span class="op">.</span>EncodeJSONFixedLength<span class="op">(</span>conn<span class="op">,</span> file<span class="op">)</span></span>
+<span id="cb13-21"><a href="#cb13-21" aria-hidden="true" tabindex="-1"></a>      <span class="co">// ...</span></span>
+<span id="cb13-22"><a href="#cb13-22" aria-hidden="true" tabindex="-1"></a>        <span class="op">}</span></span>
+<span id="cb13-23"><a href="#cb13-23" aria-hidden="true" tabindex="-1"></a>    <span class="op">}()</span></span>
+<span id="cb13-24"><a href="#cb13-24" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb13-25"><a href="#cb13-25" aria-hidden="true" tabindex="-1"></a>  <span class="co">// Sending the previously known file names</span></span>
+<span id="cb13-26"><a href="#cb13-26" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> file <span class="op">:=</span> <span class="kw">range</span> syncerSrcControlConns <span class="op">{</span></span>
+<span id="cb13-27"><a href="#cb13-27" aria-hidden="true" tabindex="-1"></a>        utils<span class="op">.</span>EncodeJSONFixedLength<span class="op">(</span>conn<span class="op">,</span> file<span class="op">)</span></span>
+<span id="cb13-28"><a href="#cb13-28" aria-hidden="true" tabindex="-1"></a>    <span class="co">// ...</span></span>
+<span id="cb13-29"><a href="#cb13-29" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb13-30"><a href="#cb13-30" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb13-31"><a href="#cb13-31" aria-hidden="true" tabindex="-1"></a>    wg<span class="op">.</span>Wait<span class="op">()</span></span></code></pre></div>
+<p>For the <code>dst</code> type, the multiplexer hub decodes a file
+name from the connection, looks for a corresponding
+<code>src-control</code> peer, and if it has found a matching one, it
+creates and sends a new ID for this connection to the
+<code>src-control</code> peer. After this, it waits until a
+<code>src-control</code> peer has connected to the hub with this ID as
+well as a new <code>src-data</code> peer by listening for broadcasts of
+<code>src-data</code> peer IDs. After this has occured, it spawns two
+new goroutines that copy data to and from this newly created
+synchronization connection and the connection of the <code>dst</code>
+peer, effectively relaying all packets between the two. For the
+<code>src-data</code> peer type, it decodes the ID for the peer, and
+broadcasts the ID, which allows the <code>dst</code> peer to continue
+operating:</p>
+<div class="sourceCode" id="cb14"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb14-1"><a href="#cb14-1" aria-hidden="true" tabindex="-1"></a><span class="cf">case</span> <span class="st">&quot;dst&quot;</span><span class="op">:</span></span>
+<span id="cb14-2"><a href="#cb14-2" aria-hidden="true" tabindex="-1"></a>  <span class="co">// Decoding the file name</span></span>
+<span id="cb14-3"><a href="#cb14-3" aria-hidden="true" tabindex="-1"></a>  file <span class="op">:=</span> <span class="st">&quot;&quot;</span></span>
+<span id="cb14-4"><a href="#cb14-4" aria-hidden="true" tabindex="-1"></a>  utils<span class="op">.</span>DecodeJSONFixedLength<span class="op">(</span>conn<span class="op">,</span> <span class="op">&amp;</span>file<span class="op">)</span></span>
+<span id="cb14-5"><a href="#cb14-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb14-6"><a href="#cb14-6" aria-hidden="true" tabindex="-1"></a>  <span class="co">// Finding the `src-control` peer</span></span>
+<span id="cb14-7"><a href="#cb14-7" aria-hidden="true" tabindex="-1"></a>  controlConn<span class="op">,</span> ok <span class="op">:=</span> syncerSrcControlConns<span class="op">[</span>file<span class="op">]</span></span>
+<span id="cb14-8"><a href="#cb14-8" aria-hidden="true" tabindex="-1"></a>  <span class="co">// ...</span></span>
+<span id="cb14-9"><a href="#cb14-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb14-10"><a href="#cb14-10" aria-hidden="true" tabindex="-1"></a>  <span class="co">// Sending the ID and waiting for a data connection</span></span>
+<span id="cb14-11"><a href="#cb14-11" aria-hidden="true" tabindex="-1"></a>  id <span class="op">:=</span> uuid<span class="op">.</span>NewString<span class="op">()</span></span>
+<span id="cb14-12"><a href="#cb14-12" aria-hidden="true" tabindex="-1"></a>  utils<span class="op">.</span>EncodeJSONFixedLength<span class="op">(</span>controlConn<span class="op">,</span> id<span class="op">)</span></span>
+<span id="cb14-13"><a href="#cb14-13" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb14-14"><a href="#cb14-14" aria-hidden="true" tabindex="-1"></a>  l <span class="op">:=</span> dataConnsBroadcaster<span class="op">.</span>Listener<span class="op">(</span><span class="dv">0</span><span class="op">)</span></span>
+<span id="cb14-15"><a href="#cb14-15" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb14-16"><a href="#cb14-16" aria-hidden="true" tabindex="-1"></a>  <span class="kw">var</span> dataConn net<span class="op">.</span>Conn</span>
+<span id="cb14-17"><a href="#cb14-17" aria-hidden="true" tabindex="-1"></a>  <span class="cf">for</span> candidate <span class="op">:=</span> <span class="kw">range</span> l<span class="op">.</span>Ch<span class="op">()</span> <span class="op">{</span></span>
+<span id="cb14-18"><a href="#cb14-18" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> candidate<span class="op">.</span>id <span class="op">==</span> id <span class="op">{</span></span>
+<span id="cb14-19"><a href="#cb14-19" aria-hidden="true" tabindex="-1"></a>        dataConn <span class="op">=</span> candidate<span class="op">.</span>conn</span>
+<span id="cb14-20"><a href="#cb14-20" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb14-21"><a href="#cb14-21" aria-hidden="true" tabindex="-1"></a>        l<span class="op">.</span>Close<span class="op">()</span></span>
+<span id="cb14-22"><a href="#cb14-22" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb14-23"><a href="#cb14-23" aria-hidden="true" tabindex="-1"></a>        <span class="cf">break</span></span>
+<span id="cb14-24"><a href="#cb14-24" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb14-25"><a href="#cb14-25" aria-hidden="true" tabindex="-1"></a>  <span class="op">}</span></span>
+<span id="cb14-26"><a href="#cb14-26" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb14-27"><a href="#cb14-27" aria-hidden="true" tabindex="-1"></a>  <span class="co">// Copying data between both connections</span></span>
+<span id="cb14-28"><a href="#cb14-28" aria-hidden="true" tabindex="-1"></a>  <span class="cf">go</span> <span class="kw">func</span><span class="op">()</span> <span class="op">{</span></span>
+<span id="cb14-29"><a href="#cb14-29" aria-hidden="true" tabindex="-1"></a>    io<span class="op">.</span>Copy<span class="op">(</span>dataConn<span class="op">,</span> conn<span class="op">)</span></span>
+<span id="cb14-30"><a href="#cb14-30" aria-hidden="true" tabindex="-1"></a>    <span class="co">// ...</span></span>
+<span id="cb14-31"><a href="#cb14-31" aria-hidden="true" tabindex="-1"></a>  <span class="op">}()</span></span>
+<span id="cb14-32"><a href="#cb14-32" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb14-33"><a href="#cb14-33" aria-hidden="true" tabindex="-1"></a>  <span class="cf">go</span> <span class="kw">func</span><span class="op">()</span> <span class="op">{</span></span>
+<span id="cb14-34"><a href="#cb14-34" aria-hidden="true" tabindex="-1"></a>    io<span class="op">.</span>Copy<span class="op">(</span>conn<span class="op">,</span> dataConn<span class="op">)</span></span>
+<span id="cb14-35"><a href="#cb14-35" aria-hidden="true" tabindex="-1"></a>    <span class="co">// ...</span></span>
+<span id="cb14-36"><a href="#cb14-36" aria-hidden="true" tabindex="-1"></a>  <span class="op">}()</span></span>
+<span id="cb14-37"><a href="#cb14-37" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb14-38"><a href="#cb14-38" aria-hidden="true" tabindex="-1"></a><span class="cf">case</span> <span class="st">&quot;src-data&quot;</span><span class="op">:</span></span>
+<span id="cb14-39"><a href="#cb14-39" aria-hidden="true" tabindex="-1"></a>  <span class="co">// Receiving the ID</span></span>
+<span id="cb14-40"><a href="#cb14-40" aria-hidden="true" tabindex="-1"></a>  id <span class="op">:=</span> <span class="st">&quot;&quot;</span></span>
+<span id="cb14-41"><a href="#cb14-41" aria-hidden="true" tabindex="-1"></a>  utils<span class="op">.</span>DecodeJSONFixedLength<span class="op">(</span>conn<span class="op">,</span> <span class="op">&amp;</span>id<span class="op">)</span></span>
+<span id="cb14-42"><a href="#cb14-42" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb14-43"><a href="#cb14-43" aria-hidden="true" tabindex="-1"></a>  <span class="co">// Broadcasting the ID</span></span>
+<span id="cb14-44"><a href="#cb14-44" aria-hidden="true" tabindex="-1"></a>  dataConnsBroadcaster<span class="op">.</span>Broadcast<span class="op">(</span>connWithID<span class="op">{</span>id<span class="op">,</span> conn<span class="op">})</span></span>
+<span id="cb14-45"><a href="#cb14-45" aria-hidden="true" tabindex="-1"></a>  <span class="co">// ...</span></span></code></pre></div>
+</section>
+<section id="file-advertisement" data-number="0.4.2.5">
+<h4 data-number="1.4.2.5"><span class="header-section-number">1.4.2.5</span> File Advertisement</h4>
+<p>The file advertisement system connects to the multiplexer hub and
+registers itself a <code>src-control</code> peer, after which it sends
+the advertised file name. It starts a loop that handles <code>dst</code>
+peer types, which, as mentioned earlier, send an ID. Once such an ID is
+received, it spawns a new goroutine, which connects to the hub again and
+registers itself as a <code>src-data</code> peer, and sends the ID it
+has received earlier to allow connecting it to the matching
+<code>dst</code> peer:</p>
+<div class="sourceCode" id="cb15"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb15-1"><a href="#cb15-1" aria-hidden="true" tabindex="-1"></a><span class="co">// ...</span></span>
+<span id="cb15-2"><a href="#cb15-2" aria-hidden="true" tabindex="-1"></a>f<span class="op">,</span> err <span class="op">:=</span> os<span class="op">.</span>OpenFile<span class="op">(</span>src<span class="op">,</span> os<span class="op">.</span>O_RDONLY<span class="op">,</span> os<span class="op">.</span>ModePerm<span class="op">)</span></span>
+<span id="cb15-3"><a href="#cb15-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-4"><a href="#cb15-4" aria-hidden="true" tabindex="-1"></a>utils<span class="op">.</span>EncodeJSONFixedLength<span class="op">(</span>dataConn<span class="op">,</span> <span class="st">&quot;src-data&quot;</span><span class="op">)</span></span>
+<span id="cb15-5"><a href="#cb15-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-6"><a href="#cb15-6" aria-hidden="true" tabindex="-1"></a>utils<span class="op">.</span>EncodeJSONFixedLength<span class="op">(</span>dataConn<span class="op">,</span> id<span class="op">)</span></span>
+<span id="cb15-7"><a href="#cb15-7" aria-hidden="true" tabindex="-1"></a><span class="co">// ...</span></span></code></pre></div>
+<p>After this initial handshake is complete, the main synchronization
+loop is started, which initiates the file transmission to the
+<code>dst</code> peer through the multiplexer hub. In order to allow for
+termination, it checks if the <code>syncStopped</code> flag has been set
+by a context cancellation which case it returns:</p>
+<div class="sourceCode" id="cb16"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb16-1"><a href="#cb16-1" aria-hidden="true" tabindex="-1"></a>syncStopped <span class="op">:=</span> <span class="ot">false</span></span>
+<span id="cb16-2"><a href="#cb16-2" aria-hidden="true" tabindex="-1"></a><span class="cf">go</span> <span class="kw">func</span><span class="op">()</span> <span class="op">{</span></span>
+<span id="cb16-3"><a href="#cb16-3" aria-hidden="true" tabindex="-1"></a>    <span class="op">&lt;-</span>ctx<span class="op">.</span>Done<span class="op">()</span> <span class="co">// Context is supplied by the caller</span></span>
+<span id="cb16-4"><a href="#cb16-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb16-5"><a href="#cb16-5" aria-hidden="true" tabindex="-1"></a>    syncStopped <span class="op">=</span> <span class="ot">true</span></span>
+<span id="cb16-6"><a href="#cb16-6" aria-hidden="true" tabindex="-1"></a><span class="op">}()</span></span></code></pre></div>
+<p>If this is not the case, it waits for the specified polling interval,
+after which it restarts the transmission:</p>
+<div class="sourceCode" id="cb17"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb17-1"><a href="#cb17-1" aria-hidden="true" tabindex="-1"></a>done <span class="op">:=</span> <span class="ot">false</span></span>
+<span id="cb17-2"><a href="#cb17-2" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> <span class="op">{</span></span>
+<span id="cb17-3"><a href="#cb17-3" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> done <span class="op">{</span></span>
+<span id="cb17-4"><a href="#cb17-4" aria-hidden="true" tabindex="-1"></a>        <span class="co">// ...</span></span>
+<span id="cb17-5"><a href="#cb17-5" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span></span>
+<span id="cb17-6"><a href="#cb17-6" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb17-7"><a href="#cb17-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb17-8"><a href="#cb17-8" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> syncStopped <span class="op">{</span></span>
+<span id="cb17-9"><a href="#cb17-9" aria-hidden="true" tabindex="-1"></a>    <span class="co">// Finish the synchronization</span></span>
+<span id="cb17-10"><a href="#cb17-10" aria-hidden="true" tabindex="-1"></a>        SendFile<span class="op">(</span>parallel<span class="op">,</span> f<span class="op">,</span> src<span class="op">,</span> blocksize<span class="op">,</span> dataConn<span class="op">,</span> verbose<span class="op">)</span></span>
+<span id="cb17-11"><a href="#cb17-11" aria-hidden="true" tabindex="-1"></a>    <span class="co">//  ...</span></span>
+<span id="cb17-12"><a href="#cb17-12" aria-hidden="true" tabindex="-1"></a>        done <span class="op">=</span> <span class="ot">true</span></span>
+<span id="cb17-13"><a href="#cb17-13" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb17-14"><a href="#cb17-14" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb17-15"><a href="#cb17-15" aria-hidden="true" tabindex="-1"></a>  <span class="co">// Start the synchronization</span></span>
+<span id="cb17-16"><a href="#cb17-16" aria-hidden="true" tabindex="-1"></a>    SendFile<span class="op">(</span>parallel<span class="op">,</span> f<span class="op">,</span> src<span class="op">,</span> blocksize<span class="op">,</span> dataConn<span class="op">,</span> verbose<span class="op">)</span></span>
+<span id="cb17-17"><a href="#cb17-17" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb17-18"><a href="#cb17-18" aria-hidden="true" tabindex="-1"></a>  <span class="co">// Wait until the next polling cycle starts</span></span>
+<span id="cb17-19"><a href="#cb17-19" aria-hidden="true" tabindex="-1"></a>    time<span class="op">.</span>Sleep<span class="op">(</span>pollDuration<span class="op">)</span></span>
+<span id="cb17-20"><a href="#cb17-20" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+</section>
+<section id="file-receiver" data-number="0.4.2.6">
+<h4 data-number="1.4.2.6"><span class="header-section-number">1.4.2.6</span> File Receiver</h4>
+<p>The file receiver also connects to the multiplexer hub, this time
+registering itself as a <code>dst-control</code> peer. After it has
+received a file name from the multiplexer hub, it connects to the
+multiplexer hub again - this time registering itself as a
+<code>dst</code> peer, which creates leading directories, opens up the
+destination file and registers itself:</p>
+<div class="sourceCode" id="cb18"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb18-1"><a href="#cb18-1" aria-hidden="true" tabindex="-1"></a><span class="co">// Connection and registration</span></span>
+<span id="cb18-2"><a href="#cb18-2" aria-hidden="true" tabindex="-1"></a>syncerConn<span class="op">,</span> err <span class="op">:=</span> d<span class="op">.</span>DialContext<span class="op">(</span>ctx<span class="op">,</span> <span class="st">&quot;tcp&quot;</span><span class="op">,</span> syncerRaddr<span class="op">)</span></span>
+<span id="cb18-3"><a href="#cb18-3" aria-hidden="true" tabindex="-1"></a><span class="co">// ...</span></span>
+<span id="cb18-4"><a href="#cb18-4" aria-hidden="true" tabindex="-1"></a>utils<span class="op">.</span>EncodeJSONFixedLength<span class="op">(</span>syncerConn<span class="op">,</span> <span class="st">&quot;dst-control&quot;</span><span class="op">)</span></span>
+<span id="cb18-5"><a href="#cb18-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb18-6"><a href="#cb18-6" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> <span class="op">{</span></span>
+<span id="cb18-7"><a href="#cb18-7" aria-hidden="true" tabindex="-1"></a>  file <span class="op">:=</span> <span class="st">&quot;&quot;</span></span>
+<span id="cb18-8"><a href="#cb18-8" aria-hidden="true" tabindex="-1"></a>  utils<span class="op">.</span>DecodeJSONFixedLength<span class="op">(</span>syncerConn<span class="op">,</span> <span class="op">&amp;</span>file<span class="op">)</span></span>
+<span id="cb18-9"><a href="#cb18-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb18-10"><a href="#cb18-10" aria-hidden="true" tabindex="-1"></a>  <span class="cf">go</span> <span class="kw">func</span><span class="op">()</span> <span class="op">{</span></span>
+<span id="cb18-11"><a href="#cb18-11" aria-hidden="true" tabindex="-1"></a>    <span class="co">// Connection and registration</span></span>
+<span id="cb18-12"><a href="#cb18-12" aria-hidden="true" tabindex="-1"></a>    dataConn<span class="op">,</span> err <span class="op">:=</span> d<span class="op">.</span>DialContext<span class="op">(</span>ctx<span class="op">,</span> <span class="st">&quot;tcp&quot;</span><span class="op">,</span> syncerRaddr<span class="op">)</span></span>
+<span id="cb18-13"><a href="#cb18-13" aria-hidden="true" tabindex="-1"></a>    <span class="co">// ..</span></span>
+<span id="cb18-14"><a href="#cb18-14" aria-hidden="true" tabindex="-1"></a>    utils<span class="op">.</span>EncodeJSONFixedLength<span class="op">(</span>dataConn<span class="op">,</span> <span class="st">&quot;dst&quot;</span><span class="op">)</span></span>
+<span id="cb18-15"><a href="#cb18-15" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb18-16"><a href="#cb18-16" aria-hidden="true" tabindex="-1"></a>    <span class="co">// Destination directory and file setup</span></span>
+<span id="cb18-17"><a href="#cb18-17" aria-hidden="true" tabindex="-1"></a>    dst <span class="op">:=</span> getDstPath<span class="op">(</span>file<span class="op">)</span></span>
+<span id="cb18-18"><a href="#cb18-18" aria-hidden="true" tabindex="-1"></a>    os<span class="op">.</span>MkdirAll<span class="op">(</span>filepath<span class="op">.</span>Dir<span class="op">(</span>dst<span class="op">),</span> os<span class="op">.</span>ModePerm<span class="op">)</span></span>
+<span id="cb18-19"><a href="#cb18-19" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb18-20"><a href="#cb18-20" aria-hidden="true" tabindex="-1"></a>    f<span class="op">,</span> err <span class="op">:=</span> os<span class="op">.</span>OpenFile<span class="op">(</span>dst<span class="op">,</span> os<span class="op">.</span>O_WRONLY<span class="op">|</span>os<span class="op">.</span>O_CREATE<span class="op">,</span> os<span class="op">.</span>ModePerm<span class="op">)</span></span>
+<span id="cb18-21"><a href="#cb18-21" aria-hidden="true" tabindex="-1"></a>    <span class="co">// ...</span></span>
+<span id="cb18-22"><a href="#cb18-22" aria-hidden="true" tabindex="-1"></a>  <span class="op">}()</span></span>
+<span id="cb18-23"><a href="#cb18-23" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<p>The file name is now sent to the multiplexer again, causing it to
+look for a peer that advertises the requested file. If such a peer is
+found, it starts the file receiver process in a loop, exiting only once
+the file has been completely synced:</p>
+<div class="sourceCode" id="cb19"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb19-1"><a href="#cb19-1" aria-hidden="true" tabindex="-1"></a><span class="co">// Sending the file name</span></span>
+<span id="cb19-2"><a href="#cb19-2" aria-hidden="true" tabindex="-1"></a>utils<span class="op">.</span>EncodeJSONFixedLength<span class="op">(</span>dataConn<span class="op">,</span> file<span class="op">)</span></span>
+<span id="cb19-3"><a href="#cb19-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-4"><a href="#cb19-4" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> <span class="op">{</span></span>
+<span id="cb19-5"><a href="#cb19-5" aria-hidden="true" tabindex="-1"></a>  <span class="co">// Receiving one set of delta changes</span></span>
+<span id="cb19-6"><a href="#cb19-6" aria-hidden="true" tabindex="-1"></a>  ReceiveFile<span class="op">(</span>parallel<span class="op">,</span> f<span class="op">,</span> dst<span class="op">,</span> blocksize<span class="op">,</span> dataConn<span class="op">,</span> verbose<span class="op">)</span></span>
+<span id="cb19-7"><a href="#cb19-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-8"><a href="#cb19-8" aria-hidden="true" tabindex="-1"></a>  <span class="co">// Termination</span></span>
+<span id="cb19-9"><a href="#cb19-9" aria-hidden="true" tabindex="-1"></a>  <span class="cf">if</span> once<span class="op">(</span>file<span class="op">)</span> <span class="op">{</span></span>
+<span id="cb19-10"><a href="#cb19-10" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span></span>
+<span id="cb19-11"><a href="#cb19-11" aria-hidden="true" tabindex="-1"></a>  <span class="op">}</span></span>
+<span id="cb19-12"><a href="#cb19-12" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+</section>
+<section id="file-transmission" data-number="0.4.2.7">
+<h4 data-number="1.4.2.7"><span class="header-section-number">1.4.2.7</span> File Transmission</h4>
+<p>This component does the actual transmission in each iteration of the
+delta synchronization algorithm. It receives the remote hashes from the
+multiplexer hub, calculates the matching local hashes and compares them,
+which it sends the hashes that don’t match back to the file receiver via
+the multiplexer hub:</p>
+<div class="sourceCode" id="cb20"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb20-1"><a href="#cb20-1" aria-hidden="true" tabindex="-1"></a><span class="co">// Receiving remote hashes</span></span>
+<span id="cb20-2"><a href="#cb20-2" aria-hidden="true" tabindex="-1"></a>remoteHashes <span class="op">:=</span> <span class="op">[]</span><span class="dt">string</span><span class="op">{}</span></span>
+<span id="cb20-3"><a href="#cb20-3" aria-hidden="true" tabindex="-1"></a>utils<span class="op">.</span>DecodeJSONFixedLength<span class="op">(</span>conn<span class="op">,</span> <span class="op">&amp;</span>remoteHashes<span class="op">)</span></span>
+<span id="cb20-4"><a href="#cb20-4" aria-hidden="true" tabindex="-1"></a><span class="co">// ...</span></span>
+<span id="cb20-5"><a href="#cb20-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb20-6"><a href="#cb20-6" aria-hidden="true" tabindex="-1"></a><span class="co">// Calculating the hashes</span></span>
+<span id="cb20-7"><a href="#cb20-7" aria-hidden="true" tabindex="-1"></a>localHashes<span class="op">,</span> cutoff<span class="op">,</span> err <span class="op">:=</span> GetHashesForBlocks<span class="op">(</span>parallel<span class="op">,</span> path<span class="op">,</span> blocksize<span class="op">)</span></span>
+<span id="cb20-8"><a href="#cb20-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb20-9"><a href="#cb20-9" aria-hidden="true" tabindex="-1"></a><span class="co">// Comparing the hashes</span></span>
+<span id="cb20-10"><a href="#cb20-10" aria-hidden="true" tabindex="-1"></a>blocksToSend <span class="op">:=</span> <span class="op">[]</span><span class="dt">int64</span><span class="op">{}</span></span>
+<span id="cb20-11"><a href="#cb20-11" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> i<span class="op">,</span> localHash <span class="op">:=</span> <span class="kw">range</span> localHashes <span class="op">{</span></span>
+<span id="cb20-12"><a href="#cb20-12" aria-hidden="true" tabindex="-1"></a>    j <span class="op">:=</span> <span class="dt">int64</span><span class="op">(</span>i<span class="op">)</span></span>
+<span id="cb20-13"><a href="#cb20-13" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb20-14"><a href="#cb20-14" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> <span class="bu">len</span><span class="op">(</span>remoteHashes<span class="op">)</span> <span class="op">&lt;=</span> i <span class="op">{</span></span>
+<span id="cb20-15"><a href="#cb20-15" aria-hidden="true" tabindex="-1"></a>        blocksToSend <span class="op">=</span> <span class="bu">append</span><span class="op">(</span>blocksToSend<span class="op">,</span> j<span class="op">)</span></span>
+<span id="cb20-16"><a href="#cb20-16" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb20-17"><a href="#cb20-17" aria-hidden="true" tabindex="-1"></a>        <span class="cf">continue</span></span>
+<span id="cb20-18"><a href="#cb20-18" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb20-19"><a href="#cb20-19" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb20-20"><a href="#cb20-20" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> localHash <span class="op">!=</span> remoteHashes<span class="op">[</span>i<span class="op">]</span> <span class="op">{</span></span>
+<span id="cb20-21"><a href="#cb20-21" aria-hidden="true" tabindex="-1"></a>        blocksToSend <span class="op">=</span> <span class="bu">append</span><span class="op">(</span>blocksToSend<span class="op">,</span> j<span class="op">)</span></span>
+<span id="cb20-22"><a href="#cb20-22" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb20-23"><a href="#cb20-23" aria-hidden="true" tabindex="-1"></a>        <span class="cf">continue</span></span>
+<span id="cb20-24"><a href="#cb20-24" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb20-25"><a href="#cb20-25" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb20-26"><a href="#cb20-26" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb20-27"><a href="#cb20-27" aria-hidden="true" tabindex="-1"></a><span class="co">// Sending the non-matching hashes</span></span>
+<span id="cb20-28"><a href="#cb20-28" aria-hidden="true" tabindex="-1"></a>utils<span class="op">.</span>EncodeJSONFixedLength<span class="op">(</span>conn<span class="op">,</span> blocksToSend<span class="op">)</span></span></code></pre></div>
+<p>If the remote has sent less hashes than were calculated locally, it
+asks the remote to truncate it’s file to the size of the local file that
+is being synchronized, after which it sends the updated data for the
+file in the order that the changed hashes were sent:</p>
+<div class="sourceCode" id="cb21"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb21-1"><a href="#cb21-1" aria-hidden="true" tabindex="-1"></a><span class="co">// Local file is empty, truncate remote file to zero</span></span>
+<span id="cb21-2"><a href="#cb21-2" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> <span class="bu">len</span><span class="op">(</span>remoteHashes<span class="op">)</span> <span class="op">&gt;</span> <span class="dv">0</span> <span class="op">&amp;&amp;</span> <span class="bu">len</span><span class="op">(</span>localHashes<span class="op">)</span> <span class="op">&lt;=</span> <span class="dv">0</span> <span class="op">{</span></span>
+<span id="cb21-3"><a href="#cb21-3" aria-hidden="true" tabindex="-1"></a>    utils<span class="op">.</span>EncodeJSONFixedLength<span class="op">(</span>conn<span class="op">,</span> <span class="op">-</span><span class="dv">1</span><span class="op">)</span></span>
+<span id="cb21-4"><a href="#cb21-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb21-5"><a href="#cb21-5" aria-hidden="true" tabindex="-1"></a>  <span class="cf">return</span> <span class="co">// ...</span></span>
+<span id="cb21-6"><a href="#cb21-6" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb21-7"><a href="#cb21-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb21-8"><a href="#cb21-8" aria-hidden="true" tabindex="-1"></a><span class="co">// Grow/shrink remote file</span></span>
+<span id="cb21-9"><a href="#cb21-9" aria-hidden="true" tabindex="-1"></a>utils<span class="op">.</span>EncodeJSONFixedLength<span class="op">(</span>conn<span class="op">,</span> cutoff<span class="op">)</span></span>
+<span id="cb21-10"><a href="#cb21-10" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb21-11"><a href="#cb21-11" aria-hidden="true" tabindex="-1"></a><span class="co">// Read changed chunks from file and copy them to the remote connection</span></span>
+<span id="cb21-12"><a href="#cb21-12" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> i<span class="op">,</span> blockToSend <span class="op">:=</span> <span class="kw">range</span> blocksToSend <span class="op">{</span></span>
+<span id="cb21-13"><a href="#cb21-13" aria-hidden="true" tabindex="-1"></a>    backset <span class="op">:=</span> <span class="dt">int64</span><span class="op">(</span><span class="dv">0</span><span class="op">)</span></span>
+<span id="cb21-14"><a href="#cb21-14" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> i <span class="op">==</span> <span class="bu">len</span><span class="op">(</span>blocksToSend<span class="op">)-</span><span class="dv">1</span> <span class="op">{</span></span>
+<span id="cb21-15"><a href="#cb21-15" aria-hidden="true" tabindex="-1"></a>        backset <span class="op">=</span> cutoff</span>
+<span id="cb21-16"><a href="#cb21-16" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb21-17"><a href="#cb21-17" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb21-18"><a href="#cb21-18" aria-hidden="true" tabindex="-1"></a>    b <span class="op">:=</span> <span class="bu">make</span><span class="op">([]</span><span class="dt">byte</span><span class="op">,</span> blocksize<span class="op">-</span>backset<span class="op">)</span></span>
+<span id="cb21-19"><a href="#cb21-19" aria-hidden="true" tabindex="-1"></a>    file<span class="op">.</span>ReadAt<span class="op">(</span>b<span class="op">,</span> blockToSend<span class="op">*(</span>blocksize<span class="op">))</span></span>
+<span id="cb21-20"><a href="#cb21-20" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb21-21"><a href="#cb21-21" aria-hidden="true" tabindex="-1"></a>    m<span class="op">,</span> err <span class="op">:=</span> conn<span class="op">.</span>Write<span class="op">(</span>b<span class="op">)</span></span>
+<span id="cb21-22"><a href="#cb21-22" aria-hidden="true" tabindex="-1"></a>  <span class="co">// ...</span></span>
+<span id="cb21-23"><a href="#cb21-23" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+</section>
+<section id="hash-calculation" data-number="0.4.2.8">
+<h4 data-number="1.4.2.8"><span class="header-section-number">1.4.2.8</span> Hash Calculation</h4>
+<p>The hash calculation implements the concurrent hashing of both the
+file transmitter and receiver. It uses a semaphore to limit the amount
+of concurrent access to the file that is being hashed, and a wait group
+to detect that the calculation has finished:</p>
+<div class="sourceCode" id="cb22"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb22-1"><a href="#cb22-1" aria-hidden="true" tabindex="-1"></a><span class="co">// The lock and semaphore</span></span>
+<span id="cb22-2"><a href="#cb22-2" aria-hidden="true" tabindex="-1"></a><span class="kw">var</span> wg sync<span class="op">.</span>WaitGroup</span>
+<span id="cb22-3"><a href="#cb22-3" aria-hidden="true" tabindex="-1"></a>wg<span class="op">.</span>Add<span class="op">(</span><span class="dt">int</span><span class="op">(</span>blocks<span class="op">))</span></span>
+<span id="cb22-4"><a href="#cb22-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb22-5"><a href="#cb22-5" aria-hidden="true" tabindex="-1"></a>lock <span class="op">:=</span> semaphore<span class="op">.</span>NewWeighted<span class="op">(</span>parallel<span class="op">)</span></span>
+<span id="cb22-6"><a href="#cb22-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb22-7"><a href="#cb22-7" aria-hidden="true" tabindex="-1"></a><span class="co">// ...</span></span>
+<span id="cb22-8"><a href="#cb22-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb22-9"><a href="#cb22-9" aria-hidden="true" tabindex="-1"></a><span class="co">// Concurrent hash calculation</span></span>
+<span id="cb22-10"><a href="#cb22-10" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> i <span class="op">:=</span> <span class="dt">int64</span><span class="op">(</span><span class="dv">0</span><span class="op">);</span> i <span class="op">&lt;</span> blocks<span class="op">;</span> i<span class="op">++</span> <span class="op">{</span></span>
+<span id="cb22-11"><a href="#cb22-11" aria-hidden="true" tabindex="-1"></a>    j <span class="op">:=</span> i</span>
+<span id="cb22-12"><a href="#cb22-12" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb22-13"><a href="#cb22-13" aria-hidden="true" tabindex="-1"></a>    <span class="cf">go</span> calculateHash<span class="op">(</span>j<span class="op">)</span></span>
+<span id="cb22-14"><a href="#cb22-14" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb22-15"><a href="#cb22-15" aria-hidden="true" tabindex="-1"></a>wg<span class="op">.</span>Wait<span class="op">()</span></span></code></pre></div>
+<p>Worker goroutines acquire a lock of this semaphore and calculate a
+CRC32 hash, which is a weak but fast hashing algorithm. For easier
+transmission, the hashes are hex-encoded and collected:</p>
+<div class="sourceCode" id="cb23"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb23-1"><a href="#cb23-1" aria-hidden="true" tabindex="-1"></a>calculateHash <span class="op">:=</span> <span class="kw">func</span><span class="op">(</span>j <span class="dt">int64</span><span class="op">)</span> <span class="op">{</span></span>
+<span id="cb23-2"><a href="#cb23-2" aria-hidden="true" tabindex="-1"></a>    _ <span class="op">=</span> lock<span class="op">.</span>Acquire<span class="op">(</span>context<span class="op">.</span>Background<span class="op">(),</span> <span class="dv">1</span><span class="op">)</span></span>
+<span id="cb23-3"><a href="#cb23-3" aria-hidden="true" tabindex="-1"></a>    <span class="co">// ...</span></span>
+<span id="cb23-4"><a href="#cb23-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb23-5"><a href="#cb23-5" aria-hidden="true" tabindex="-1"></a>    checkFile<span class="op">,</span> err <span class="op">:=</span> os<span class="op">.</span>Open<span class="op">(</span>file<span class="op">)</span></span>
+<span id="cb23-6"><a href="#cb23-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb23-7"><a href="#cb23-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb23-8"><a href="#cb23-8" aria-hidden="true" tabindex="-1"></a>  <span class="co">// Hash calculation of the specific chunk</span></span>
+<span id="cb23-9"><a href="#cb23-9" aria-hidden="true" tabindex="-1"></a>    hash <span class="op">:=</span> crc32<span class="op">.</span>NewIEEE<span class="op">()</span></span>
+<span id="cb23-10"><a href="#cb23-10" aria-hidden="true" tabindex="-1"></a>    io<span class="op">.</span>CopyN<span class="op">(</span>hash<span class="op">,</span> io<span class="op">.</span>NewSectionReader<span class="op">(</span>checkFile<span class="op">,</span> j<span class="op">*(</span>blocksize<span class="op">),</span> blocksize<span class="op">),</span> blocksize<span class="op">)</span></span>
+<span id="cb23-11"><a href="#cb23-11" aria-hidden="true" tabindex="-1"></a>    <span class="co">// ...</span></span>
+<span id="cb23-12"><a href="#cb23-12" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb23-13"><a href="#cb23-13" aria-hidden="true" tabindex="-1"></a>  <span class="co">// Hash encoding</span></span>
+<span id="cb23-14"><a href="#cb23-14" aria-hidden="true" tabindex="-1"></a>    hashes<span class="op">[</span>j<span class="op">]</span> <span class="op">=</span> hex<span class="op">.</span>EncodeToString<span class="op">(</span>hash<span class="op">.</span>Sum<span class="op">(</span><span class="ot">nil</span><span class="op">))</span></span>
+<span id="cb23-15"><a href="#cb23-15" aria-hidden="true" tabindex="-1"></a>  <span class="co">// ...</span></span>
+<span id="cb23-16"><a href="#cb23-16" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+</section>
+<section id="file-reception" data-number="0.4.2.9">
+<h4 data-number="1.4.2.9"><span class="header-section-number">1.4.2.9</span> File Reception</h4>
+<p>This is the receiving component of one delta synchronization
+iteration. It starts by calculating hashes for the existing local copy
+of the file, which it then sends to the remote before it waits to
+receive the remote’s hashes and potential truncation request:</p>
+<div class="sourceCode" id="cb24"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb24-1"><a href="#cb24-1" aria-hidden="true" tabindex="-1"></a><span class="co">// Local hash calculation</span></span>
+<span id="cb24-2"><a href="#cb24-2" aria-hidden="true" tabindex="-1"></a>localHashes<span class="op">,</span> _<span class="op">,</span> err <span class="op">:=</span> GetHashesForBlocks<span class="op">(</span>parallel<span class="op">,</span> path<span class="op">,</span> blocksize<span class="op">)</span></span>
+<span id="cb24-3"><a href="#cb24-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb24-4"><a href="#cb24-4" aria-hidden="true" tabindex="-1"></a><span class="co">// Sending the hashes to the remote</span></span>
+<span id="cb24-5"><a href="#cb24-5" aria-hidden="true" tabindex="-1"></a>utils<span class="op">.</span>EncodeJSONFixedLength<span class="op">(</span>conn<span class="op">,</span> localHashes<span class="op">)</span></span>
+<span id="cb24-6"><a href="#cb24-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb24-7"><a href="#cb24-7" aria-hidden="true" tabindex="-1"></a><span class="co">// Receiving the remote hashes and the truncation request</span></span>
+<span id="cb24-8"><a href="#cb24-8" aria-hidden="true" tabindex="-1"></a>blocksToFetch <span class="op">:=</span> <span class="op">[]</span><span class="dt">int64</span><span class="op">{}</span></span>
+<span id="cb24-9"><a href="#cb24-9" aria-hidden="true" tabindex="-1"></a>utils<span class="op">.</span>DecodeJSONFixedLength<span class="op">(</span>conn<span class="op">,</span> <span class="op">&amp;</span>blocksToFetch<span class="op">)</span></span>
+<span id="cb24-10"><a href="#cb24-10" aria-hidden="true" tabindex="-1"></a><span class="co">// ...</span></span>
+<span id="cb24-11"><a href="#cb24-11" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb24-12"><a href="#cb24-12" aria-hidden="true" tabindex="-1"></a>cutoff <span class="op">:=</span> <span class="dt">int64</span><span class="op">(</span><span class="dv">0</span><span class="op">)</span></span>
+<span id="cb24-13"><a href="#cb24-13" aria-hidden="true" tabindex="-1"></a>utils<span class="op">.</span>DecodeJSONFixedLength<span class="op">(</span>conn<span class="op">,</span> <span class="op">&amp;</span>cutoff<span class="op">)</span></span></code></pre></div>
+<p>If the remote detected that the file needs to be cleared (by sending
+a negative cutoff value), the receiver truncates the file; similarly so,
+if it has detected that the file has grown or shrunk since the last
+synchronization cycle, it shortens or extends it, after which the chunks
+are read from the connection and written to the local file:</p>
+<div class="sourceCode" id="cb25"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb25-1"><a href="#cb25-1" aria-hidden="true" tabindex="-1"></a><span class="co">// Clearing the file</span></span>
+<span id="cb25-2"><a href="#cb25-2" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> cutoff <span class="op">==</span> <span class="op">-</span><span class="dv">1</span> <span class="op">{</span></span>
+<span id="cb25-3"><a href="#cb25-3" aria-hidden="true" tabindex="-1"></a>    file<span class="op">.</span>Truncate<span class="op">(</span><span class="dv">0</span><span class="op">)</span></span>
+<span id="cb25-4"><a href="#cb25-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb25-5"><a href="#cb25-5" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> <span class="ot">nil</span></span>
+<span id="cb25-6"><a href="#cb25-6" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb25-7"><a href="#cb25-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb25-8"><a href="#cb25-8" aria-hidden="true" tabindex="-1"></a><span class="co">/// ...</span></span>
+<span id="cb25-9"><a href="#cb25-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb25-10"><a href="#cb25-10" aria-hidden="true" tabindex="-1"></a><span class="co">// Shrinking or growing the file</span></span>
+<span id="cb25-11"><a href="#cb25-11" aria-hidden="true" tabindex="-1"></a>s<span class="op">,</span> err <span class="op">:=</span> os<span class="op">.</span>Stat<span class="op">(</span>path<span class="op">)</span></span>
+<span id="cb25-12"><a href="#cb25-12" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb25-13"><a href="#cb25-13" aria-hidden="true" tabindex="-1"></a>newSize <span class="op">:=</span> <span class="op">(((</span>blocksToFetch<span class="op">[</span><span class="bu">len</span><span class="op">(</span>blocksToFetch<span class="op">)-</span><span class="dv">1</span><span class="op">]</span> <span class="op">+</span> <span class="dv">1</span><span class="op">)</span> <span class="op">*</span> blocksize<span class="op">)</span> <span class="op">-</span> cutoff<span class="op">)</span></span>
+<span id="cb25-14"><a href="#cb25-14" aria-hidden="true" tabindex="-1"></a>diff <span class="op">:=</span> s<span class="op">.</span>Size<span class="op">()</span> <span class="op">-</span> newSize</span>
+<span id="cb25-15"><a href="#cb25-15" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb25-16"><a href="#cb25-16" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> diff <span class="op">&gt;</span> <span class="dv">0</span> <span class="op">{</span></span>
+<span id="cb25-17"><a href="#cb25-17" aria-hidden="true" tabindex="-1"></a>    <span class="co">// If the file on the server got smaller, truncate the local file accordingly</span></span>
+<span id="cb25-18"><a href="#cb25-18" aria-hidden="true" tabindex="-1"></a>    file<span class="op">.</span>Truncate<span class="op">(</span>newSize<span class="op">)</span></span>
+<span id="cb25-19"><a href="#cb25-19" aria-hidden="true" tabindex="-1"></a><span class="op">}</span> <span class="cf">else</span> <span class="op">{</span></span>
+<span id="cb25-20"><a href="#cb25-20" aria-hidden="true" tabindex="-1"></a>    <span class="co">// If the file on the server grew, grow the local file accordingly</span></span>
+<span id="cb25-21"><a href="#cb25-21" aria-hidden="true" tabindex="-1"></a>    file<span class="op">.</span>Seek<span class="op">(</span><span class="dv">0</span><span class="op">,</span> <span class="dv">2</span><span class="op">)</span></span>
+<span id="cb25-22"><a href="#cb25-22" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb25-23"><a href="#cb25-23" aria-hidden="true" tabindex="-1"></a>    io<span class="op">.</span>CopyN<span class="op">(</span>file<span class="op">,</span> nopReader<span class="op">{},</span> <span class="op">-</span>diff<span class="op">)</span></span>
+<span id="cb25-24"><a href="#cb25-24" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb25-25"><a href="#cb25-25" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb25-26"><a href="#cb25-26" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> i<span class="op">,</span> blockToFetch <span class="op">:=</span> <span class="kw">range</span> blocksToFetch <span class="op">{</span></span>
+<span id="cb25-27"><a href="#cb25-27" aria-hidden="true" tabindex="-1"></a>    backset <span class="op">:=</span> <span class="dt">int64</span><span class="op">(</span><span class="dv">0</span><span class="op">)</span></span>
+<span id="cb25-28"><a href="#cb25-28" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> i <span class="op">==</span> <span class="bu">len</span><span class="op">(</span>blocksToFetch<span class="op">)-</span><span class="dv">1</span> <span class="op">{</span></span>
+<span id="cb25-29"><a href="#cb25-29" aria-hidden="true" tabindex="-1"></a>        backset <span class="op">=</span> cutoff</span>
+<span id="cb25-30"><a href="#cb25-30" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb25-31"><a href="#cb25-31" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb25-32"><a href="#cb25-32" aria-hidden="true" tabindex="-1"></a>  <span class="co">// Receiving the chunk</span></span>
+<span id="cb25-33"><a href="#cb25-33" aria-hidden="true" tabindex="-1"></a>    b <span class="op">:=</span> <span class="bu">make</span><span class="op">([]</span><span class="dt">byte</span><span class="op">,</span> blocksize<span class="op">-</span>backset<span class="op">)</span></span>
+<span id="cb25-34"><a href="#cb25-34" aria-hidden="true" tabindex="-1"></a>    io<span class="op">.</span>ReadFull<span class="op">(</span>conn<span class="op">,</span> b<span class="op">)</span></span>
+<span id="cb25-35"><a href="#cb25-35" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb25-36"><a href="#cb25-36" aria-hidden="true" tabindex="-1"></a>  <span class="co">// Writing the chunk to the local file</span></span>
+<span id="cb25-37"><a href="#cb25-37" aria-hidden="true" tabindex="-1"></a>    file<span class="op">.</span>WriteAt<span class="op">(</span>b<span class="op">,</span> blockToFetch<span class="op">*(</span>blocksize<span class="op">))</span></span>
+<span id="cb25-38"><a href="#cb25-38" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
 <div id="refs" class="references csl-bib-body" role="doc-bibliography">
 <div id="ref-linux2023docs" class="csl-entry" role="doc-biblioentry">
 <div class="csl-left-margin">[1] </div><div class="csl-right-inline">T.
@@ -1876,6 +2258,7 @@ scylla open source 4.4,”</span> ScyllaDB Inc, 2021.Available: <a href="https:/
 Corbet, <span>“4.3 merge window, part 2.”</span> <a href="https://lwn.net/Articles/656731/" class="uri">https://lwn.net/Articles/656731/</a>, 2015.Available: <a href="https://lwn.net/Articles/656731/">https://lwn.net/Articles/656731/</a></div>
 </div>
 </div>
+</section>
 </section>
 </section>
 </body>
