@@ -641,25 +641,16 @@ csl: static/ieee.csl
 
 ### FUSE Implementation in Go
 
-- File system-based synchronization in the kernel
-  - Since the push method requires polling and is very CPU and I/O intensive, and `userfaultfd-go` has only low throughput, a better solution is needed
-  - What if we could still get the events for the writes and reads without having to use `userfaultfd-go` or hashing?
-  - We can create a custom file system in Linux and load it as a kernel module
-  - This file system could then intercept reads/writes to/from the `mmap`ed region, making it possible to respond to them with a custom backend
-  - But such a system would need to run in the kernel directly, which leads to a lot of potential drawbacks
-- FUSE vs kernel filesystems
-  - While it is possible to write kernel modules with Rust instead of C these days, a lot of problems remain
-  - Kernel modules aren't portable; they are built for a specific kernel, which makes them hard to distribute to users
-  - A kernel file system is able to skip having to go through user space and thus save on context switching, but that will also mean that it will run in the kernel address space, making for a poor level of isolation
-  - Iterating on a kernel module is much harder than iterating on a program running in user space
-  - If we want the user to be able to provide their own backends from/to which to pull/push, that will still require communication between user space and the kernel
-  - So while adding this implementation in the kernel would be possible, it would also be very complex
-- Implementation
-  - It is possible to use even very complex and at first view non-compatible backends as a FUSE file system's backend
+- Implementing a FUSE in Go means tight integration with libraries
+- It makes sense to divide the process into two aspects
+- Creating a backend for a file system abstraction API like `afero.Fs`
   - By using a file system abstraction API like `afero.Fs`, we can separate the FUSE implementation from the actual file system structure, making it unit testable and making it possible to add caching in user space (code snippet from https://github.com/pojntfx/stfs/blob/main/pkg/fs/file.go)
-  - It is possible to map any `afero.Fs` to a FUSE backend, so it would be possible to switch between different file system backends without having to write FUSE-specific (code snippet from https://github.com/JakWai01/sile-fystem/blob/main/pkg/filesystem/fs.go)
+  - It is possible to use even very complex and at first view non-compatible backends as a FUSE file system's backend
   - For example, STFS used a tape drive as the backend, which is not random access, but instead append-only and linear (https://github.com/pojntfx/stfs/blob/main/pkg/operations/update.go)
   - By using an on-disk index and access optimizations, the resulting file system was still performant enough to be used, and supported almost all features required for the average user
+  - Creating an adapter between the FS abstraction API and the FUSE library's backend interface
+  - It is possible to map any `afero.Fs` to a FUSE backend, so it would be possible to switch between different file system backends without having to write FUSE-specific (code snippet from https://github.com/JakWai01/sile-fystem/blob/main/pkg/filesystem/fs.go)
+- While this approach is interesting, the required overhead of implementing it (which is known from prior projects like STFS[@pojtinger2022stfs] and sile-fystem[@waibel2022silefystem]) and other factors that will be touched upon later led to it not being pursued further
 
 ### NBD with `go-nbd`
 
