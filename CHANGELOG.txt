@@ -1,3 +1,9 @@
+commit 5400247a8b84e18d01c14d1f218d53ee170780a7
+Author: Felicitas Pojtinger <felicitas@pojtinger.com>
+Date:   Thu Jul 20 03:24:47 2023 +0200
+
+    feat: Add planning sections for push-pull sync and migrations
+
 commit 54570017b6ca1bd9e79feae627bbd74b1b44f6bf
 Author: Felicitas Pojtinger <felicitas@pojtinger.com>
 Date:   Thu Jul 20 01:22:39 2023 +0200

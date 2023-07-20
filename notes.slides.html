@@ -1030,6 +1030,43 @@ share a resource this way</li>
 access the underlying data, which further complicates migration by not
 implementing a migration lifecycle</li>
 </ul></li>
+<li>The migration protocol
+<ul>
+<li>To fix this, the migration API defines two new actors: The seeder
+and the leecher</li>
+<li>The seeder represents a resource that can be migrated from/a host
+that exposes a migratable resource</li>
+<li>The leecher represents a client that wants to migrate a resource to
+itself</li>
+<li>Initially, the protocol starts by running an application with the
+application’s state on the seeder’s mount</li>
+<li>When a leecher connects to the seeder, the seeder starts tracking
+any writes to it’s mount</li>
+<li>The leecher starts pulling chunks from the seeder to it’s local
+backend</li>
+<li>Once the leecher has received a satisfactory level of locally
+available chunks, it as the seeder to finalize, which then causes the
+seeder to stop the remote app, <code>msync</code>/flushes the drive, and
+returns the chunks that were changed between it started tracking and
+finalizing</li>
+<li>The leecher then marks these chunks as remote, immediately resumes
+the VM, and queues them to be pulled immediately</li>
+<li>By splitting the migration into these two distinct phases, the
+overhead of having to start the device on the leecher can be skipped and
+additional app initialization that doesn’t depend on the app’s state
+(e.g. memory allocation, connecting to databases, loading models etc.)
+can be performed before the application needs to be suspended</li>
+<li>This solution combines both the pre-copy algorithm (by pulling the
+chunks from the seeder ahead of time) and the post-copy algorithm (by
+resolving dirty chunks from the seeder after the VM has been migrated)
+into one coherent protocol (add state machine diagram here)</li>
+<li>This way, the maximum tolerable downtime can be drastically reduced,
+and dirty chunks don’t need to be re-transmitted multiple times</li>
+<li>Effectively, it drops the maximum guaranteed downtime to the time it
+takes to <code>msync</code> the seeder’s app state, the RTT and, if they
+are being accessed immediately, how long it takes to fetch the chunks
+that were written in between starting to track and finalize</li>
+</ul></li>
 <li>The finalization phase
 <ul>
 <li>A interesting question to ask with the two-step migration API is
@@ -1614,43 +1651,6 @@ pull-only algorithm</li>
 <ul>
 <li>The flexible architecture of the <code>ReadWriterAt</code>
 components allow the reuse of lots of code for both use cases</li>
-</ul></li>
-<li>The migration protocol
-<ul>
-<li>To fix this, the migration API defines two new actors: The seeder
-and the leecher</li>
-<li>The seeder represents a resource that can be migrated from/a host
-that exposes a migratable resource</li>
-<li>The leecher represents a client that wants to migrate a resource to
-itself</li>
-<li>Initially, the protocol starts by running an application with the
-application’s state on the seeder’s mount</li>
-<li>When a leecher connects to the seeder, the seeder starts tracking
-any writes to it’s mount</li>
-<li>The leecher starts pulling chunks from the seeder to it’s local
-backend</li>
-<li>Once the leecher has received a satisfactory level of locally
-available chunks, it as the seeder to finalize, which then causes the
-seeder to stop the remote app, <code>msync</code>/flushes the drive, and
-returns the chunks that were changed between it started tracking and
-finalizing</li>
-<li>The leecher then marks these chunks as remote, immediately resumes
-the VM, and queues them to be pulled immediately</li>
-<li>By splitting the migration into these two distinct phases, the
-overhead of having to start the device on the leecher can be skipped and
-additional app initialization that doesn’t depend on the app’s state
-(e.g. memory allocation, connecting to databases, loading models etc.)
-can be performed before the application needs to be suspended</li>
-<li>This solution combines both the pre-copy algorithm (by pulling the
-chunks from the seeder ahead of time) and the post-copy algorithm (by
-resolving dirty chunks from the seeder after the VM has been migrated)
-into one coherent protocol (add state machine diagram here)</li>
-<li>This way, the maximum tolerable downtime can be drastically reduced,
-and dirty chunks don’t need to be re-transmitted multiple times</li>
-<li>Effectively, it drops the maximum guaranteed downtime to the time it
-takes to <code>msync</code> the seeder’s app state, the RTT and, if they
-are being accessed immediately, how long it takes to fetch the chunks
-that were written in between starting to track and finalize</li>
 </ul></li>
 <li>Implementing the seeder
 <ul>
