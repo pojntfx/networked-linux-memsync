@@ -577,24 +577,24 @@ csl: static/ieee.csl
   - Reads the common name from the certificate, contains the `syncerID`
   - Spawns a new goroutine for the syncerID to handle the communication with the specific syncer
   - In goroutine it reads the type of the peer
-  - For the `src-control` peer type
+  - For the `src-control` peer type (code snippet from https://github.com/loopholelabs/darkmagyk/blob/159d4af/cmd/darkmagyk-cloudpoint/main.go#L824-L844)
     - Reads a file name from the syncer
     - Registers the connection as the one providing the file with this name
     - Broadcasts the file as one now being available
-  - For the `dst-control` peer type
+  - For the `dst-control` peer type (code snippet from https://github.com/loopholelabs/darkmagyk/blob/159d4af/cmd/darkmagyk-cloudpoint/main.go#L845-L880)
     - It listens to the broadcasted files from `src-control` peers
     - Relays any received file names to the `dst-control` peers so that it can subscribe
     - Also sends all currently known file names to the peer
-  - For the `dst` peer type
+  - For the `dst` peer type (code snippet from https://github.com/loopholelabs/darkmagyk/blob/159d4af/cmd/darkmagyk-cloudpoint/main.go#L882-L942)
     - Decodes a file name from the connection
     - Looks for a corresponding `src-control` peer
     - If it has found a peer, it creates and sends a new ID for this connection to the `src-control` peer
     - Waits until the `src-control` peer has connected to the hub with this ID with a new `src-data` peer by listening for `src-data` peer ID broadcasts
     - Spawns two new goroutines that copy to/from this newly created synchronization connection and the connection of the `dst` peer, relaying any information between the two
-  - For the `src-data` peer type
+  - For the `src-data` peer type (code snippet from https://github.com/loopholelabs/darkmagyk/blob/159d4af/cmd/darkmagyk-cloudpoint/main.go#L943-L954)
     - Decodes the ID for the peer
     - Broadcasts the ID, which allows the `dst` peer to continue
-- File advertisement
+- File advertisement (code snippet from https://github.com/loopholelabs/darkmagyk/blob/159d4afe0828452c61c63233aa134fb3c2a45a1a/pkg/filetransfer/src.go#L112-L269)
   - Connects to the multiplexer hub
   - Registers itself as a `src-control` type of peer
   - Sends the file name to the multipler hub
@@ -607,7 +607,7 @@ csl: static/ieee.csl
   - Starts a new loop that starts the file transmission to the `dst` peer through the multiplexer
   - Checks if context is cancelled to stop the transmission by breaking the loop if requested
   - After a file transmission is done, waits for the specified polling interval, then starts a file transmission cycle again
-- File receiver loop
+- File receiver loop (code snippet from https://github.com/loopholelabs/darkmagyk/blob/159d4afe0828452c61c63233aa134fb3c2a45a1a/pkg/filetransfer/dst.go#L127-L243)
   - Connects to the multiplexer hub
   - Registers itself as the `dst-control` type of peer
   - Spawns a new goroutine after a file name has been received from the multiplexer hub
@@ -616,7 +616,7 @@ csl: static/ieee.csl
   - Registers itself as the `dst` peer
   - Sends the file name to the multiplexer, causing the multiplexer to look for a peer that advertises the requested file
   - Starts the file receiption process in a loop, and exits if a callback determines that the file has been synced completely
-- File transmission
+- File transmission (code snippet from https://github.com/loopholelabs/darkmagyk/blob/159d4afe0828452c61c63233aa134fb3c2a45a1a/pkg/filetransfer/src.go#L14-L110)
   - Does the actual file transmission part of delta synchronization
   - Receives the remote hashes from the mulitplexer hub
   - Calculates the local hashes
@@ -624,14 +624,14 @@ csl: static/ieee.csl
   - Sends hashes that don't match to the remote via the multiplexer hub
   - If the remote sent less hashes than there were locally, asks the remote to truncate it's file to the size of the local file that is being synchronized
   - Loops over each of the chunks that need to be sent, and sends the updated data for the file in order
-- Hash calculation
+- Hash calculation (code snippet from https://github.com/loopholelabs/darkmagyk/blob/159d4afe0828452c61c63233aa134fb3c2a45a1a/pkg/filetransfer/hashes.go#L17-L73)
   - `GetHashesForBlocks` handles the concurrent calculation of the hashes for a file on both the file transmitter and receiver
   - It uses a semaphore to limit the amount of concurrent access to the file that is being hashed
   - Acquires a lock on the semaphore for each hash calculation worker
   - Each worker goroutine then opens up the file and calculates a CRC32 hash
   - To allow for easy transmission of the hashes over the network, it encodes them as hash values
   - After all hashes have been calculated, it adds them to the array and returns them
-- File receiption
+- File receiption (code snippet from https://github.com/loopholelabs/darkmagyk/blob/159d4afe0828452c61c63233aa134fb3c2a45a1a/pkg/filetransfer/dst.go#L23-L125)
   - Is the receiving part of the delta synchronization algorithm
   - Starts by calculating hashes for the local copy of the file
   - Sends the local hashes to the emote, then waits until it has received the remote's hashes
