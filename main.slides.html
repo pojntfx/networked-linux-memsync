@@ -169,6 +169,24 @@ Planning</a>
 <li><a href="#push-pull-synchronization-with-fuse"><span class="toc-section-number">3.3</span> Push-Pull Synchronization with
 FUSE</a></li>
 <li><a href="#mounts-with-nbd"><span class="toc-section-number">3.4</span> Mounts with NBD</a></li>
+<li><a href="#push-pull-synchronization-with-mounts"><span class="toc-section-number">3.5</span> Push-Pull Synchronization with
+Mounts</a>
+<ul>
+<li><a href="#overview"><span class="toc-section-number">3.5.1</span>
+Overview</a></li>
+<li><a href="#chunking"><span class="toc-section-number">3.5.2</span>
+Chunking</a></li>
+<li><a href="#background-pull-and-push"><span class="toc-section-number">3.5.3</span> Background Pull and
+Push</a></li>
+</ul></li>
+<li><a href="#pull-based-synchronization-with-migrations"><span class="toc-section-number">3.6</span> Pull-Based Synchronization with
+Migrations</a>
+<ul>
+<li><a href="#overview-1"><span class="toc-section-number">3.6.1</span>
+Overview</a></li>
+<li><a href="#migration-protocol-and-critical-phases"><span class="toc-section-number">3.6.2</span> Migration Protocol and Critical
+Phases</a></li>
+</ul></li>
 </ul></li>
 </ul>
 </div>
@@ -1029,6 +1047,195 @@ not all of the features provided by a full file system are be required,
 which means that the implementation of a NBD server and client, as well
 as the accompanying protocols, is significantly less complex and can
 also reduce the overhead of the system as a whole.</p>
+<h2 id="push-pull-synchronization-with-mounts"><span class="header-section-number">3.5</span> Push-Pull Synchronization with
+Mounts</h2>
+<h3 id="overview"><span class="header-section-number">3.5.1</span>
+Overview</h3>
+<p>This approach also leverages <code>mmap</code> and NBD to handle
+reads and writes to the migratable ressource’s memory region, similar to
+the prior approaches, but differs from mounts with NBD in a few
+significant ways.</p>
+<p>Usually, the NBD server and client don’t run on the same system, but
+are instead separated over a network. This network commonly is LAN, and
+the NBD protocol was designed to access a remote hard drive in this
+network. As a result of the protocol being designed for this
+low-latency, high-throughput type of network, there are a few
+limitations of the NBD protocol when it is being used in a WAN that can
+not guarantee the same.</p>
+<p>While most wire security issues with the protocol can be worked
+around by simply using TLS, the big issue of it’s latency sensitivity
+remains. Usually, individual blocks would only be fetched as they are
+being accessed, resulting in a ready latency per block that is at least
+the RTT. In order to work around this issue, instead of directly
+connecting a NBD client to a remote NBD server, a layer of indirection
+(called “Mount”) is created. This component consists of both a client
+and a server, both of which are running on the local system instead of
+being split into a separate remote and local component.</p>
+<p>By combining the NBD server and client into this reusabable uit, we
+can connect the server to a new backend component with a protocol which
+is better suited for WAN usage than NBD. This also allows the
+implementation of smart, asynchronous background push/pull strategies
+instead of simpliy directly writing to/from the network (called “Managed
+Mounts”). The simplest form of the mount API is the direct mount API; it
+simply swaps out NBD for a transport-independent RPC framework, but does
+not do additional optimizations. It has two simple actors: The client
+and the server. Only unidirectional RPCs from the client to the server
+are required for this to work, and the required backend service’s
+interface is simple:</p>
+<div class="sourceCode" id="cb5"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> BackendRemote <span class="kw">struct</span> <span class="op">{</span></span>
+<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a>    ReadAt  <span class="kw">func</span><span class="op">(</span>context context<span class="op">.</span>Context<span class="op">,</span> length <span class="dt">int</span><span class="op">,</span> off <span class="dt">int64</span><span class="op">)</span> <span class="op">(</span>r ReadAtResponse<span class="op">,</span> err <span class="dt">error</span><span class="op">)</span></span>
+<span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a>    WriteAt <span class="kw">func</span><span class="op">(</span>context context<span class="op">.</span>Context<span class="op">,</span> p <span class="op">[]</span><span class="dt">byte</span><span class="op">,</span> off <span class="dt">int64</span><span class="op">)</span> <span class="op">(</span>n <span class="dt">int</span><span class="op">,</span> err <span class="dt">error</span><span class="op">)</span></span>
+<span id="cb5-4"><a href="#cb5-4" aria-hidden="true" tabindex="-1"></a>    Size    <span class="kw">func</span><span class="op">(</span>context context<span class="op">.</span>Context<span class="op">)</span> <span class="op">(</span><span class="dt">int64</span><span class="op">,</span> <span class="dt">error</span><span class="op">)</span></span>
+<span id="cb5-5"><a href="#cb5-5" aria-hidden="true" tabindex="-1"></a>    Sync    <span class="kw">func</span><span class="op">(</span>context context<span class="op">.</span>Context<span class="op">)</span> <span class="dt">error</span></span>
+<span id="cb5-6"><a href="#cb5-6" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<p>The protocol is stateless, as there is only a simple remote reader
+and writer interface; there are no distinct protocol phases, either.</p>
+<p>TODO: Add protocol sequence diagram TODO: Add state machine
+diagram</p>
+<h3 id="chunking"><span class="header-section-number">3.5.2</span>
+Chunking</h3>
+<p>And additional issue that was mentioned before that this approach can
+approve upon is better chunking support. While it is possible to specify
+the NBD protocol’s chunk size by configuring the NBD client and server,
+this is limited to only 4KB in the case of Linux’s implementation. If
+the RTT between the backend and the NBD server however is large, it
+might be preferable to use a much larger chunk size; this used to not be
+possible by using NBD directly, but thanks to this layer of indirection
+it can be implemented.</p>
+<p>Similarly to the Linux kernel’s NBD client, backends themselves might
+also have constraints that prevent them from working without a specific
+chunk size, or otherwise require aligned reads. This is for example the
+case for tape drives, where reads and writes must occur with a fixed
+block size and on aligned offsets; furthermore, these linear storage
+devices work best if chunks are multiple MBs instead KBs.</p>
+<p>It is possible to do this chunking in two places: On the mount API’s
+side (meaning the NBD server), or on the (potentially remote) backend’s
+side. While this will be discussed further in the results section,
+chunking on the backend’s side is usually preferred as doing it
+client-side can significantly increase latency due to a read being
+required if a non-aligned write occurs, esp. in the case of a WAN
+deployment with high RTT.</p>
+<p>But even if the backend does not require any kind of chunking to be
+accessed - i.e. if it is a remote file - it might still make sense to
+limit the maximum supported message size between the NBD server and the
+backend, simply to prevent DoS attacks that would require the backend to
+allocate large chunks of memory, were such a limit provided by a
+chunking system not in place.</p>
+<h3 id="background-pull-and-push"><span class="header-section-number">3.5.3</span> Background Pull and Push</h3>
+<p>A pre-copy migration system for the managed API is realized in the
+form of pre-emptive pulls that run asynchronously in the background. In
+order to optimize for sequential locality, a pull priority heuristic was
+introduced; this is used to determine the order in which chunks should
+be pulled. Many applications and other migratable resources commonly
+access certain parts of their memory first, so if a ressources should be
+accessible locally as quickly as possible (so that reads go to the local
+cache filled by the pre-emptive pulls, instead of having to wait at
+least one RTT to fetch it from the remote), knowing this access pattern
+and fetching these sections first can improve latency and throughput
+signficantly.</p>
+<p>And example of this can be data that consists of one or multiple
+headers followed by raw data. If this structure is known, rather than
+fetching everything linearly in the background, the headers can be
+fetched first in order to allow for i.e. metadata to be displayed before
+the rest of the data has been fetched. Similarly so, if a file system is
+being synchronized, and the superblocks of a file system are being
+stored in a known pattern or known fixed locations, these can be pulled
+first, significantly speeding up operations such as directory listings
+that don’t require the actual inode’s data to be available.</p>
+<p>Post-copy migration conversly is implemented using asynchronous
+background push. This push system is started in parallel with the pull
+system. It keeps track of which chunks were written to, de-duplicates
+remote writes, and periodically writes back these dirty chunks to the
+remote backend. This can significantly improve write performance
+compared to forwarding writes directly to the remote by being able to
+catch multiple writes without having to block for at least the RTT until
+the remote write has finished before continuing to the next write.</p>
+<p>For the managed mount API, the pre- and post-copy live migration
+paradigms are combined to form a hybrid solution. Due to reasons
+elaborated on in more detail in the discussion section, the managed
+mount API however is primarly intended for efficiently reading from a
+remote resource and synching back changes eventually, rather than
+migrating a resource between two hosts. For the migration usecase, the
+migration API, which will be introduced in the following section,
+provides a better solution by building on similar concepts as the
+managed mounts API.</p>
+<h2 id="pull-based-synchronization-with-migrations"><span class="header-section-number">3.6</span> Pull-Based Synchronization with
+Migrations</h2>
+<h3 id="overview-1"><span class="header-section-number">3.6.1</span>
+Overview</h3>
+<p>Similarly to the managed mount API, this migration API again tracks
+changes to the memory of the migratable resource using NBD. As mentioned
+before however, the managed mount API is not optimized for the migration
+usecase, but rather for efficiently accessing a remote resource. For
+live migration, one metric is very important: maximum acceptable
+downtime. This refers to the time that a application, VM etc. must be
+suspended or otherwise prevented from writing to or reading from the
+resource that is being synchronized; the higher this value is, the more
+noticable the downtime becomes.</p>
+<p>To improve on this the pull-based migration API, the migration
+process is split into two distinct phases. This is required due the
+constraint mentioned earlier; the mount API does not allow for safe
+concurrent access of a remote resource by two readers or writers at the
+same time. This poses a signficant problem for the migration scenario,
+as the app that is writing to the source device would need to be
+suspended before the transfer could even begin, as starting the
+destination node would already violate the single-reader, single-writer
+constraint of the mount API. This adds significant latency, and is
+complicated further by the backend for the managed mount API not
+exposing a block itself but rather just serving as a remote that can be
+mounted. The migration API on the other hand doesn’t have this
+hierarchical system; both the source and destination are peers that
+expose block devices on either end.</p>
+<h3 id="migration-protocol-and-critical-phases"><span class="header-section-number">3.6.2</span> Migration Protocol and
+Critical Phases</h3>
+<p>The migration protocol that allows for this defines two new actors:
+The seeder and the leecher. A seeder represents a resource that can be
+migrated from or a host that exposes a migrabtable resource, while the
+leecher represents a client that intents to migrate a resource to
+itself. The protocol starts by running an application with the
+application’s state on the region <code>mmap</code>ed to the seeder’s
+block device, similarly to the managed mount API. Once a leecher
+connects to the seeder, the seeder starts tracking any writes to it’s
+mount, effectively keeping a list of dirty chunks. Once tracking has
+started, the leecher starts pulling chunks from the seeder to it’s local
+cache. Once it has received a satisfactory level of locally available
+chunks, it asks the seeder to finalize. This then causes the seeder to
+suspend the app accessing the memory region on it’s block device,
+<code>msync</code>/flushes the it, and returns a list of chunks that
+were changed between the point where it started tracking and the flush
+has occured. Upon receiving this list, the leecher marks these chunks
+are remotes, immediately resumes the application (which is now accessing
+the leecher’s block device), and queues the dirty chunks to be pulled in
+the background.</p>
+<p>TODO: Add protocol sequence diagram TODO: Add state machine
+diagram</p>
+<p>By splitting the migration into these two distinct phases, the
+overhead of having to start the deivce can be skipped and additional app
+initialization that doesn’t depend on the app’s state (i.e. memory
+allocation, connecting to databases, loading models etc.) can be
+performed before the application needs to be suspended. This combines
+both the pre-copy algorithm (by pulling the chunks from the seeder ahead
+of time) and the post-copy algorithm (by resolving dirtyc chunsk from
+the seeder after the VM has been migrated) into one coherent protocol.
+As will be discussed further in the results section, the maximum
+tolerable downtime can be drastically reduced, and dirty chunks don’t
+need to be re-transmitted multiple times. Effectively, it allows
+dropping this downtime to the time it takes to <code>msync</code> the
+seeder’s app state, the RTT and, if they are being accessed immediately,
+how long it takes to fetch the chunks that were written in between the
+start of it tracking and finalizing. The migration API can use the same
+preemptive pull system as the managed mount API and benefit from it’s
+optimizations, but does not use the background push system.</p>
+<p>An interesting question to ask with this two-step migration API is
+when to start the finalization step. The finalization phase in the
+protocol is critical, and it is hard or impossible to recover from
+depending on the specific implementation. While the synchronization
+itself could be safely recovered from by simply calling
+<code>Finalize</code> multiple times to restart it. But since
+<code>Finalize</code> needs to return a list of dirty chunks, it
+requires the app on the seeder to be suspended before
+<code>FInalize</code> can return, an operation that might not be
+idempotent.</p>
 <div id="refs" class="references csl-bib-body">
 <div id="ref-linux2023docs" class="csl-entry">
 <div class="csl-left-margin">[1] </div><div class="csl-right-inline">T.
