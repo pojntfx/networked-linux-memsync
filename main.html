@@ -319,6 +319,11 @@ Mounts</a></li>
 <li><a href="#pull-based-synchronization-with-migrations"><span class="toc-section-number">1.3.6</span> Pull-Based Synchronization with
 Migrations</a></li>
 </ul></li>
+<li><a href="#implementation"><span class="toc-section-number">1.4</span> Implementation</a>
+<ul>
+<li><a href="#userfaults-in-go-with-userfaultfd"><span class="toc-section-number">1.4.1</span> Userfaults in Go with
+<code>userfaultfd</code></a></li>
+</ul></li>
 </ul>
 </nav>
 <section id="introduction" data-number="0.1">
@@ -1432,8 +1437,158 @@ itself could be safely recovered from by simply calling
 <code>Finalize</code> multiple times to restart it. But since
 <code>Finalize</code> needs to return a list of dirty chunks, it
 requires the app on the seeder to be suspended before
-<code>FInalize</code> can return, an operation that might not be
+<code>Finalize</code> can return, an operation that might not be
 idempotent.</p>
+</section>
+</section>
+</section>
+<section id="implementation" data-number="0.4">
+<h2 data-number="1.4"><span class="header-section-number">1.4</span>
+Implementation</h2>
+<section id="userfaults-in-go-with-userfaultfd" data-number="0.4.1">
+<h3 data-number="1.4.1"><span class="header-section-number">1.4.1</span>
+Userfaults in Go with <code>userfaultfd</code></h3>
+<section id="registration-and-handlers" data-number="0.4.1.1">
+<h4 data-number="1.4.1.1"><span class="header-section-number">1.4.1.1</span> Registration and
+Handlers</h4>
+<p>By listening to page faults, we can know when a process wants to
+access a specific offset of memory that is not yet available. As
+mentioned before, we can use this event to then fetch this chunk of
+memory from the remote, mapping it to the offset on which the page fault
+occured, thus effectively only fetching data when it is required.
+Instead of registering signal handlers, we can use the
+<code>userfaultfd</code> system introduced with Linux 4.3<span class="citation" data-cites="corbet2015linux43">[39]</span> to handle
+these faults in userspace in a more idiomatic way.</p>
+<p>In the Go implementation created for this thesis,
+<code>userfaultfd-go</code>, <code>userfaultfd</code> works by first
+creating a region of memory, e.g. by using <code>mmap</code>, which is
+then registered with the <code>userfaultfd</code> API:</p>
+<div class="sourceCode" id="cb6"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="co">// Creating the `userfaultfd` API</span></span>
+<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a>uffd<span class="op">,</span> _<span class="op">,</span> errno <span class="op">:=</span> syscall<span class="op">.</span>Syscall<span class="op">(</span>constants<span class="op">.</span>NR_userfaultfd<span class="op">,</span> <span class="dv">0</span><span class="op">,</span> <span class="dv">0</span><span class="op">,</span> <span class="dv">0</span><span class="op">)</span></span>
+<span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-4"><a href="#cb6-4" aria-hidden="true" tabindex="-1"></a>uffdioAPI <span class="op">:=</span> constants<span class="op">.</span>NewUffdioAPI<span class="op">(</span></span>
+<span id="cb6-5"><a href="#cb6-5" aria-hidden="true" tabindex="-1"></a>    constants<span class="op">.</span>UFFD_API<span class="op">,</span></span>
+<span id="cb6-6"><a href="#cb6-6" aria-hidden="true" tabindex="-1"></a>    <span class="dv">0</span><span class="op">,</span></span>
+<span id="cb6-7"><a href="#cb6-7" aria-hidden="true" tabindex="-1"></a><span class="op">)</span></span>
+<span id="cb6-8"><a href="#cb6-8" aria-hidden="true" tabindex="-1"></a><span class="co">// ...</span></span>
+<span id="cb6-9"><a href="#cb6-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-10"><a href="#cb6-10" aria-hidden="true" tabindex="-1"></a><span class="co">// Allocating the region</span></span>
+<span id="cb6-11"><a href="#cb6-11" aria-hidden="true" tabindex="-1"></a>l <span class="op">:=</span> <span class="dt">int</span><span class="op">(</span>math<span class="op">.</span>Ceil<span class="op">(</span><span class="dt">float64</span><span class="op">(</span>length<span class="op">)/</span><span class="dt">float64</span><span class="op">(</span>pagesize<span class="op">))</span> <span class="op">*</span> <span class="dt">float64</span><span class="op">(</span>pagesize<span class="op">))</span></span>
+<span id="cb6-12"><a href="#cb6-12" aria-hidden="true" tabindex="-1"></a>b<span class="op">,</span> err <span class="op">:=</span> syscall<span class="op">.</span>Mmap<span class="op">(</span></span>
+<span id="cb6-13"><a href="#cb6-13" aria-hidden="true" tabindex="-1"></a>    <span class="op">-</span><span class="dv">1</span><span class="op">,</span></span>
+<span id="cb6-14"><a href="#cb6-14" aria-hidden="true" tabindex="-1"></a>    <span class="dv">0</span><span class="op">,</span></span>
+<span id="cb6-15"><a href="#cb6-15" aria-hidden="true" tabindex="-1"></a>    l<span class="op">,</span></span>
+<span id="cb6-16"><a href="#cb6-16" aria-hidden="true" tabindex="-1"></a>    syscall<span class="op">.</span>PROT_READ<span class="op">|</span>syscall<span class="op">.</span>PROT_WRITE<span class="op">,</span></span>
+<span id="cb6-17"><a href="#cb6-17" aria-hidden="true" tabindex="-1"></a>    syscall<span class="op">.</span>MAP_PRIVATE<span class="op">|</span>syscall<span class="op">.</span>MAP_ANONYMOUS<span class="op">,</span></span>
+<span id="cb6-18"><a href="#cb6-18" aria-hidden="true" tabindex="-1"></a><span class="op">)</span></span>
+<span id="cb6-19"><a href="#cb6-19" aria-hidden="true" tabindex="-1"></a><span class="co">// ...</span></span>
+<span id="cb6-20"><a href="#cb6-20" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-21"><a href="#cb6-21" aria-hidden="true" tabindex="-1"></a><span class="co">// Registering the region</span></span>
+<span id="cb6-22"><a href="#cb6-22" aria-hidden="true" tabindex="-1"></a>uffdioRegister <span class="op">:=</span> constants<span class="op">.</span>NewUffdioRegister<span class="op">(</span></span>
+<span id="cb6-23"><a href="#cb6-23" aria-hidden="true" tabindex="-1"></a>    constants<span class="op">.</span>CULong<span class="op">(</span>start<span class="op">),</span></span>
+<span id="cb6-24"><a href="#cb6-24" aria-hidden="true" tabindex="-1"></a>    constants<span class="op">.</span>CULong<span class="op">(</span>l<span class="op">),</span></span>
+<span id="cb6-25"><a href="#cb6-25" aria-hidden="true" tabindex="-1"></a>    constants<span class="op">.</span>UFFDIO_REGISTER_MODE_MISSING<span class="op">,</span></span>
+<span id="cb6-26"><a href="#cb6-26" aria-hidden="true" tabindex="-1"></a><span class="op">)</span></span>
+<span id="cb6-27"><a href="#cb6-27" aria-hidden="true" tabindex="-1"></a><span class="co">// ...</span></span>
+<span id="cb6-28"><a href="#cb6-28" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-29"><a href="#cb6-29" aria-hidden="true" tabindex="-1"></a>syscall<span class="op">.</span>Syscall<span class="op">(</span></span>
+<span id="cb6-30"><a href="#cb6-30" aria-hidden="true" tabindex="-1"></a>  syscall<span class="op">.</span>SYS_IOCTL<span class="op">,</span></span>
+<span id="cb6-31"><a href="#cb6-31" aria-hidden="true" tabindex="-1"></a>  uffd<span class="op">,</span></span>
+<span id="cb6-32"><a href="#cb6-32" aria-hidden="true" tabindex="-1"></a>  constants<span class="op">.</span>UFFDIO_REGISTER<span class="op">,</span></span>
+<span id="cb6-33"><a href="#cb6-33" aria-hidden="true" tabindex="-1"></a>  <span class="dt">uintptr</span><span class="op">(</span>unsafe<span class="op">.</span>Pointer<span class="op">(&amp;</span>uffdioRegister<span class="op">))</span></span>
+<span id="cb6-34"><a href="#cb6-34" aria-hidden="true" tabindex="-1"></a><span class="op">)</span></span></code></pre></div>
+<p>This is abstracted into a single
+<code>Register(length int) ([]byte, UFFD, uintptr, error)</code>
+function. Once this region has been registered, the
+<code>userfaultfd</code> API’s file descriptor and the offset is passed
+over a UNIX socket:</p>
+<div class="sourceCode" id="cb7"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a>syscall<span class="op">.</span>Sendmsg<span class="op">(</span><span class="dt">int</span><span class="op">(</span>f<span class="op">.</span>Fd<span class="op">()),</span> <span class="ot">nil</span><span class="op">,</span> syscall<span class="op">.</span>UnixRights<span class="op">(</span>b<span class="op">...),</span> <span class="ot">nil</span><span class="op">,</span> <span class="dv">0</span><span class="op">)</span></span></code></pre></div>
+<p>Where it can then be received by the handler:</p>
+<div class="sourceCode" id="cb8"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a>buf <span class="op">:=</span> <span class="bu">make</span><span class="op">([]</span><span class="dt">byte</span><span class="op">,</span> syscall<span class="op">.</span>CmsgSpace<span class="op">(</span>num<span class="op">*</span><span class="dv">4</span><span class="op">))</span> <span class="co">// See https://github.com/ftrvxmtrx/fd/blob/master/fd.go#L51</span></span>
+<span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a>syscall<span class="op">.</span>Recvmsg<span class="op">(</span><span class="dt">int</span><span class="op">(</span>f<span class="op">.</span>Fd<span class="op">()),</span> <span class="ot">nil</span><span class="op">,</span> buf<span class="op">,</span> <span class="dv">0</span><span class="op">)</span></span>
+<span id="cb8-3"><a href="#cb8-3" aria-hidden="true" tabindex="-1"></a><span class="co">// ..</span></span>
+<span id="cb8-4"><a href="#cb8-4" aria-hidden="true" tabindex="-1"></a>msgs<span class="op">,</span> err <span class="op">:=</span> syscall<span class="op">.</span>ParseSocketControlMessage<span class="op">(</span>buf<span class="op">)</span></span></code></pre></div>
+<p>The handler itself receives the address that has triggered the page
+fault by polling the transferred file descriptor, which is then
+responded to by fetching the relevant chunk from a provided reader and
+sending it to the faulting memory region over the same socket:</p>
+<div class="sourceCode" id="cb9"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a><span class="co">// Receiving the fage fault address</span></span>
+<span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a>unix<span class="op">.</span>Poll<span class="op">(</span></span>
+<span id="cb9-3"><a href="#cb9-3" aria-hidden="true" tabindex="-1"></a>    <span class="op">[]</span>unix<span class="op">.</span>PollFd<span class="op">{{</span></span>
+<span id="cb9-4"><a href="#cb9-4" aria-hidden="true" tabindex="-1"></a>        Fd<span class="op">:</span>     <span class="dt">int32</span><span class="op">(</span>uffd<span class="op">),</span></span>
+<span id="cb9-5"><a href="#cb9-5" aria-hidden="true" tabindex="-1"></a>        Events<span class="op">:</span> unix<span class="op">.</span>POLLIN<span class="op">,</span></span>
+<span id="cb9-6"><a href="#cb9-6" aria-hidden="true" tabindex="-1"></a>    <span class="op">}},</span></span>
+<span id="cb9-7"><a href="#cb9-7" aria-hidden="true" tabindex="-1"></a>    <span class="op">-</span><span class="dv">1</span><span class="op">,</span></span>
+<span id="cb9-8"><a href="#cb9-8" aria-hidden="true" tabindex="-1"></a><span class="op">)</span></span>
+<span id="cb9-9"><a href="#cb9-9" aria-hidden="true" tabindex="-1"></a><span class="co">// ...</span></span>
+<span id="cb9-10"><a href="#cb9-10" aria-hidden="true" tabindex="-1"></a>pagefault <span class="op">:=</span> <span class="op">(*(*</span>constants<span class="op">.</span>UffdPagefault<span class="op">)(</span>unsafe<span class="op">.</span>Pointer<span class="op">(&amp;</span>arg<span class="op">[</span><span class="dv">0</span><span class="op">])))</span></span>
+<span id="cb9-11"><a href="#cb9-11" aria-hidden="true" tabindex="-1"></a>addr <span class="op">:=</span> constants<span class="op">.</span>GetPagefaultAddress<span class="op">(&amp;</span>pagefault<span class="op">)</span></span>
+<span id="cb9-12"><a href="#cb9-12" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb9-13"><a href="#cb9-13" aria-hidden="true" tabindex="-1"></a><span class="co">// Fetching the missing chunk from the provided backend</span></span>
+<span id="cb9-14"><a href="#cb9-14" aria-hidden="true" tabindex="-1"></a>p <span class="op">:=</span> <span class="bu">make</span><span class="op">([]</span><span class="dt">byte</span><span class="op">,</span> pagesize<span class="op">)</span></span>
+<span id="cb9-15"><a href="#cb9-15" aria-hidden="true" tabindex="-1"></a>n<span class="op">,</span> err <span class="op">:=</span> src<span class="op">.</span>ReadAt<span class="op">(</span>p<span class="op">,</span> <span class="dt">int64</span><span class="op">(</span><span class="dt">uintptr</span><span class="op">(</span>addr<span class="op">)-</span>start<span class="op">))</span></span>
+<span id="cb9-16"><a href="#cb9-16" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb9-17"><a href="#cb9-17" aria-hidden="true" tabindex="-1"></a><span class="co">// Sending the missing chunk to the faulting memory region&#39;s `userfaultfd` API:</span></span>
+<span id="cb9-18"><a href="#cb9-18" aria-hidden="true" tabindex="-1"></a>cpy <span class="op">:=</span> constants<span class="op">.</span>NewUffdioCopy<span class="op">(</span></span>
+<span id="cb9-19"><a href="#cb9-19" aria-hidden="true" tabindex="-1"></a>    p<span class="op">,</span></span>
+<span id="cb9-20"><a href="#cb9-20" aria-hidden="true" tabindex="-1"></a>    addr<span class="op">&amp;^</span>constants<span class="op">.</span>CULong<span class="op">(</span>pagesize<span class="dv">-1</span><span class="op">),</span></span>
+<span id="cb9-21"><a href="#cb9-21" aria-hidden="true" tabindex="-1"></a>    constants<span class="op">.</span>CULong<span class="op">(</span>pagesize<span class="op">),</span></span>
+<span id="cb9-22"><a href="#cb9-22" aria-hidden="true" tabindex="-1"></a>    <span class="dv">0</span><span class="op">,</span></span>
+<span id="cb9-23"><a href="#cb9-23" aria-hidden="true" tabindex="-1"></a>    <span class="dv">0</span><span class="op">,</span></span>
+<span id="cb9-24"><a href="#cb9-24" aria-hidden="true" tabindex="-1"></a><span class="op">)</span></span>
+<span id="cb9-25"><a href="#cb9-25" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb9-26"><a href="#cb9-26" aria-hidden="true" tabindex="-1"></a>syscall<span class="op">.</span>Syscall<span class="op">(</span></span>
+<span id="cb9-27"><a href="#cb9-27" aria-hidden="true" tabindex="-1"></a>    syscall<span class="op">.</span>SYS_IOCTL<span class="op">,</span></span>
+<span id="cb9-28"><a href="#cb9-28" aria-hidden="true" tabindex="-1"></a>    <span class="dt">uintptr</span><span class="op">(</span>uffd<span class="op">),</span></span>
+<span id="cb9-29"><a href="#cb9-29" aria-hidden="true" tabindex="-1"></a>    constants<span class="op">.</span>UFFDIO_COPY<span class="op">,</span></span>
+<span id="cb9-30"><a href="#cb9-30" aria-hidden="true" tabindex="-1"></a>    <span class="dt">uintptr</span><span class="op">(</span>unsafe<span class="op">.</span>Pointer<span class="op">(&amp;</span>cpy<span class="op">)),</span></span>
+<span id="cb9-31"><a href="#cb9-31" aria-hidden="true" tabindex="-1"></a><span class="op">)</span></span></code></pre></div>
+<p>Similarly to the registration API, this is also wrapped into a
+reusable
+<code>func Handle(uffd UFFD, start uintptr, src io.ReaderAt) error</code>
+function.</p>
+</section>
+<section id="userfaultfd-backends" data-number="0.4.1.2">
+<h4 data-number="1.4.1.2"><span class="header-section-number">1.4.1.2</span> <code>userfaultfd</code>
+Backends</h4>
+<p>Thanks to <code>userfaultfd</code> being mostly useful for post-copy
+migration, the backend can be simplifed to a simple pull-only reader
+interface (<code>ReadAt(p []byte, off int64) (n int, err error)</code>).
+This means that almost any <code>io.ReaderAt</code> can be used to
+provide chunks to a <code>userfaultfd</code>-registered memory region,
+and access to this reader is guaranteed to be aligned to system’s page
+size, which is typically 4KB. By having this simple backend interface,
+and thus only requiring read-only access, it is possible to implement
+the migration backend in many different ways. A simple backend can for
+example return a pattern to the memory region:</p>
+<div class="sourceCode" id="cb10"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> <span class="op">(</span>a abcReader<span class="op">)</span> ReadAt<span class="op">(</span>p <span class="op">[]</span><span class="dt">byte</span><span class="op">,</span> off <span class="dt">int64</span><span class="op">)</span> <span class="op">(</span>n <span class="dt">int</span><span class="op">,</span> err <span class="dt">error</span><span class="op">)</span> <span class="op">{</span></span>
+<span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a>    n <span class="op">=</span> <span class="bu">copy</span><span class="op">(</span>p<span class="op">,</span> bytes<span class="op">.</span>Repeat<span class="op">([]</span><span class="dt">byte</span><span class="op">{</span><span class="ch">&#39;A&#39;</span> <span class="op">+</span> <span class="dt">byte</span><span class="op">(</span>off<span class="op">%</span><span class="dv">20</span><span class="op">)},</span> <span class="bu">len</span><span class="op">(</span>p<span class="op">)))</span></span>
+<span id="cb10-3"><a href="#cb10-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-4"><a href="#cb10-4" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> n<span class="op">,</span> <span class="ot">nil</span></span>
+<span id="cb10-5"><a href="#cb10-5" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<p>In Go specifically, many objects can be exposed as an
+<code>io.ReaderAt</code>, including a file. This makes it possible to
+simply pass in any file as a backend, essentially mimicking a call to
+<code>mmap</code> with <code>MAP_SHARED</code>:</p>
+<div class="sourceCode" id="cb11"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a>f<span class="op">,</span> err <span class="op">:=</span> os<span class="op">.</span>OpenFile<span class="op">(*</span>file<span class="op">,</span> os<span class="op">.</span>O_RDONLY<span class="op">,</span> os<span class="op">.</span>ModePerm<span class="op">)</span></span>
+<span id="cb11-2"><a href="#cb11-2" aria-hidden="true" tabindex="-1"></a><span class="co">// ...</span></span>
+<span id="cb11-3"><a href="#cb11-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb11-4"><a href="#cb11-4" aria-hidden="true" tabindex="-1"></a>b<span class="op">,</span> uffd<span class="op">,</span> start<span class="op">,</span> err <span class="op">:=</span> mapper<span class="op">.</span>Register<span class="op">(</span><span class="dt">int</span><span class="op">(</span>s<span class="op">.</span>Size<span class="op">()))</span></span>
+<span id="cb11-5"><a href="#cb11-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb11-6"><a href="#cb11-6" aria-hidden="true" tabindex="-1"></a>mapper<span class="op">.</span>Handle<span class="op">(</span>uffd<span class="op">,</span> start<span class="op">,</span> f<span class="op">)</span></span></code></pre></div>
+<p>Similarly so, a remote file, i.e. one that is being stored in S3, can
+be used as a <code>userfaultfd</code> backend as well; here, HTTP range
+requests allow for fetching only the chunks that are being required by
+the application accessing the registered memory region, effectively
+making it possible to map a remote S3 object into memory:</p>
+<div class="sourceCode" id="cb12"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a>mc<span class="op">,</span> err <span class="op">:=</span> minio<span class="op">.</span>New<span class="op">(*</span>s3Endpoint<span class="op">,</span> <span class="co">/* ... */</span><span class="op">)</span></span>
+<span id="cb12-2"><a href="#cb12-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb12-3"><a href="#cb12-3" aria-hidden="true" tabindex="-1"></a>f<span class="op">,</span> err <span class="op">:=</span> mc<span class="op">.</span>GetObject<span class="op">(</span>ctx<span class="op">,</span> <span class="op">*</span>s3BucketName<span class="op">,</span> <span class="op">*</span>s3ObjectName<span class="op">,</span> minio<span class="op">.</span>GetObjectOptions<span class="op">{})</span></span>
+<span id="cb12-4"><a href="#cb12-4" aria-hidden="true" tabindex="-1"></a><span class="co">// ...</span></span>
+<span id="cb12-5"><a href="#cb12-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb12-6"><a href="#cb12-6" aria-hidden="true" tabindex="-1"></a>b<span class="op">,</span> uffd<span class="op">,</span> start<span class="op">,</span> err <span class="op">:=</span> mapper<span class="op">.</span>Register<span class="op">(</span><span class="dt">int</span><span class="op">(</span>s<span class="op">.</span>Size<span class="op">()))</span></span>
+<span id="cb12-7"><a href="#cb12-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb12-8"><a href="#cb12-8" aria-hidden="true" tabindex="-1"></a>mapper<span class="op">.</span>Handle<span class="op">(</span>uffd<span class="op">,</span> start<span class="op">,</span> f<span class="op">)</span></span></code></pre></div>
 <div id="refs" class="references csl-bib-body" role="doc-bibliography">
 <div id="ref-linux2023docs" class="csl-entry" role="doc-biblioentry">
 <div class="csl-left-margin">[1] </div><div class="csl-right-inline">T.
@@ -1640,6 +1795,10 @@ storage system,”</span> <em>SIGOPS Oper. Syst. Rev.</em>, vol. 44, no.
 Grabowski, J. Stasiewicz, and K. Baryla, <span>“Apache cassandra 4.0
 performance benchmark: Comparing cassandra 4.0, cassandra 3.11 and
 scylla open source 4.4,”</span> ScyllaDB Inc, 2021.Available: <a href="https://www.scylladb.com/wp-content/uploads/wp-apache-cassandra-4-performance-benchmark-3.pdf">https://www.scylladb.com/wp-content/uploads/wp-apache-cassandra-4-performance-benchmark-3.pdf</a></div>
+</div>
+<div id="ref-corbet2015linux43" class="csl-entry" role="doc-biblioentry">
+<div class="csl-left-margin">[39] </div><div class="csl-right-inline">J.
+Corbet, <span>“4.3 merge window, part 2.”</span> <a href="https://lwn.net/Articles/656731/" class="uri">https://lwn.net/Articles/656731/</a>, 2015.Available: <a href="https://lwn.net/Articles/656731/">https://lwn.net/Articles/656731/</a></div>
 </div>
 </div>
 </section>
