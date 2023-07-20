@@ -487,6 +487,19 @@ csl: static/ieee.csl
   - This adds very significant latency, which is a problem
   - The mount API was also designed in such a way as to make it hard to share a resource this way
   - The remote backend for example API doesn't itself provide a mount to access the underlying data, which further complicates migration by not implementing a migration lifecycle
+- The migration protocol
+  - To fix this, the migration API defines two new actors: The seeder and the leecher
+  - The seeder represents a resource that can be migrated from/a host that exposes a migratable resource
+  - The leecher represents a client that wants to migrate a resource to itself
+  - Initially, the protocol starts by running an application with the application's state on the seeder's mount
+  - When a leecher connects to the seeder, the seeder starts tracking any writes to it's mount
+  - The leecher starts pulling chunks from the seeder to it's local backend
+  - Once the leecher has received a satisfactory level of locally available chunks, it as the seeder to finalize, which then causes the seeder to stop the remote app, `msync`/flushes the drive, and returns the chunks that were changed between it started tracking and finalizing
+  - The leecher then marks these chunks as remote, immediately resumes the VM, and queues them to be pulled immediately
+  - By splitting the migration into these two distinct phases, the overhead of having to start the device on the leecher can be skipped and additional app initialization that doesn't depend on the app's state (e.g. memory allocation, connecting to databases, loading models etc.) can be performed before the application needs to be suspended
+  - This solution combines both the pre-copy algorithm (by pulling the chunks from the seeder ahead of time) and the post-copy algorithm (by resolving dirty chunks from the seeder after the VM has been migrated) into one coherent protocol (add state machine diagram here)
+  - This way, the maximum tolerable downtime can be drastically reduced, and dirty chunks don't need to be re-transmitted multiple times
+  - Effectively, it drops the maximum guaranteed downtime to the time it takes to `msync` the seeder's app state, the RTT and, if they are being accessed immediately, how long it takes to fetch the chunks that were written in between starting to track and finalize
 - The finalization phase
   - A interesting question to ask with the two-step migration API is when to start the finalization step
   - As is visible from the migration API protocol state machine showed beforehand, the finalization stage is critical and hard or impossible to recover from depending on the implementation
@@ -708,19 +721,6 @@ csl: static/ieee.csl
 
 - Optimization mounts for migration scenarios
   - The flexible architecture of the `ReadWriterAt` components allow the reuse of lots of code for both use cases
-- The migration protocol
-  - To fix this, the migration API defines two new actors: The seeder and the leecher
-  - The seeder represents a resource that can be migrated from/a host that exposes a migratable resource
-  - The leecher represents a client that wants to migrate a resource to itself
-  - Initially, the protocol starts by running an application with the application's state on the seeder's mount
-  - When a leecher connects to the seeder, the seeder starts tracking any writes to it's mount
-  - The leecher starts pulling chunks from the seeder to it's local backend
-  - Once the leecher has received a satisfactory level of locally available chunks, it as the seeder to finalize, which then causes the seeder to stop the remote app, `msync`/flushes the drive, and returns the chunks that were changed between it started tracking and finalizing
-  - The leecher then marks these chunks as remote, immediately resumes the VM, and queues them to be pulled immediately
-  - By splitting the migration into these two distinct phases, the overhead of having to start the device on the leecher can be skipped and additional app initialization that doesn't depend on the app's state (e.g. memory allocation, connecting to databases, loading models etc.) can be performed before the application needs to be suspended
-  - This solution combines both the pre-copy algorithm (by pulling the chunks from the seeder ahead of time) and the post-copy algorithm (by resolving dirty chunks from the seeder after the VM has been migrated) into one coherent protocol (add state machine diagram here)
-  - This way, the maximum tolerable downtime can be drastically reduced, and dirty chunks don't need to be re-transmitted multiple times
-  - Effectively, it drops the maximum guaranteed downtime to the time it takes to `msync` the seeder's app state, the RTT and, if they are being accessed immediately, how long it takes to fetch the chunks that were written in between starting to track and finalize
 - Implementing the seeder
   - To achieve this, the seeder defines a simple read-only API with the familiar `ReadAt` methods, but also new APIs such as returning dirty chunks from `Sync` and adding a `Track` method (code snippet from https://github.com/pojntfx/r3map/blob/main/pkg/services/seeder.go#L15-L21)
   - Unlike the remote backend, a seeder also exposes a mount through a path, file or byte slice, so that as the migration is happening, the underlying data can still be accessed by the application
