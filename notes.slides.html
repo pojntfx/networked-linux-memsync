@@ -1386,59 +1386,35 @@ matching offset in the local file</li>
 </ul>
 <h2 id="fuse-implementation-in-go"><span class="header-section-number">4.3</span> FUSE Implementation in Go</h2>
 <ul>
-<li>File system-based synchronization in the kernel
+<li>Implementing a FUSE in Go means tight integration with
+libraries</li>
+<li>It makes sense to divide the process into two aspects</li>
+<li>Creating a backend for a file system abstraction API like
+<code>afero.Fs</code>
 <ul>
-<li>Since the push method requires polling and is very CPU and I/O
-intensive, and <code>userfaultfd-go</code> has only low throughput, a
-better solution is needed</li>
-<li>What if we could still get the events for the writes and reads
-without having to use <code>userfaultfd-go</code> or hashing?</li>
-<li>We can create a custom file system in Linux and load it as a kernel
-module</li>
-<li>This file system could then intercept reads/writes to/from the
-<code>mmap</code>ed region, making it possible to respond to them with a
-custom backend</li>
-<li>But such a system would need to run in the kernel directly, which
-leads to a lot of potential drawbacks</li>
-</ul></li>
-<li>FUSE vs kernel filesystems
-<ul>
-<li>While it is possible to write kernel modules with Rust instead of C
-these days, a lot of problems remain</li>
-<li>Kernel modules aren’t portable; they are built for a specific
-kernel, which makes them hard to distribute to users</li>
-<li>A kernel file system is able to skip having to go through user space
-and thus save on context switching, but that will also mean that it will
-run in the kernel address space, making for a poor level of
-isolation</li>
-<li>Iterating on a kernel module is much harder than iterating on a
-program running in user space</li>
-<li>If we want the user to be able to provide their own backends from/to
-which to pull/push, that will still require communication between user
-space and the kernel</li>
-<li>So while adding this implementation in the kernel would be possible,
-it would also be very complex</li>
-</ul></li>
-<li>Implementation
-<ul>
-<li>It is possible to use even very complex and at first view
-non-compatible backends as a FUSE file system’s backend</li>
 <li>By using a file system abstraction API like <code>afero.Fs</code>,
 we can separate the FUSE implementation from the actual file system
 structure, making it unit testable and making it possible to add caching
 in user space (code snippet from
 https://github.com/pojntfx/stfs/blob/main/pkg/fs/file.go)</li>
-<li>It is possible to map any <code>afero.Fs</code> to a FUSE backend,
-so it would be possible to switch between different file system backends
-without having to write FUSE-specific (code snippet from
-https://github.com/JakWai01/sile-fystem/blob/main/pkg/filesystem/fs.go)</li>
+<li>It is possible to use even very complex and at first view
+non-compatible backends as a FUSE file system’s backend</li>
 <li>For example, STFS used a tape drive as the backend, which is not
 random access, but instead append-only and linear
 (https://github.com/pojntfx/stfs/blob/main/pkg/operations/update.go)</li>
 <li>By using an on-disk index and access optimizations, the resulting
 file system was still performant enough to be used, and supported almost
 all features required for the average user</li>
+<li>Creating an adapter between the FS abstraction API and the FUSE
+library’s backend interface</li>
+<li>It is possible to map any <code>afero.Fs</code> to a FUSE backend,
+so it would be possible to switch between different file system backends
+without having to write FUSE-specific (code snippet from
+https://github.com/JakWai01/sile-fystem/blob/main/pkg/filesystem/fs.go)</li>
 </ul></li>
+<li>While this approach is interesting, the required overhead of
+implementing it (which is known from prior projects like STFS<span class="citation">[31]</span> and sile-fystem<span class="citation">[32]</span>) and other factors that will be touched
+upon later led to it not being pursued further</li>
 </ul>
 <h2 id="nbd-with-go-nbd"><span class="header-section-number">4.4</span>
 NBD with <code>go-nbd</code></h2>
@@ -2410,7 +2386,7 @@ to the single-phase mount API</li>
 </ul></li>
 <li>Comparing it to RegionFS, An existing remote memory system
 <ul>
-<li>A similar approach was made in RegionFS<span class="citation">[31]</span></li>
+<li>A similar approach was made in RegionFS<span class="citation">[33]</span></li>
 <li>RegionFS is implemented as a kernel module, but it is functionally
 similar to how this API exposes a NBD device for memory interaction</li>
 <li>In RegionFS, the regions file system is mounted to a path, which
@@ -2997,8 +2973,18 @@ Grabowski, J. Stasiewicz, and K. Baryla, <span>“Apache cassandra 4.0
 performance benchmark: Comparing cassandra 4.0, cassandra 3.11 and
 scylla open source 4.4,”</span> ScyllaDB Inc, 2021.Available: <a href="https://www.scylladb.com/wp-content/uploads/wp-apache-cassandra-4-performance-benchmark-3.pdf">https://www.scylladb.com/wp-content/uploads/wp-apache-cassandra-4-performance-benchmark-3.pdf</a></div>
 </div>
+<div id="ref-pojtinger2022stfs" class="csl-entry">
+<div class="csl-left-margin">[31] </div><div class="csl-right-inline">F.
+Pojtinger, <span>“<span class="nocase">STFS: Simple Tape File System, a
+file system for tapes and tar files</span>.”</span> <a href="https://github.com/pojntfx/stfs" class="uri">https://github.com/pojntfx/stfs</a>, 2022.</div>
+</div>
+<div id="ref-waibel2022silefystem" class="csl-entry">
+<div class="csl-left-margin">[32] </div><div class="csl-right-inline">J.
+Waibel and F. Pojtinger, <span>“<span class="nocase">sile-fystem: A
+generic FUSE implementation</span>.”</span> <a href="https://github.com/jakWai01/sile-fystem" class="uri">https://github.com/jakWai01/sile-fystem</a>, 2022.</div>
+</div>
 <div id="ref-aguilera2018remoteregions" class="csl-entry">
-<div class="csl-left-margin">[31] </div><div class="csl-right-inline">M.
+<div class="csl-left-margin">[33] </div><div class="csl-right-inline">M.
 K. Aguilera <em>et al.</em>, <span>“Remote regions: A simple abstraction
 for remote memory,”</span> in <em>Proceedings of the 2018 USENIX
 conference on usenix annual technical conference</em>, 2018, pp.

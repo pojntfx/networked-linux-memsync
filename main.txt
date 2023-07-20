@@ -55,6 +55,7 @@ Felicitas Pojtinger (Stuttgart Media University)
         -   4.2.7 File Transmission
         -   4.2.8 Hash Calculation
         -   4.2.9 File Reception
+    -   4.3 FUSE Implementation in Go
 
 Introduction
 
@@ -1821,7 +1822,6 @@ are read from the connection and written to the local file:
 
         return nil
     }
-
     /// ...
 
     // Shrinking or growing the file
@@ -1853,6 +1853,69 @@ are read from the connection and written to the local file:
       // Writing the chunk to the local file
         file.WriteAt(b, blockToFetch*(blocksize))
     }
+
+FUSE Implementation in Go
+
+Implementing a FUSE in Go can be split into two separate tasks: Creating
+a backend for a file abstraction API and creating an adapter between
+this API and a FUSE library.
+
+Developing a backend for a file system abstraction API such as afero.Fs
+instead of implementing it to work with FUSE bindings directly offers
+several advantages. This layer of indirection allows splitting the FUSE
+implementation from the actual inode structure of the system, which
+makes it unit testable[40]. This is a high priority due to the
+complexities and edge cases involved with creating a file system. A
+standard API also offers the ability to implement things such as caching
+by simply nesting multiple afero.Fs interfaces, and the required
+interface is rather minimal[41]:
+
+    type Fs interface {
+        Create(name string) (File, error)
+        Mkdir(name string, perm os.FileMode) error
+        MkdirAll(path string, perm os.FileMode) error
+        Open(name string) (File, error)
+        OpenFile(name string, flag int, perm os.FileMode) (File, error)
+        Remove(name string) error
+        RemoveAll(path string) error
+        Rename(oldname, newname string) error
+        Stat(name string) (os.FileInfo, error)
+        Name() string
+        Chmod(name string, mode os.FileMode) error
+        Chown(name string, uid, gid int) error
+        Chtimes(name string, atime time.Time, mtime time.Time) error
+    }
+
+The STFS project[42] has shown that by using this abstraction layer,
+seemingly incompatible, non-linear backends can still be mapped to a
+file system. The project is backend by a tape drive, which is inherently
+append-only and optimized for linear access. Thanks to the inclusion of
+an on-disk index and various optimization methods, the resulting file
+system was still performant enough for standard use, while also
+supporting most of the features required by the average user such as
+symlinks, file updates and more.
+
+By using a project like sile-fystem[43], it is also possible to use any
+afero.Fs filesystem as a FUSE backend; this can signficantly reduce the
+required implementation overhead, as it doesn’t require writing a custom
+adapter:
+
+    // Creating the file system
+    serve := filesystem.NewFileSystem(
+      // ..
+      afero.NewOsFs(),  // afero.Fs implementation here
+      // ...
+    )
+    // ...
+
+    // Mounting the file system
+    fuse.Mount(viper.GetString(mountpoint), serve, cfg)
+    // ...
+
+While the FUSE approach to synchronization is interesting, even with
+these available libraries the required overhead of implementing it (as
+shown by prior projects like STFS) as well as other factors that will be
+mentioned later led to this approach not being pursued further.
 
 [1] T. kernel development community, “Quick start.”
 https://www.kernel.org/doc/html/next/rust/quick-start.html, 2023.
@@ -2003,3 +2066,16 @@ https://www.scylladb.com/wp-content/uploads/wp-apache-cassandra-4-performance-be
 [39] J. Corbet, “4.3 merge window, part 2.”
 https://lwn.net/Articles/656731/, 2015.Available:
 https://lwn.net/Articles/656731/
+
+[40] F. Pojtinger, “STFS file system unit tests.”
+https://github.com/pojntfx/stfs/blob/main/pkg/fs/filesystem_test.go,
+2022.
+
+[41] S. Francia, “Fs interface - afero: A FileSystem abstraction system
+for go.” https://pkg.go.dev/github.com/spf13/afero#Fs, 2023.
+
+[42] F. Pojtinger, “STFS: Simple Tape File System, a file system for
+tapes and tar files.” https://github.com/pojntfx/stfs, 2022.
+
+[43] J. Waibel and F. Pojtinger, “sile-fystem: A generic FUSE
+implementation.” https://github.com/jakWai01/sile-fystem, 2022.

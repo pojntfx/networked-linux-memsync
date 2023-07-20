@@ -325,6 +325,8 @@ Migrations</a></li>
 <code>userfaultfd</code></a></li>
 <li><a href="#file-based-synchronization"><span class="toc-section-number">1.4.2</span> File-Based
 Synchronization</a></li>
+<li><a href="#fuse-implementation-in-go"><span class="toc-section-number">1.4.3</span> FUSE Implementation in
+Go</a></li>
 </ul></li>
 </ul>
 </nav>
@@ -2014,38 +2016,97 @@ are read from the connection and written to the local file:</p>
 <span id="cb25-4"><a href="#cb25-4" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb25-5"><a href="#cb25-5" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> <span class="ot">nil</span></span>
 <span id="cb25-6"><a href="#cb25-6" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
-<span id="cb25-7"><a href="#cb25-7" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb25-8"><a href="#cb25-8" aria-hidden="true" tabindex="-1"></a><span class="co">/// ...</span></span>
-<span id="cb25-9"><a href="#cb25-9" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb25-10"><a href="#cb25-10" aria-hidden="true" tabindex="-1"></a><span class="co">// Shrinking or growing the file</span></span>
-<span id="cb25-11"><a href="#cb25-11" aria-hidden="true" tabindex="-1"></a>s<span class="op">,</span> err <span class="op">:=</span> os<span class="op">.</span>Stat<span class="op">(</span>path<span class="op">)</span></span>
-<span id="cb25-12"><a href="#cb25-12" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb25-13"><a href="#cb25-13" aria-hidden="true" tabindex="-1"></a>newSize <span class="op">:=</span> <span class="op">(((</span>blocksToFetch<span class="op">[</span><span class="bu">len</span><span class="op">(</span>blocksToFetch<span class="op">)-</span><span class="dv">1</span><span class="op">]</span> <span class="op">+</span> <span class="dv">1</span><span class="op">)</span> <span class="op">*</span> blocksize<span class="op">)</span> <span class="op">-</span> cutoff<span class="op">)</span></span>
-<span id="cb25-14"><a href="#cb25-14" aria-hidden="true" tabindex="-1"></a>diff <span class="op">:=</span> s<span class="op">.</span>Size<span class="op">()</span> <span class="op">-</span> newSize</span>
-<span id="cb25-15"><a href="#cb25-15" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb25-16"><a href="#cb25-16" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> diff <span class="op">&gt;</span> <span class="dv">0</span> <span class="op">{</span></span>
-<span id="cb25-17"><a href="#cb25-17" aria-hidden="true" tabindex="-1"></a>    <span class="co">// If the file on the server got smaller, truncate the local file accordingly</span></span>
-<span id="cb25-18"><a href="#cb25-18" aria-hidden="true" tabindex="-1"></a>    file<span class="op">.</span>Truncate<span class="op">(</span>newSize<span class="op">)</span></span>
-<span id="cb25-19"><a href="#cb25-19" aria-hidden="true" tabindex="-1"></a><span class="op">}</span> <span class="cf">else</span> <span class="op">{</span></span>
-<span id="cb25-20"><a href="#cb25-20" aria-hidden="true" tabindex="-1"></a>    <span class="co">// If the file on the server grew, grow the local file accordingly</span></span>
-<span id="cb25-21"><a href="#cb25-21" aria-hidden="true" tabindex="-1"></a>    file<span class="op">.</span>Seek<span class="op">(</span><span class="dv">0</span><span class="op">,</span> <span class="dv">2</span><span class="op">)</span></span>
-<span id="cb25-22"><a href="#cb25-22" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb25-23"><a href="#cb25-23" aria-hidden="true" tabindex="-1"></a>    io<span class="op">.</span>CopyN<span class="op">(</span>file<span class="op">,</span> nopReader<span class="op">{},</span> <span class="op">-</span>diff<span class="op">)</span></span>
-<span id="cb25-24"><a href="#cb25-24" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
-<span id="cb25-25"><a href="#cb25-25" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb25-26"><a href="#cb25-26" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> i<span class="op">,</span> blockToFetch <span class="op">:=</span> <span class="kw">range</span> blocksToFetch <span class="op">{</span></span>
-<span id="cb25-27"><a href="#cb25-27" aria-hidden="true" tabindex="-1"></a>    backset <span class="op">:=</span> <span class="dt">int64</span><span class="op">(</span><span class="dv">0</span><span class="op">)</span></span>
-<span id="cb25-28"><a href="#cb25-28" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> i <span class="op">==</span> <span class="bu">len</span><span class="op">(</span>blocksToFetch<span class="op">)-</span><span class="dv">1</span> <span class="op">{</span></span>
-<span id="cb25-29"><a href="#cb25-29" aria-hidden="true" tabindex="-1"></a>        backset <span class="op">=</span> cutoff</span>
-<span id="cb25-30"><a href="#cb25-30" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
-<span id="cb25-31"><a href="#cb25-31" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb25-32"><a href="#cb25-32" aria-hidden="true" tabindex="-1"></a>  <span class="co">// Receiving the chunk</span></span>
-<span id="cb25-33"><a href="#cb25-33" aria-hidden="true" tabindex="-1"></a>    b <span class="op">:=</span> <span class="bu">make</span><span class="op">([]</span><span class="dt">byte</span><span class="op">,</span> blocksize<span class="op">-</span>backset<span class="op">)</span></span>
-<span id="cb25-34"><a href="#cb25-34" aria-hidden="true" tabindex="-1"></a>    io<span class="op">.</span>ReadFull<span class="op">(</span>conn<span class="op">,</span> b<span class="op">)</span></span>
-<span id="cb25-35"><a href="#cb25-35" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb25-36"><a href="#cb25-36" aria-hidden="true" tabindex="-1"></a>  <span class="co">// Writing the chunk to the local file</span></span>
-<span id="cb25-37"><a href="#cb25-37" aria-hidden="true" tabindex="-1"></a>    file<span class="op">.</span>WriteAt<span class="op">(</span>b<span class="op">,</span> blockToFetch<span class="op">*(</span>blocksize<span class="op">))</span></span>
-<span id="cb25-38"><a href="#cb25-38" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<span id="cb25-7"><a href="#cb25-7" aria-hidden="true" tabindex="-1"></a><span class="co">/// ...</span></span>
+<span id="cb25-8"><a href="#cb25-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb25-9"><a href="#cb25-9" aria-hidden="true" tabindex="-1"></a><span class="co">// Shrinking or growing the file</span></span>
+<span id="cb25-10"><a href="#cb25-10" aria-hidden="true" tabindex="-1"></a>s<span class="op">,</span> err <span class="op">:=</span> os<span class="op">.</span>Stat<span class="op">(</span>path<span class="op">)</span></span>
+<span id="cb25-11"><a href="#cb25-11" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb25-12"><a href="#cb25-12" aria-hidden="true" tabindex="-1"></a>newSize <span class="op">:=</span> <span class="op">(((</span>blocksToFetch<span class="op">[</span><span class="bu">len</span><span class="op">(</span>blocksToFetch<span class="op">)-</span><span class="dv">1</span><span class="op">]</span> <span class="op">+</span> <span class="dv">1</span><span class="op">)</span> <span class="op">*</span> blocksize<span class="op">)</span> <span class="op">-</span> cutoff<span class="op">)</span></span>
+<span id="cb25-13"><a href="#cb25-13" aria-hidden="true" tabindex="-1"></a>diff <span class="op">:=</span> s<span class="op">.</span>Size<span class="op">()</span> <span class="op">-</span> newSize</span>
+<span id="cb25-14"><a href="#cb25-14" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb25-15"><a href="#cb25-15" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> diff <span class="op">&gt;</span> <span class="dv">0</span> <span class="op">{</span></span>
+<span id="cb25-16"><a href="#cb25-16" aria-hidden="true" tabindex="-1"></a>    <span class="co">// If the file on the server got smaller, truncate the local file accordingly</span></span>
+<span id="cb25-17"><a href="#cb25-17" aria-hidden="true" tabindex="-1"></a>    file<span class="op">.</span>Truncate<span class="op">(</span>newSize<span class="op">)</span></span>
+<span id="cb25-18"><a href="#cb25-18" aria-hidden="true" tabindex="-1"></a><span class="op">}</span> <span class="cf">else</span> <span class="op">{</span></span>
+<span id="cb25-19"><a href="#cb25-19" aria-hidden="true" tabindex="-1"></a>    <span class="co">// If the file on the server grew, grow the local file accordingly</span></span>
+<span id="cb25-20"><a href="#cb25-20" aria-hidden="true" tabindex="-1"></a>    file<span class="op">.</span>Seek<span class="op">(</span><span class="dv">0</span><span class="op">,</span> <span class="dv">2</span><span class="op">)</span></span>
+<span id="cb25-21"><a href="#cb25-21" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb25-22"><a href="#cb25-22" aria-hidden="true" tabindex="-1"></a>    io<span class="op">.</span>CopyN<span class="op">(</span>file<span class="op">,</span> nopReader<span class="op">{},</span> <span class="op">-</span>diff<span class="op">)</span></span>
+<span id="cb25-23"><a href="#cb25-23" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb25-24"><a href="#cb25-24" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb25-25"><a href="#cb25-25" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> i<span class="op">,</span> blockToFetch <span class="op">:=</span> <span class="kw">range</span> blocksToFetch <span class="op">{</span></span>
+<span id="cb25-26"><a href="#cb25-26" aria-hidden="true" tabindex="-1"></a>    backset <span class="op">:=</span> <span class="dt">int64</span><span class="op">(</span><span class="dv">0</span><span class="op">)</span></span>
+<span id="cb25-27"><a href="#cb25-27" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> i <span class="op">==</span> <span class="bu">len</span><span class="op">(</span>blocksToFetch<span class="op">)-</span><span class="dv">1</span> <span class="op">{</span></span>
+<span id="cb25-28"><a href="#cb25-28" aria-hidden="true" tabindex="-1"></a>        backset <span class="op">=</span> cutoff</span>
+<span id="cb25-29"><a href="#cb25-29" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb25-30"><a href="#cb25-30" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb25-31"><a href="#cb25-31" aria-hidden="true" tabindex="-1"></a>  <span class="co">// Receiving the chunk</span></span>
+<span id="cb25-32"><a href="#cb25-32" aria-hidden="true" tabindex="-1"></a>    b <span class="op">:=</span> <span class="bu">make</span><span class="op">([]</span><span class="dt">byte</span><span class="op">,</span> blocksize<span class="op">-</span>backset<span class="op">)</span></span>
+<span id="cb25-33"><a href="#cb25-33" aria-hidden="true" tabindex="-1"></a>    io<span class="op">.</span>ReadFull<span class="op">(</span>conn<span class="op">,</span> b<span class="op">)</span></span>
+<span id="cb25-34"><a href="#cb25-34" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb25-35"><a href="#cb25-35" aria-hidden="true" tabindex="-1"></a>  <span class="co">// Writing the chunk to the local file</span></span>
+<span id="cb25-36"><a href="#cb25-36" aria-hidden="true" tabindex="-1"></a>    file<span class="op">.</span>WriteAt<span class="op">(</span>b<span class="op">,</span> blockToFetch<span class="op">*(</span>blocksize<span class="op">))</span></span>
+<span id="cb25-37"><a href="#cb25-37" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+</section>
+</section>
+<section id="fuse-implementation-in-go" data-number="0.4.3">
+<h3 data-number="1.4.3"><span class="header-section-number">1.4.3</span>
+FUSE Implementation in Go</h3>
+<p>Implementing a FUSE in Go can be split into two separate tasks:
+Creating a backend for a file abstraction API and creating an adapter
+between this API and a FUSE library.</p>
+<p>Developing a backend for a file system abstraction API such as
+<code>afero.Fs</code> instead of implementing it to work with FUSE
+bindings directly offers several advantages. This layer of indirection
+allows splitting the FUSE implementation from the actual
+<code>inode</code> structure of the system, which makes it unit
+testable<span class="citation" data-cites="pojtinger2022stfstests">[40]</span>. This is a high priority
+due to the complexities and edge cases involved with creating a file
+system. A standard API also offers the ability to implement things such
+as caching by simply nesting multiple <code>afero.Fs</code> interfaces,
+and the required interface is rather minimal<span class="citation" data-cites="francia2023afero">[41]</span>:</p>
+<div class="sourceCode" id="cb26"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb26-1"><a href="#cb26-1" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> Fs <span class="kw">interface</span> <span class="op">{</span></span>
+<span id="cb26-2"><a href="#cb26-2" aria-hidden="true" tabindex="-1"></a>    Create<span class="op">(</span>name <span class="dt">string</span><span class="op">)</span> <span class="op">(</span>File<span class="op">,</span> <span class="dt">error</span><span class="op">)</span></span>
+<span id="cb26-3"><a href="#cb26-3" aria-hidden="true" tabindex="-1"></a>    Mkdir<span class="op">(</span>name <span class="dt">string</span><span class="op">,</span> perm os<span class="op">.</span>FileMode<span class="op">)</span> <span class="dt">error</span></span>
+<span id="cb26-4"><a href="#cb26-4" aria-hidden="true" tabindex="-1"></a>    MkdirAll<span class="op">(</span>path <span class="dt">string</span><span class="op">,</span> perm os<span class="op">.</span>FileMode<span class="op">)</span> <span class="dt">error</span></span>
+<span id="cb26-5"><a href="#cb26-5" aria-hidden="true" tabindex="-1"></a>    Open<span class="op">(</span>name <span class="dt">string</span><span class="op">)</span> <span class="op">(</span>File<span class="op">,</span> <span class="dt">error</span><span class="op">)</span></span>
+<span id="cb26-6"><a href="#cb26-6" aria-hidden="true" tabindex="-1"></a>    OpenFile<span class="op">(</span>name <span class="dt">string</span><span class="op">,</span> flag <span class="dt">int</span><span class="op">,</span> perm os<span class="op">.</span>FileMode<span class="op">)</span> <span class="op">(</span>File<span class="op">,</span> <span class="dt">error</span><span class="op">)</span></span>
+<span id="cb26-7"><a href="#cb26-7" aria-hidden="true" tabindex="-1"></a>    Remove<span class="op">(</span>name <span class="dt">string</span><span class="op">)</span> <span class="dt">error</span></span>
+<span id="cb26-8"><a href="#cb26-8" aria-hidden="true" tabindex="-1"></a>    RemoveAll<span class="op">(</span>path <span class="dt">string</span><span class="op">)</span> <span class="dt">error</span></span>
+<span id="cb26-9"><a href="#cb26-9" aria-hidden="true" tabindex="-1"></a>    Rename<span class="op">(</span>oldname<span class="op">,</span> newname <span class="dt">string</span><span class="op">)</span> <span class="dt">error</span></span>
+<span id="cb26-10"><a href="#cb26-10" aria-hidden="true" tabindex="-1"></a>    Stat<span class="op">(</span>name <span class="dt">string</span><span class="op">)</span> <span class="op">(</span>os<span class="op">.</span>FileInfo<span class="op">,</span> <span class="dt">error</span><span class="op">)</span></span>
+<span id="cb26-11"><a href="#cb26-11" aria-hidden="true" tabindex="-1"></a>    Name<span class="op">()</span> <span class="dt">string</span></span>
+<span id="cb26-12"><a href="#cb26-12" aria-hidden="true" tabindex="-1"></a>    Chmod<span class="op">(</span>name <span class="dt">string</span><span class="op">,</span> mode os<span class="op">.</span>FileMode<span class="op">)</span> <span class="dt">error</span></span>
+<span id="cb26-13"><a href="#cb26-13" aria-hidden="true" tabindex="-1"></a>    Chown<span class="op">(</span>name <span class="dt">string</span><span class="op">,</span> uid<span class="op">,</span> gid <span class="dt">int</span><span class="op">)</span> <span class="dt">error</span></span>
+<span id="cb26-14"><a href="#cb26-14" aria-hidden="true" tabindex="-1"></a>    Chtimes<span class="op">(</span>name <span class="dt">string</span><span class="op">,</span> atime time<span class="op">.</span>Time<span class="op">,</span> mtime time<span class="op">.</span>Time<span class="op">)</span> <span class="dt">error</span></span>
+<span id="cb26-15"><a href="#cb26-15" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<p>The STFS project<span class="citation" data-cites="pojtinger2022stfs">[42]</span> has shown that by using this
+abstraction layer, seemingly incompatible, non-linear backends can still
+be mapped to a file system. The project is backend by a tape drive,
+which is inherently append-only and optimized for linear access. Thanks
+to the inclusion of an on-disk index and various optimization methods,
+the resulting file system was still performant enough for standard use,
+while also supporting most of the features required by the average user
+such as symlinks, file updates and more.</p>
+<p>By using a project like sile-fystem<span class="citation" data-cites="waibel2022silefystem">[43]</span>, it is also possible to
+use any <code>afero.Fs</code> filesystem as a FUSE backend; this can
+signficantly reduce the required implementation overhead, as it doesn’t
+require writing a custom adapter:</p>
+<div class="sourceCode" id="cb27"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb27-1"><a href="#cb27-1" aria-hidden="true" tabindex="-1"></a><span class="co">// Creating the file system</span></span>
+<span id="cb27-2"><a href="#cb27-2" aria-hidden="true" tabindex="-1"></a>serve <span class="op">:=</span> filesystem<span class="op">.</span>NewFileSystem<span class="op">(</span></span>
+<span id="cb27-3"><a href="#cb27-3" aria-hidden="true" tabindex="-1"></a>  <span class="co">// ..</span></span>
+<span id="cb27-4"><a href="#cb27-4" aria-hidden="true" tabindex="-1"></a>  afero<span class="op">.</span>NewOsFs<span class="op">(),</span>  <span class="co">// afero.Fs implementation here</span></span>
+<span id="cb27-5"><a href="#cb27-5" aria-hidden="true" tabindex="-1"></a>  <span class="co">// ...</span></span>
+<span id="cb27-6"><a href="#cb27-6" aria-hidden="true" tabindex="-1"></a><span class="op">)</span></span>
+<span id="cb27-7"><a href="#cb27-7" aria-hidden="true" tabindex="-1"></a><span class="co">// ...</span></span>
+<span id="cb27-8"><a href="#cb27-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb27-9"><a href="#cb27-9" aria-hidden="true" tabindex="-1"></a><span class="co">// Mounting the file system</span></span>
+<span id="cb27-10"><a href="#cb27-10" aria-hidden="true" tabindex="-1"></a>fuse<span class="op">.</span>Mount<span class="op">(</span>viper<span class="op">.</span>GetString<span class="op">(</span>mountpoint<span class="op">),</span> serve<span class="op">,</span> cfg<span class="op">)</span></span>
+<span id="cb27-11"><a href="#cb27-11" aria-hidden="true" tabindex="-1"></a><span class="co">// ...</span></span></code></pre></div>
+<p>While the FUSE approach to synchronization is interesting, even with
+these available libraries the required overhead of implementing it (as
+shown by prior projects like STFS) as well as other factors that will be
+mentioned later led to this approach not being pursued further.</p>
 <div id="refs" class="references csl-bib-body" role="doc-bibliography">
 <div id="ref-linux2023docs" class="csl-entry" role="doc-biblioentry">
 <div class="csl-left-margin">[1] </div><div class="csl-right-inline">T.
@@ -2257,8 +2318,28 @@ scylla open source 4.4,”</span> ScyllaDB Inc, 2021.Available: <a href="https:/
 <div class="csl-left-margin">[39] </div><div class="csl-right-inline">J.
 Corbet, <span>“4.3 merge window, part 2.”</span> <a href="https://lwn.net/Articles/656731/" class="uri">https://lwn.net/Articles/656731/</a>, 2015.Available: <a href="https://lwn.net/Articles/656731/">https://lwn.net/Articles/656731/</a></div>
 </div>
+<div id="ref-pojtinger2022stfstests" class="csl-entry" role="doc-biblioentry">
+<div class="csl-left-margin">[40] </div><div class="csl-right-inline">F.
+Pojtinger, <span>“STFS file system unit tests.”</span> <a href="https://github.com/pojntfx/stfs/blob/main/pkg/fs/filesystem_test.go" class="uri">https://github.com/pojntfx/stfs/blob/main/pkg/fs/filesystem_test.go</a>,
+2022.</div>
 </div>
-</section>
+<div id="ref-francia2023afero" class="csl-entry" role="doc-biblioentry">
+<div class="csl-left-margin">[41] </div><div class="csl-right-inline">S.
+Francia, <span>“Fs interface - afero: A FileSystem abstraction system
+for go.”</span> <a href="https://pkg.go.dev/github.com/spf13/afero#Fs" class="uri">https://pkg.go.dev/github.com/spf13/afero#Fs</a>,
+2023.</div>
+</div>
+<div id="ref-pojtinger2022stfs" class="csl-entry" role="doc-biblioentry">
+<div class="csl-left-margin">[42] </div><div class="csl-right-inline">F.
+Pojtinger, <span>“<span class="nocase">STFS: Simple Tape File System, a
+file system for tapes and tar files</span>.”</span> <a href="https://github.com/pojntfx/stfs" class="uri">https://github.com/pojntfx/stfs</a>, 2022.</div>
+</div>
+<div id="ref-waibel2022silefystem" class="csl-entry" role="doc-biblioentry">
+<div class="csl-left-margin">[43] </div><div class="csl-right-inline">J.
+Waibel and F. Pojtinger, <span>“<span class="nocase">sile-fystem: A
+generic FUSE implementation</span>.”</span> <a href="https://github.com/jakWai01/sile-fystem" class="uri">https://github.com/jakWai01/sile-fystem</a>, 2022.</div>
+</div>
+</div>
 </section>
 </section>
 </body>
