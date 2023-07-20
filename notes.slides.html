@@ -1262,14 +1262,16 @@ receiver</li>
 <li>Spawns a new goroutine for the syncerID to handle the communication
 with the specific syncer</li>
 <li>In goroutine it reads the type of the peer</li>
-<li>For the <code>src-control</code> peer type
+<li>For the <code>src-control</code> peer type (code snippet from
+https://github.com/loopholelabs/darkmagyk/blob/159d4af/cmd/darkmagyk-cloudpoint/main.go#L824-L844)
 <ul>
 <li>Reads a file name from the syncer</li>
 <li>Registers the connection as the one providing the file with this
 name</li>
 <li>Broadcasts the file as one now being available</li>
 </ul></li>
-<li>For the <code>dst-control</code> peer type
+<li>For the <code>dst-control</code> peer type (code snippet from
+https://github.com/loopholelabs/darkmagyk/blob/159d4af/cmd/darkmagyk-cloudpoint/main.go#L845-L880)
 <ul>
 <li>It listens to the broadcasted files from <code>src-control</code>
 peers</li>
@@ -1277,7 +1279,8 @@ peers</li>
 so that it can subscribe</li>
 <li>Also sends all currently known file names to the peer</li>
 </ul></li>
-<li>For the <code>dst</code> peer type
+<li>For the <code>dst</code> peer type (code snippet from
+https://github.com/loopholelabs/darkmagyk/blob/159d4af/cmd/darkmagyk-cloudpoint/main.go#L882-L942)
 <ul>
 <li>Decodes a file name from the connection</li>
 <li>Looks for a corresponding <code>src-control</code> peer</li>
@@ -1290,14 +1293,16 @@ hub with this ID with a new <code>src-data</code> peer by listening for
 synchronization connection and the connection of the <code>dst</code>
 peer, relaying any information between the two</li>
 </ul></li>
-<li>For the <code>src-data</code> peer type
+<li>For the <code>src-data</code> peer type (code snippet from
+https://github.com/loopholelabs/darkmagyk/blob/159d4af/cmd/darkmagyk-cloudpoint/main.go#L943-L954)
 <ul>
 <li>Decodes the ID for the peer</li>
 <li>Broadcasts the ID, which allows the <code>dst</code> peer to
 continue</li>
 </ul></li>
 </ul></li>
-<li>File advertisement
+<li>File advertisement (code snippet from
+https://github.com/loopholelabs/darkmagyk/blob/159d4afe0828452c61c63233aa134fb3c2a45a1a/pkg/filetransfer/src.go#L112-L269)
 <ul>
 <li>Connects to the multiplexer hub</li>
 <li>Registers itself as a <code>src-control</code> type of peer</li>
@@ -1317,7 +1322,8 @@ the loop if requested</li>
 <li>After a file transmission is done, waits for the specified polling
 interval, then starts a file transmission cycle again</li>
 </ul></li>
-<li>File receiver loop
+<li>File receiver loop (code snippet from
+https://github.com/loopholelabs/darkmagyk/blob/159d4afe0828452c61c63233aa134fb3c2a45a1a/pkg/filetransfer/dst.go#L127-L243)
 <ul>
 <li>Connects to the multiplexer hub</li>
 <li>Registers itself as the <code>dst-control</code> type of peer</li>
@@ -1332,7 +1338,8 @@ look for a peer that advertises the requested file</li>
 <li>Starts the file receiption process in a loop, and exits if a
 callback determines that the file has been synced completely</li>
 </ul></li>
-<li>File transmission
+<li>File transmission (code snippet from
+https://github.com/loopholelabs/darkmagyk/blob/159d4afe0828452c61c63233aa134fb3c2a45a1a/pkg/filetransfer/src.go#L14-L110)
 <ul>
 <li>Does the actual file transmission part of delta synchronization</li>
 <li>Receives the remote hashes from the mulitplexer hub</li>
@@ -1346,7 +1353,8 @@ synchronized</li>
 <li>Loops over each of the chunks that need to be sent, and sends the
 updated data for the file in order</li>
 </ul></li>
-<li>Hash calculation
+<li>Hash calculation (code snippet from
+https://github.com/loopholelabs/darkmagyk/blob/159d4afe0828452c61c63233aa134fb3c2a45a1a/pkg/filetransfer/hashes.go#L17-L73)
 <ul>
 <li><code>GetHashesForBlocks</code> handles the concurrent calculation
 of the hashes for a file on both the file transmitter and receiver</li>
@@ -1361,7 +1369,8 @@ encodes them as hash values</li>
 <li>After all hashes have been calculated, it adds them to the array and
 returns them</li>
 </ul></li>
-<li>File receiption
+<li>File receiption (code snippet from
+https://github.com/loopholelabs/darkmagyk/blob/159d4afe0828452c61c63233aa134fb3c2a45a1a/pkg/filetransfer/dst.go#L23-L125)
 <ul>
 <li>Is the receiving part of the delta synchronization algorithm</li>
 <li>Starts by calculating hashes for the local copy of the file</li>

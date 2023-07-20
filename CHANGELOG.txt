@@ -1,3 +1,9 @@
+commit a4a04832f474d6ec1ecefaeb64f5d8631c58371b
+Author: Felicitas Pojtinger <felicitas@pojtinger.com>
+Date:   Thu Jul 20 20:22:46 2023 +0200
+
+    docs: Add code snippets to file transfer section
+
 commit 9cdb0a92e87cfb1b423f75b4bd8bcecad580ae46
 Author: Felicitas Pojtinger <felicitas@pojtinger.com>
 Date:   Thu Jul 20 20:15:23 2023 +0200
