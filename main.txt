@@ -45,6 +45,10 @@ Felicitas Pojtinger (Stuttgart Media University)
     -   4.1 Userfaults in Go with userfaultfd
         -   4.1.1 Registration and Handlers
         -   4.1.2 userfaultfd Backends
+    -   4.2 File-Based Synchronization
+        -   4.2.1 Caching Restrictions
+        -   4.2.2 Detecting File Changes
+        -   Synchronization Protocol
 
 Introduction
 
@@ -1378,6 +1382,75 @@ to map a remote S3 object into memory:
     b, uffd, start, err := mapper.Register(int(s.Size()))
 
     mapper.Handle(uffd, start, f)
+
+File-Based Synchronization
+
+Caching Restrictions
+
+As mentioned earlier, this approach uses mmap to map a memory region to
+a file. By default however, mmap doesn’t write back changes to memory;
+instead, it simply makes the backing file available as a memory region,
+keeping changes to the region in memory, no matter whether the file was
+opened as read-only or read-writable. To work around this, Linux
+provides the MAP_SHARED flag; this tells the kernel to eventually write
+back changes to the memory region to the corresponding regions of the
+backing file.
+
+Linux caches reads to the backing file similarly to how it does if read
+etc. are being used, meaning that only the first page fault would be
+responded to by reading from disk; this means that any future changes to
+the backing file would not be represented in the mmaped region,
+similarly to how userfaultfd handles it. The same applies to writes,
+meaning that in the same way that files need to be synced in order for
+them to be flushed to disk, mmaped regions need to be msynced in order
+to flush changes to the backing file. This is particularly important for
+a memory usecase, since reading from the backing file without flushing
+first would result in the synchronization of potentially stale data, and
+is different to how traditional file synchronization can handle this
+usecase, where the Linux file cache would respond with the changes if
+the file is read from disk even if sync was not called beforehand. For
+file I/O, it is possible to skip the kernel cache and read/write
+directly from/to the disk by passing the O_DIRECT flag to open, but this
+flag is ignored by mmap.
+
+Detecting File Changes
+
+In order to actually watch for changes, at first glance, the obvious
+choice would be to use inotify, which would allow the registration of
+write or sync even handlers to catch writes to the memory region by
+registering them on the backing file. As mentioned earlier however,
+Linux doesn’t emit these events on mmaped files, so an alternative must
+be used; the best option here is to instead poll for either attribute
+changes (i.e. the “Last Modified” attribute of the backing file), or by
+continously hashing the file to check if it has changed. Hashing
+continously with this pollig method can have significant downsides,
+especially in a migration scenario, where it raises the guaranteed
+minimum latency by having to wait for at least the next polling cycle.
+Hashing the entire file is also a an I/O- and CPU-intensive process,
+because in order to compute the hash, the entire file needs to be read
+at some point. Within the context of the file-based synchronization
+approach however, it is the only option available.
+
+To speed up the process of hashing, instead of hashing the entire file,
+we can instead hash individual chunks of the file, in effect
+implementing a delta synchronization algorithm. This can be implemented
+by opening the file multiple times, hashing individual offsets using
+each of the opened files, and aggregating the chunks that have been
+changed. When picking algorithms for this chunk-based hashing algorithm,
+two metrics are of relevance: the algorithm’s throughput with which it
+can calculate hashes, and the prevalence of hash collisions, where two
+different inputs produce the same hashes, leading to a chunk change not
+being detected. Furthermore, if the underlying algorithm is CPU- and not
+I/O-bound, using multiple open files can increase throughput
+substantially by allowing for better concurrent processing. Not only
+does this decrease the time spent on each individual hashing iteration
+of the polling process, but dividing the file into smaller chunks that
+all have their own hashes to compare with the remote’s hashes can also
+decrease the amount of network traffic that is required to sync the
+changes, since a small change in the backing file leads to the transfer
+of a smaller chunk.
+
+Synchronization Protocol
 
 [1] T. kernel development community, “Quick start.”
 https://www.kernel.org/doc/html/next/rust/quick-start.html, 2023.

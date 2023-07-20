@@ -1,3 +1,9 @@
+commit 9cdb0a92e87cfb1b423f75b4bd8bcecad580ae46
+Author: Felicitas Pojtinger <felicitas@pojtinger.com>
+Date:   Thu Jul 20 20:15:23 2023 +0200
+
+    docs: Add notes on the file synchronization solution
+
 commit acee4c721c8bc5bca0d4db0d04c9e219ab3a62ef
 Author: Felicitas Pojtinger <felicitas@pojtinger.com>
 Date:   Thu Jul 20 17:42:42 2023 +0200

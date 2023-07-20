@@ -323,6 +323,8 @@ Migrations</a></li>
 <ul>
 <li><a href="#userfaults-in-go-with-userfaultfd"><span class="toc-section-number">1.4.1</span> Userfaults in Go with
 <code>userfaultfd</code></a></li>
+<li><a href="#file-based-synchronization"><span class="toc-section-number">1.4.2</span> File-Based
+Synchronization</a></li>
 </ul></li>
 </ul>
 </nav>
@@ -1589,6 +1591,79 @@ making it possible to map a remote S3 object into memory:</p>
 <span id="cb12-6"><a href="#cb12-6" aria-hidden="true" tabindex="-1"></a>b<span class="op">,</span> uffd<span class="op">,</span> start<span class="op">,</span> err <span class="op">:=</span> mapper<span class="op">.</span>Register<span class="op">(</span><span class="dt">int</span><span class="op">(</span>s<span class="op">.</span>Size<span class="op">()))</span></span>
 <span id="cb12-7"><a href="#cb12-7" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb12-8"><a href="#cb12-8" aria-hidden="true" tabindex="-1"></a>mapper<span class="op">.</span>Handle<span class="op">(</span>uffd<span class="op">,</span> start<span class="op">,</span> f<span class="op">)</span></span></code></pre></div>
+</section>
+</section>
+<section id="file-based-synchronization" data-number="0.4.2">
+<h3 data-number="1.4.2"><span class="header-section-number">1.4.2</span>
+File-Based Synchronization</h3>
+<section id="caching-restrictions" data-number="0.4.2.1">
+<h4 data-number="1.4.2.1"><span class="header-section-number">1.4.2.1</span> Caching Restrictions</h4>
+<p>As mentioned earlier, this approach uses <code>mmap</code> to map a
+memory region to a file. By default however, <code>mmap</code> doesn’t
+write back changes to memory; instead, it simply makes the backing file
+available as a memory region, keeping changes to the region in memory,
+no matter whether the file was opened as read-only or read-writable. To
+work around this, Linux provides the <code>MAP_SHARED</code> flag; this
+tells the kernel to eventually write back changes to the memory region
+to the corresponding regions of the backing file.</p>
+<p>Linux caches reads to the backing file similarly to how it does if
+<code>read</code> etc. are being used, meaning that only the first page
+fault would be responded to by reading from disk; this means that any
+future changes to the backing file would not be represented in the
+<code>mmap</code>ed region, similarly to how <code>userfaultfd</code>
+handles it. The same applies to writes, meaning that in the same way
+that files need to be <code>sync</code>ed in order for them to be
+flushed to disk, <code>mmap</code>ed regions need to be
+<code>msync</code>ed in order to flush changes to the backing file. This
+is particularly important for a memory usecase, since reading from the
+backing file without flushing first would result in the synchronization
+of potentially stale data, and is different to how traditional file
+synchronization can handle this usecase, where the Linux file cache
+would respond with the changes if the file is read from disk even if
+<code>sync</code> was not called beforehand. For file I/O, it is
+possible to skip the kernel cache and read/write directly from/to the
+disk by passing the <code>O_DIRECT</code> flag to <code>open</code>, but
+this flag is ignored by <code>mmap</code>.</p>
+</section>
+<section id="detecting-file-changes" data-number="0.4.2.2">
+<h4 data-number="1.4.2.2"><span class="header-section-number">1.4.2.2</span> Detecting File Changes</h4>
+<p>In order to actually watch for changes, at first glance, the obvious
+choice would be to use <code>inotify</code>, which would allow the
+registration of <code>write</code> or <code>sync</code> even handlers to
+catch writes to the memory region by registering them on the backing
+file. As mentioned earlier however, Linux doesn’t emit these events on
+<code>mmap</code>ed files, so an alternative must be used; the best
+option here is to instead poll for either attribute changes (i.e. the
+“Last Modified” attribute of the backing file), or by continously
+hashing the file to check if it has changed. Hashing continously with
+this pollig method can have significant downsides, especially in a
+migration scenario, where it raises the guaranteed minimum latency by
+having to wait for at least the next polling cycle. Hashing the entire
+file is also a an I/O- and CPU-intensive process, because in order to
+compute the hash, the entire file needs to be read at some point. Within
+the context of the file-based synchronization approach however, it is
+the only option available.</p>
+<p>To speed up the process of hashing, instead of hashing the entire
+file, we can instead hash individual chunks of the file, in effect
+implementing a delta synchronization algorithm. This can be implemented
+by opening the file multiple times, hashing individual offsets using
+each of the opened files, and aggregating the chunks that have been
+changed. When picking algorithms for this chunk-based hashing algorithm,
+two metrics are of relevance: the algorithm’s throughput with which it
+can calculate hashes, and the prevalence of hash collisions, where two
+different inputs produce the same hashes, leading to a chunk change not
+being detected. Furthermore, if the underlying algorithm is CPU- and not
+I/O-bound, using multiple open files can increase throughput
+substantially by allowing for better concurrent processing. Not only
+does this decrease the time spent on each individual hashing iteration
+of the polling process, but dividing the file into smaller chunks that
+all have their own hashes to compare with the remote’s hashes can also
+decrease the amount of network traffic that is required to sync the
+changes, since a small change in the backing file leads to the transfer
+of a smaller chunk.</p>
+</section>
+<h4 class="unnumbered" id="synchronization-protocol">Synchronization
+Protocol</h4>
 <div id="refs" class="references csl-bib-body" role="doc-bibliography">
 <div id="ref-linux2023docs" class="csl-entry" role="doc-biblioentry">
 <div class="csl-left-margin">[1] </div><div class="csl-right-inline">T.
@@ -1801,7 +1876,6 @@ scylla open source 4.4,”</span> ScyllaDB Inc, 2021.Available: <a href="https:/
 Corbet, <span>“4.3 merge window, part 2.”</span> <a href="https://lwn.net/Articles/656731/" class="uri">https://lwn.net/Articles/656731/</a>, 2015.Available: <a href="https://lwn.net/Articles/656731/">https://lwn.net/Articles/656731/</a></div>
 </div>
 </div>
-</section>
 </section>
 </section>
 </body>

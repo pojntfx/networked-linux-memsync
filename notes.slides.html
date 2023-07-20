@@ -1188,11 +1188,11 @@ critical</li>
 <li>For files, you can use <code>O_DIRECT</code> to skip this kernel
 caching if your process already does caching on its own, but this flag
 is ignored by the <code>mmap</code></li>
-<li>Usually, one would use <code>inotify</code> to watch changes to a
-file</li>
 </ul></li>
 <li><code>inotify</code> vs. polling
 <ul>
+<li>Usually, one would use <code>inotify</code> to watch changes to a
+file</li>
 <li><code>inotify</code> allows applications to register handlers on a
 file’s events, e.g. <code>WRITE</code> or <code>SYNC</code>. This allows
 for efficient file synchronization, and is used by many file
@@ -1220,11 +1220,11 @@ between two polling iterations</li>
 </ul></li>
 <li>Detecting file changes
 <ul>
+<li>We can do this by opening up the file multiple times, then hashing
+individual offsets, and aggregating the chunks that have changed</li>
 <li>When picking algorithms for this hashing process, the most important
 metric to consider is the throughput with which it can compute hashes,
 as well as the change of collisions</li>
-<li>We can do this by opening up the file multiple times, then hashing
-individual offsets, and aggregating the chunks that have changed</li>
 <li>If the underlying hashing algorithm is CPU-bound, this also allows
 for better concurrent processing</li>
 <li>Increases the initial latency/overhead by having to open up multiple
@@ -1237,7 +1237,7 @@ common practice</li>
 </ul></li>
 <li>Delta synchronization protocol
 <ul>
-<li>We have implemented a simple TCP-based protocol for this delta
+<li>We have implemented a simple protocol for this delta
 synchronization, just like rsync’s delta synchronization algorithm (code
 snippet from
 https://github.com/loopholelabs/darkmagyk/blob/master/cmd/darkmagyk-orchestrator/main.go#L1337-L1411
@@ -1246,6 +1246,133 @@ etc.)</li>
 the first message when starting the synchronization, but a simple
 multiplexing system could easily be implemented by sending a file ID
 with each message</li>
+<li>Its intended to be simpler than <code>rsync</code>, and to support a
+central forwarding up instead of requiring P2P connectivity between each
+host</li>
+<li>Defines three actors: Multiplexer, file advertiser, and file
+receiver</li>
+<li>TODO: Add sequence diagram for the protocol</li>
+</ul></li>
+<li>Multiplexer hub
+<ul>
+<li>Accepts TLS connections</li>
+<li>Reads client certificate</li>
+<li>Reads the common name from the certificate, contains the
+<code>syncerID</code></li>
+<li>Spawns a new goroutine for the syncerID to handle the communication
+with the specific syncer</li>
+<li>In goroutine it reads the type of the peer</li>
+<li>For the <code>src-control</code> peer type
+<ul>
+<li>Reads a file name from the syncer</li>
+<li>Registers the connection as the one providing the file with this
+name</li>
+<li>Broadcasts the file as one now being available</li>
+</ul></li>
+<li>For the <code>dst-control</code> peer type
+<ul>
+<li>It listens to the broadcasted files from <code>src-control</code>
+peers</li>
+<li>Relays any received file names to the <code>dst-control</code> peers
+so that it can subscribe</li>
+<li>Also sends all currently known file names to the peer</li>
+</ul></li>
+<li>For the <code>dst</code> peer type
+<ul>
+<li>Decodes a file name from the connection</li>
+<li>Looks for a corresponding <code>src-control</code> peer</li>
+<li>If it has found a peer, it creates and sends a new ID for this
+connection to the <code>src-control</code> peer</li>
+<li>Waits until the <code>src-control</code> peer has connected to the
+hub with this ID with a new <code>src-data</code> peer by listening for
+<code>src-data</code> peer ID broadcasts</li>
+<li>Spawns two new goroutines that copy to/from this newly created
+synchronization connection and the connection of the <code>dst</code>
+peer, relaying any information between the two</li>
+</ul></li>
+<li>For the <code>src-data</code> peer type
+<ul>
+<li>Decodes the ID for the peer</li>
+<li>Broadcasts the ID, which allows the <code>dst</code> peer to
+continue</li>
+</ul></li>
+</ul></li>
+<li>File advertisement
+<ul>
+<li>Connects to the multiplexer hub</li>
+<li>Registers itself as a <code>src-control</code> type of peer</li>
+<li>Sends the file name to the multipler hub</li>
+<li>Starts a loop to handle <code>dst</code> peer types</li>
+<li>As mentioned earlier, <code>dst</code> peer types send a ID</li>
+<li>Waits until ID is received, then spawns new goroutine</li>
+<li>Connects to the multiplexer hub again, this time registering itself
+as a <code>src-data</code> peer</li>
+<li>Opens the file that it advertises</li>
+<li>Sends the ID that it has received back to the multiplexer hub, which
+connects it to the matching <code>dst</code> peer</li>
+<li>Starts a new loop that starts the file transmission to the
+<code>dst</code> peer through the multiplexer</li>
+<li>Checks if context is cancelled to stop the transmission by breaking
+the loop if requested</li>
+<li>After a file transmission is done, waits for the specified polling
+interval, then starts a file transmission cycle again</li>
+</ul></li>
+<li>File receiver loop
+<ul>
+<li>Connects to the multiplexer hub</li>
+<li>Registers itself as the <code>dst-control</code> type of peer</li>
+<li>Spawns a new goroutine after a file name has been received from the
+multiplexer hub</li>
+<li>Connects to the multiplexer hub again, this time registering itself
+as a <code>dst</code> peer</li>
+<li>Opens up the destination file</li>
+<li>Registers itself as the <code>dst</code> peer</li>
+<li>Sends the file name to the multiplexer, causing the multiplexer to
+look for a peer that advertises the requested file</li>
+<li>Starts the file receiption process in a loop, and exits if a
+callback determines that the file has been synced completely</li>
+</ul></li>
+<li>File transmission
+<ul>
+<li>Does the actual file transmission part of delta synchronization</li>
+<li>Receives the remote hashes from the mulitplexer hub</li>
+<li>Calculates the local hashes</li>
+<li>Compares local and remote hashes</li>
+<li>Sends hashes that don’t match to the remote via the multiplexer
+hub</li>
+<li>If the remote sent less hashes than there were locally, asks the
+remote to truncate it’s file to the size of the local file that is being
+synchronized</li>
+<li>Loops over each of the chunks that need to be sent, and sends the
+updated data for the file in order</li>
+</ul></li>
+<li>Hash calculation
+<ul>
+<li><code>GetHashesForBlocks</code> handles the concurrent calculation
+of the hashes for a file on both the file transmitter and receiver</li>
+<li>It uses a semaphore to limit the amount of concurrent access to the
+file that is being hashed</li>
+<li>Acquires a lock on the semaphore for each hash calculation
+worker</li>
+<li>Each worker goroutine then opens up the file and calculates a CRC32
+hash</li>
+<li>To allow for easy transmission of the hashes over the network, it
+encodes them as hash values</li>
+<li>After all hashes have been calculated, it adds them to the array and
+returns them</li>
+</ul></li>
+<li>File receiption
+<ul>
+<li>Is the receiving part of the delta synchronization algorithm</li>
+<li>Starts by calculating hashes for the local copy of the file</li>
+<li>Sends the local hashes to the emote, then waits until it has
+received the remote’s hashes</li>
+<li>If the remote detected that the file needs to be truncated (by
+sending a negative cutoff value), it truncates the file</li>
+<li>If the remote’s file has grown beyond what the local file is since
+the last synchronization cycle, it extends the file</li>
+<li>It then reads from the remote in order, and copies each chunk to the
+matching offset in the local file</li>
 </ul></li>
 </ul>
 <h2 id="fuse-implementation-in-go"><span class="header-section-number">4.3</span> FUSE Implementation in Go</h2>
