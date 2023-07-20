@@ -420,4 +420,140 @@ TODO: Add state machine diagram
 
 By splitting the migration into these two distinct phases, the overhead of having to start the deivce can be skipped and additional app initialization that doesn't depend on the app's state (i.e. memory allocation, connecting to databases, loading models etc.) can be performed before the application needs to be suspended. This combines both the pre-copy algorithm (by pulling the chunks from the seeder ahead of time) and the post-copy algorithm (by resolving dirtyc chunsk from the seeder after the VM has been migrated) into one coherent protocol. As will be discussed further in the results section, the maximum tolerable downtime can be drastically reduced, and dirty chunks don't need to be re-transmitted multiple times. Effectively, it allows dropping this downtime to the time it takes to `msync` the seeder's app state, the RTT and, if they are being accessed immediately, how long it takes to fetch the chunks that were written in between the start of it tracking and finalizing. The migration API can use the same preemptive pull system as the managed mount API and benefit from it's optimizations, but does not use the background push system.
 
-An interesting question to ask with this two-step migration API is when to start the finalization step. The finalization phase in the protocol is critical, and it is hard or impossible to recover from depending on the specific implementation. While the synchronization itself could be safely recovered from by simply calling `Finalize` multiple times to restart it. But since `Finalize` needs to return a list of dirty chunks, it requires the app on the seeder to be suspended before `FInalize` can return, an operation that might not be idempotent.
+An interesting question to ask with this two-step migration API is when to start the finalization step. The finalization phase in the protocol is critical, and it is hard or impossible to recover from depending on the specific implementation. While the synchronization itself could be safely recovered from by simply calling `Finalize` multiple times to restart it. But since `Finalize` needs to return a list of dirty chunks, it requires the app on the seeder to be suspended before `Finalize` can return, an operation that might not be idempotent.
+
+## Implementation
+
+### Userfaults in Go with `userfaultfd`
+
+#### Registration and Handlers
+
+By listening to page faults, we can know when a process wants to access a specific offset of memory that is not yet available. As mentioned before, we can use this event to then fetch this chunk of memory from the remote, mapping it to the offset on which the page fault occured, thus effectively only fetching data when it is required. Instead of registering signal handlers, we can use the `userfaultfd` system introduced with Linux 4.3[@corbet2015linux43] to handle these faults in userspace in a more idiomatic way.
+
+In the Go implementation created for this thesis, `userfaultfd-go`, `userfaultfd` works by first creating a region of memory, e.g. by using `mmap`, which is then registered with the `userfaultfd` API:
+
+```go
+// Creating the `userfaultfd` API
+uffd, _, errno := syscall.Syscall(constants.NR_userfaultfd, 0, 0, 0)
+
+uffdioAPI := constants.NewUffdioAPI(
+	constants.UFFD_API,
+	0,
+)
+// ...
+
+// Allocating the region
+l := int(math.Ceil(float64(length)/float64(pagesize)) * float64(pagesize))
+b, err := syscall.Mmap(
+	-1,
+	0,
+	l,
+	syscall.PROT_READ|syscall.PROT_WRITE,
+	syscall.MAP_PRIVATE|syscall.MAP_ANONYMOUS,
+)
+// ...
+
+// Registering the region
+uffdioRegister := constants.NewUffdioRegister(
+	constants.CULong(start),
+	constants.CULong(l),
+	constants.UFFDIO_REGISTER_MODE_MISSING,
+)
+// ...
+
+syscall.Syscall(
+  syscall.SYS_IOCTL,
+  uffd,
+  constants.UFFDIO_REGISTER,
+  uintptr(unsafe.Pointer(&uffdioRegister))
+)
+```
+
+This is abstracted into a single `Register(length int) ([]byte, UFFD, uintptr, error)` function. Once this region has been registered, the `userfaultfd` API's file descriptor and the offset is passed over a UNIX socket:
+
+```go
+syscall.Sendmsg(int(f.Fd()), nil, syscall.UnixRights(b...), nil, 0)
+```
+
+Where it can then be received by the handler:
+
+```go
+buf := make([]byte, syscall.CmsgSpace(num*4)) // See https://github.com/ftrvxmtrx/fd/blob/master/fd.go#L51
+syscall.Recvmsg(int(f.Fd()), nil, buf, 0)
+// ..
+msgs, err := syscall.ParseSocketControlMessage(buf)
+```
+
+The handler itself receives the address that has triggered the page fault by polling the transferred file descriptor, which is then responded to by fetching the relevant chunk from a provided reader and sending it to the faulting memory region over the same socket:
+
+```go
+// Receiving the fage fault address
+unix.Poll(
+	[]unix.PollFd{{
+		Fd:     int32(uffd),
+		Events: unix.POLLIN,
+	}},
+	-1,
+)
+// ...
+pagefault := (*(*constants.UffdPagefault)(unsafe.Pointer(&arg[0])))
+addr := constants.GetPagefaultAddress(&pagefault)
+
+// Fetching the missing chunk from the provided backend
+p := make([]byte, pagesize)
+n, err := src.ReadAt(p, int64(uintptr(addr)-start))
+
+// Sending the missing chunk to the faulting memory region's `userfaultfd` API:
+cpy := constants.NewUffdioCopy(
+	p,
+	addr&^constants.CULong(pagesize-1),
+	constants.CULong(pagesize),
+	0,
+	0,
+)
+
+syscall.Syscall(
+	syscall.SYS_IOCTL,
+	uintptr(uffd),
+	constants.UFFDIO_COPY,
+	uintptr(unsafe.Pointer(&cpy)),
+)
+```
+
+Similarly to the registration API, this is also wrapped into a reusable `func Handle(uffd UFFD, start uintptr, src io.ReaderAt) error` function.
+
+#### `userfaultfd` Backends
+
+Thanks to `userfaultfd` being mostly useful for post-copy migration, the backend can be simplifed to a simple pull-only reader interface (`ReadAt(p []byte, off int64) (n int, err error)`). This means that almost any `io.ReaderAt` can be used to provide chunks to a `userfaultfd`-registered memory region, and access to this reader is guaranteed to be aligned to system's page size, which is typically 4KB. By having this simple backend interface, and thus only requiring read-only access, it is possible to implement the migration backend in many different ways. A simple backend can for example return a pattern to the memory region:
+
+```go
+func (a abcReader) ReadAt(p []byte, off int64) (n int, err error) {
+	n = copy(p, bytes.Repeat([]byte{'A' + byte(off%20)}, len(p)))
+
+	return n, nil
+}
+```
+
+In Go specifically, many objects can be exposed as an `io.ReaderAt`, including a file. This makes it possible to simply pass in any file as a backend, essentially mimicking a call to `mmap` with `MAP_SHARED`:
+
+```go
+f, err := os.OpenFile(*file, os.O_RDONLY, os.ModePerm)
+// ...
+
+b, uffd, start, err := mapper.Register(int(s.Size()))
+
+mapper.Handle(uffd, start, f)
+```
+
+Similarly so, a remote file, i.e. one that is being stored in S3, can be used as a `userfaultfd` backend as well; here, HTTP range requests allow for fetching only the chunks that are being required by the application accessing the registered memory region, effectively making it possible to map a remote S3 object into memory:
+
+```go
+mc, err := minio.New(*s3Endpoint, /* ... */)
+
+f, err := mc.GetObject(ctx, *s3BucketName, *s3ObjectName, minio.GetObjectOptions{})
+// ...
+
+b, uffd, start, err := mapper.Register(int(s.Size()))
+
+mapper.Handle(uffd, start, f)
+```
