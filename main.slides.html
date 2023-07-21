@@ -213,6 +213,13 @@ Protocol</a></li>
 <li><a href="#file-reception"><span class="toc-section-number">4.2.9</span> File Reception</a></li>
 </ul></li>
 <li><a href="#fuse-implementation-in-go"><span class="toc-section-number">4.3</span> FUSE Implementation in Go</a></li>
+<li><a href="#nbd-with-go-nbd"><span class="toc-section-number">4.4</span> NBD with <code>go-nbd</code></a>
+<ul>
+<li><a href="#overview-2"><span class="toc-section-number">4.4.1</span>
+Overview</a></li>
+<li><a href="#server"><span class="toc-section-number">4.4.2</span>
+Server</a></li>
+</ul></li>
 </ul></li>
 </ul>
 </div>
@@ -1896,6 +1903,72 @@ require writing a custom adapter:</p>
 these available libraries the required overhead of implementing it (as
 shown by prior projects like STFS) as well as other factors that will be
 mentioned later led to this approach not being pursued further.</p>
+<h2 id="nbd-with-go-nbd"><span class="header-section-number">4.4</span>
+NBD with <code>go-nbd</code></h2>
+<h3 id="overview-2"><span class="header-section-number">4.4.1</span>
+Overview</h3>
+<p>In order to implement the NBD synchronization approach, we need to
+create a NBD server. Due to a lack of a lean and maintained NBD library
+for Go, a new pure NBD library, <code>go-nbd</code>, was implemented.
+This does not rely on CGo or a pre-existing NBD C library like
+<code>nbdkit</code>, which means that a lot of the issues around this
+ecosystem and complexities and performance issues around CGo call
+overhead<span class="citation">[44]</span> can be avoided. Unlike many
+existing libraries, <code>go-nbd</code> also provides both a NBD server
+and client implementation, making it possible to switch out i.e. the
+system-provided <code>nbd-client</code> command with pure Go too.</p>
+<h3 id="server"><span class="header-section-number">4.4.2</span>
+Server</h3>
+<p><code>go-nbd</code> exposes a simple backend interface for the NBD
+server. The key difference between this interface compared to
+<code>userfaultfd-go</code> is that it can also handle writes, thus
+making it possible to implement the pre-copy migration flow with it:</p>
+<div class="sourceCode" id="cb28"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb28-1"><a href="#cb28-1" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> Backend <span class="kw">interface</span> <span class="op">{</span></span>
+<span id="cb28-2"><a href="#cb28-2" aria-hidden="true" tabindex="-1"></a>    io<span class="op">.</span>ReaderAt</span>
+<span id="cb28-3"><a href="#cb28-3" aria-hidden="true" tabindex="-1"></a>    io<span class="op">.</span>WriterAt</span>
+<span id="cb28-4"><a href="#cb28-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb28-5"><a href="#cb28-5" aria-hidden="true" tabindex="-1"></a>    Size<span class="op">()</span> <span class="op">(</span><span class="dt">int64</span><span class="op">,</span> <span class="dt">error</span><span class="op">)</span></span>
+<span id="cb28-6"><a href="#cb28-6" aria-hidden="true" tabindex="-1"></a>    Sync<span class="op">()</span> <span class="dt">error</span></span>
+<span id="cb28-7"><a href="#cb28-7" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<p>A good example backend that implements this interface is a file
+backend; here, a simple implementation essentially just serves as a
+proxy to the file itself, keeping a key benefit of
+<code>userfaultfd-go</code>’s backend API design:</p>
+<div class="sourceCode" id="cb29"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb29-1"><a href="#cb29-1" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> <span class="op">(</span>b <span class="op">*</span>FileBackend<span class="op">)</span> ReadAt<span class="op">(</span>p <span class="op">[]</span><span class="dt">byte</span><span class="op">,</span> off <span class="dt">int64</span><span class="op">)</span> <span class="op">(</span>n <span class="dt">int</span><span class="op">,</span> err <span class="dt">error</span><span class="op">)</span> <span class="op">{</span></span>
+<span id="cb29-2"><a href="#cb29-2" aria-hidden="true" tabindex="-1"></a>    n<span class="op">,</span> err <span class="op">=</span> b<span class="op">.</span>file<span class="op">.</span>ReadAt<span class="op">(</span>p<span class="op">,</span> off<span class="op">)</span></span>
+<span id="cb29-3"><a href="#cb29-3" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb29-4"><a href="#cb29-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb29-5"><a href="#cb29-5" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> <span class="op">(</span>b <span class="op">*</span>FileBackend<span class="op">)</span> WriteAt<span class="op">(</span>p <span class="op">[]</span><span class="dt">byte</span><span class="op">,</span> off <span class="dt">int64</span><span class="op">)</span> <span class="op">(</span>n <span class="dt">int</span><span class="op">,</span> err <span class="dt">error</span><span class="op">)</span> <span class="op">{</span></span>
+<span id="cb29-6"><a href="#cb29-6" aria-hidden="true" tabindex="-1"></a>    n<span class="op">,</span> err <span class="op">=</span> b<span class="op">.</span>file<span class="op">.</span>WriteAt<span class="op">(</span>p<span class="op">,</span> off<span class="op">)</span></span>
+<span id="cb29-7"><a href="#cb29-7" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb29-8"><a href="#cb29-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb29-9"><a href="#cb29-9" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> <span class="op">(</span>b <span class="op">*</span>FileBackend<span class="op">)</span> Size<span class="op">()</span> <span class="op">(</span><span class="dt">int64</span><span class="op">,</span> <span class="dt">error</span><span class="op">)</span> <span class="op">{</span></span>
+<span id="cb29-10"><a href="#cb29-10" aria-hidden="true" tabindex="-1"></a>    stat<span class="op">,</span> err <span class="op">:=</span> b<span class="op">.</span>file<span class="op">.</span>Stat<span class="op">()</span></span>
+<span id="cb29-11"><a href="#cb29-11" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> err <span class="op">!=</span> <span class="ot">nil</span> <span class="op">{</span></span>
+<span id="cb29-12"><a href="#cb29-12" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> <span class="op">-</span><span class="dv">1</span><span class="op">,</span> err</span>
+<span id="cb29-13"><a href="#cb29-13" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb29-14"><a href="#cb29-14" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb29-15"><a href="#cb29-15" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> stat<span class="op">.</span>Size<span class="op">(),</span> <span class="ot">nil</span></span>
+<span id="cb29-16"><a href="#cb29-16" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb29-17"><a href="#cb29-17" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb29-18"><a href="#cb29-18" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> <span class="op">(</span>b <span class="op">*</span>FileBackend<span class="op">)</span> Sync<span class="op">()</span> <span class="dt">error</span> <span class="op">{</span></span>
+<span id="cb29-19"><a href="#cb29-19" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> b<span class="op">.</span>file<span class="op">.</span>Sync<span class="op">()</span></span>
+<span id="cb29-20"><a href="#cb29-20" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<p>Starting the actual NBD server is possible by calling
+<code>Handle</code>, which takes any <code>net.Conn</code> as it’s
+argument. This is another strength of <code>go-nbd</code>, as it makes
+it possible to use any transport layer that has compatible guarantees to
+TCP, such as WebRTC, too instead of relying on TCP only. It also doesn’t
+require a <code>accept</code>/<code>dial</code>-style client/server
+model making it possible to use a P2P transport layer, and also makes
+switching to TLS as simple as passing in a TLS connection. If NBD
+service is to be provided over an already existing socket with different
+services, this also makes it possible to inspect e.g. the TLS SNI before
+connecting to NBD instead of an alternative service:</p>
+<div class="sourceCode" id="cb30"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb30-1"><a href="#cb30-1" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> Handle<span class="op">(</span>conn net<span class="op">.</span>Conn<span class="op">,</span> exports <span class="op">[]</span>Export<span class="op">,</span> options <span class="op">*</span>Options<span class="op">)</span> <span class="dt">error</span></span></code></pre></div>
+<p>In addition to passing a connection to the NBD server, any array of
+exports is passed to backend as well. An export (TODO: finish section on
+exports)</p>
 <div id="refs" class="references csl-bib-body">
 <div id="ref-linux2023docs" class="csl-entry">
 <div class="csl-left-margin">[1] </div><div class="csl-right-inline">T.
@@ -2127,6 +2200,11 @@ file system for tapes and tar files</span>.”</span> <a href="https://github.co
 <div class="csl-left-margin">[43] </div><div class="csl-right-inline">J.
 Waibel and F. Pojtinger, <span>“<span class="nocase">sile-fystem: A
 generic FUSE implementation</span>.”</span> <a href="https://github.com/jakWai01/sile-fystem" class="uri">https://github.com/jakWai01/sile-fystem</a>, 2022.</div>
+</div>
+<div id="ref-grieger2015cgo" class="csl-entry">
+<div class="csl-left-margin">[44] </div><div class="csl-right-inline">T.
+Grieger, <span>“The cost and complexity of cgo.”</span> Dec.
+2015.Available: <a href="https://www.cockroachlabs.com/blog/the-cost-and-complexity-of-cgo/">https://www.cockroachlabs.com/blog/the-cost-and-complexity-of-cgo/</a></div>
 </div>
 </div>
 </div>

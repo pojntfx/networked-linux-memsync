@@ -1145,44 +1145,21 @@ FUSE Implementation in Go
 
 NBD with go-nbd
 
--   Block Device-based synchronization
-    -   As hinted at before, a better API would be able to catch
-        reads/writes to a single mmaped file instead of having to
-        implement a complete file system
-    -   It does however not have to be an actual file, a block device
-        also works
-    -   In Linux, block devices are (typically storage) devices that
-        support reading/writing fixed chunks (blocks) of data
-    -   We can mmap a block device in the same way that we can mmap a
-        file
-    -   Similarly to how a file system can be implemented in a kernel
-        module, a block device is typically implemented as a kernel
-        module/in kernel space
-    -   However, the same security, portability and developer experience
-        issues as with the former also apply here
-    -   Instead of implementing a FUSE to solve this, we can create a
-        NBD (network block device) server that can be used by the kernel
-        NBD module similarly to how the process that connected to the
-        FUSE kernel module functioned
-    -   The difference between a FUSE and NBD is that a NBD server
-        doesn’t provide a file system
-    -   A NBD server provides the storage device that (typically) hosts
-        a file system, which means that the interface for it is much,
-        much simpler
-    -   The implementation overhead of a NBD server’s backend is much
-        more similar to how userfaultfd-go works, rather than a FUSE
--   Implementing go-nbd
+-   Overview
     -   Due to the lack of pre-existing libraries, a new pure Go NBD
         library was implemented
     -   This library does not rely on CGo/a pre-existing C library,
         meaning that a lot of context switching can be skipped
+-   Server
+    -   The server is completely in user space, there are no kernel
+        components involved here
     -   The backend interface for go-nbd is very simple and only
         requires four methods: ReadAt, WriteAt, Size and Sync
+    -   The key difference here to the way backends were designed in
+        userfaultfd-go is that they can also handle writes
     -   A good example backend that maps well to a block device is the
         file backend (code snippet from
         https://github.com/pojntfx/go-nbd/blob/main/pkg/backend/file.go)
-    -   The key difference here to the way backends were designed in
-        userfaultfd-go is that they can also handle writes
     -   go-nbd exposes a Handle function to support multiple users
         without depending on a specific transport layer (code snippet
         from
@@ -1192,43 +1169,95 @@ NBD with go-nbd
         easily
     -   It also allows for easily hosting NBD and other services on the
         same TCP socket
+    -   Role of exports
+        (https://github.com/pojntfx/go-nbd/blob/main/pkg/server/nbd.go#L23-L28)
+    -   Role of options
+        (https://github.com/pojntfx/go-nbd/blob/main/pkg/server/nbd.go#L30-L35)
+    -   To make it easier to parse, the headers and other structured
+        messages are modeled as Go structs where possible (code snippet
+        from
+        https://github.com/pojntfx/go-nbd/blob/main/pkg/protocol/negotiation.go)
+    -   Only the “fixed newstyle” handshake is implemented to keep it
+        simple[18]
+    -   Server initiates the handshake by sending the handshake header
+        and ignoring client flags
+        (https://github.com/pojntfx/go-nbd/blob/main/pkg/server/nbd.go#L56-L68)
+    -   The handshake is implemented using a simple for loop, which
+        either returns on error or breaks
     -   The server encodes/decodes messages with the binary package
         (code snippet from
         https://github.com/pojntfx/go-nbd/blob/main/pkg/server/nbd.go#L73-L76)
-    -   To make it easier to parse, the headers and other structured
-        messages are modeled as Go structs (code snippet from
-        https://github.com/pojntfx/go-nbd/blob/main/pkg/protocol/negotiation.go)
-    -   The handshake is implemented using a simple for loop, which
-        either returns on error or breaks
-    -   The actual transmission phase is done similarly, by reading in a
-        header, switching on the message type and reading/sending the
-        relevant data/reply
-    -   The server is completely in user space, there are no kernel
-        components involved here
-    -   The NBD client however is implemented by using the kernel NBD
-        client
-    -   In order to use it, one needs to find a free NBD device first
+    -   Client sends options with ID
+    -   NEGOTIATION_ID_OPTION_INFO and NEGOTIATION_ID_OPTION_GO exchange
+        the information about the chosen export (i.e. block size, export
+        size, export name and description etc.), and if GO is specified
+        it continues directly to the transmission phase
+    -   If an export isn’t found, the server aborts the connection
+        (https://github.com/pojntfx/go-nbd/blob/main/pkg/server/nbd.go#L102-L120)
+    -   NEGOTIATION_ID_OPTION_LIST encodes and sends the list of exports
+        to the client
+    -   NEGOTIATION_ID_OPTION_ABORT aborts the handshake, causing the
+        server to close the connection
+    -   The actual transmission phase is done similarly, by reading
+        headers in a loop, switching on the message type and
+        reading/sending the relevant data/reply
+    -   TRANSMISSION_TYPE_REQUEST_READ executes a read request on the
+        backend and sends the relevant chunk to the client
+        (https://github.com/pojntfx/go-nbd/blob/main/pkg/server/nbd.go#L331-L351)
+    -   TRANSMISSION_TYPE_REQUEST_WRITE reads an offset and chunk from
+        the client, then writes it to the client; if the read-only
+        option is specified for the server, a permission error is
+        returned to the client instead
+        (https://github.com/pojntfx/go-nbd/blob/main/pkg/server/nbd.go#L353-L368)
+    -   TRANSMISSION_TYPE_REQUEST_DISC gracefully disconnects from the
+        server and causes the backend to sync, i.e. to flush it’s
+        changes to the disk
+-   Client
+    -   The NBD client is implemented by using the kernel NBD client and
+        a userspace component
+    -   In order to use it, one needs to find a free NBD device
+        allocated by the kernel NBD module first
     -   NBD devices are pre-created by the NBD kernel module and more
         can be specified with the nbds_max parameter
     -   In order to find a free one, we can either specify it directly,
         or check whether we can find a NBD device with zero size in
         sysfs (code snippet from
         https://github.com/pojntfx/r3map/blob/main/pkg/utils/unused.go)
+    -   Client is started by calling Connect and a connection and
+        options are provided
+    -   Role of options
+        (https://github.com/pojntfx/go-nbd/blob/main/pkg/client/nbd.go#L38-L45)
+    -   The connection is set on the kernel’s NBD device
+        (https://github.com/pojntfx/go-nbd/blob/main/pkg/client/nbd.go#L182-L189)
     -   Relevant ioctl numbers depend on the kernel and are extracted
         using CGo (code snippet from
         https://github.com/pojntfx/go-nbd/blob/main/pkg/ioctl/negotiation_cgo.go)
     -   The handshake for the NBD client is negotiated in user space by
         the Go program
-    -   Simple for loop, basically the same as for the server (code
-        snippet from
-        https://github.com/pojntfx/go-nbd/blob/main/pkg/client/nbd.go#L221-L288)
+    -   Client also only supports the newstyle negotiation and aborts
+        otherwise
+    -   Handshake is implented as a simple for loop, basically the same
+        as for the server but inverted, once again switches on the types
+    -   On a NEGOTIATION_TYPE_REPLY_INFO, the client handles the export
+        size with NEGOTIATION_TYPE_INFO_EXPORT, the name, description
+        and block size with NEGOTIATION_TYPE_INFO_BLOCKSIZE
+    -   Client validates that the blocksize is valid (within specified
+        bounds, and a power of two
+        https://github.com/pojntfx/go-nbd/blob/main/pkg/client/nbd.go#L261-L277)
     -   After the metadata for the export has been fetched in the
-        handshake, the kernel NBD client is configured using ioctls
-        (code snippet from
+        handshake, the kernel NBD client is configured with these values
+        using ioctls (code snippet from
         https://github.com/pojntfx/go-nbd/blob/main/pkg/client/nbd.go#L290-L328)
--   Optimizations for the NBD implementation
-    -   The DO_IT syscall never returns, meaning that an external system
-        must be used to detect whether the device is actually ready
+    -   go-nbd can also list exports with List
+    -   For this, the newstyle handshake is initiated, but this time
+        NEGOTIATION_ID_OPTION_LIST is provided
+    -   The client reads the export names from the server and
+        disconnects
+        (https://github.com/pojntfx/go-nbd/blob/main/pkg/client/nbd.go#L393-L410)
+-   Client Lifecycle
+    -   The DO_IT syscall never returns until it is disconnected,
+        meaning that an external system must be used to detect whether
+        the device is actually ready
     -   Two ways of detecting whether the device is ready: By polling
         sysfs for the size parameter, or by using udev
     -   udev manages devices in Linux
@@ -1240,12 +1269,19 @@ NBD with go-nbd
         subscribing to the udev event, so we give the user the option to
         switch between both options (code snippet from
         https://github.com/pojntfx/go-nbd/blob/main/pkg/client/nbd.go#L140-L178)
+    -   Disconnecting the NBD client is also an asynchronous operation
+    -   Works by calling three ioctls: TRANSMISSION_IOCTL_CLEAR_QUE,
+        TRANSMISSION_IOCTL_DISCONNECT and TRANSMISSION_IOCTL_CLEAR_SOCK
+        (https://github.com/pojntfx/go-nbd/blob/main/pkg/client/nbd.go#L334-L359)
+    -   Calling these ioctls causes DO_IT to exit, thus terminating the
+        call to Connect
+-   Optimizations for the NBD client implementation
     -   When opening the block device that the client has connected to,
         usually the kernel does provide a caching mechanism and thus
         requires sync to flush changes
-    -   By using O_DIRECT however, it is possible to skip the kernel
-        caching layer and write all changes directly to the NBD
-        client/server
+    -   As mentioned earlier, by using O_DIRECT however, it is possible
+        to skip the kernel caching layer and write all changes directly
+        to the NBD client/server
     -   This is particularly useful if both the client and server are on
         the local system, and if the amount of time spent on syncing
         should be as small as possible
@@ -1257,22 +1293,34 @@ NBD with go-nbd
     -   The server and client are connected by creating a connected UNIX
         socket pair (code snippet from
         https://github.com/pojntfx/r3map/blob/main/pkg/mount/path_direct.go#L59-L62)
+    -   This exposes a path mount, which essentially returns the path to
+        the NBD device for further abstraction layers
     -   By building on this basic direct mount, we can add a file (code
         snippet from
         https://github.com/pojntfx/r3map/blob/main/pkg/mount/file_direct.go)
-        and slice (code snippet from
+        mount API
+    -   The file mount API allows accessing the remote ressource with
+        the common read/write syscalls, like a local file would be
+        accessed
+    -   The lifecycle is integrated with Open and Close for the device
+        with both mounts, preventing potential synchronization pitfalls
+        over just manually implementing it in each application
+    -   The slice API is another mount API (code snippet from
         https://github.com/pojntfx/r3map/blob/main/pkg/mount/slice_direct.go)
-        mount API, which allows for easy usage and integration with
-        sync/msync respectively
+        that mmaps the NBD device directly
     -   Using the mmap/slice approach has a few benefits
     -   First, it makes it possible to use the byte slice directly as
         though it were a byte slice allocated by make, except its
         transparently mapped to the (remote) backend
     -   mmap/the byte slices also swaps out the syscall-based file
-        interface with a random access one, which allows for faster
-        concurrent reads from the underlying backend
+        interface with a truly random access one, which allows for
+        faster concurrent reads from the underlying backend
+    -   Also has the benefit of supporting applications that aren’t
+        build for streaming support/files, but depend on
+        storing/fetching data in a byte slice
     -   Alternatively, it would also be possible to format the server’s
-        backend or the block device using standard file system tools
+        backend with a file system or the block device using standard
+        file system tools
     -   When the device then becomes ready, it can be mounted to a
         directory on the system
     -   This way it is possible to mmap one or multiple files on the
