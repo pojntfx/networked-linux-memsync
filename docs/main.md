@@ -974,3 +974,56 @@ fuse.Mount(viper.GetString(mountpoint), serve, cfg)
 ```
 
 While the FUSE approach to synchronization is interesting, even with these available libraries the required overhead of implementing it (as shown by prior projects like STFS) as well as other factors that will be mentioned later led to this approach not being pursued further.
+
+### NBD with `go-nbd`
+
+#### Overview
+
+In order to implement the NBD synchronization approach, we need to create a NBD server. Due to a lack of a lean and maintained NBD library for Go, a new pure NBD library, `go-nbd`, was implemented. This does not rely on CGo or a pre-existing NBD C library like `nbdkit`, which means that a lot of the issues around this ecosystem and complexities and performance issues around CGo call overhead[@grieger2015cgo] can be avoided. Unlike many existing libraries, `go-nbd` also provides both a NBD server and client implementation, making it possible to switch out i.e. the system-provided `nbd-client` command with pure Go too.
+
+#### Server
+
+`go-nbd` exposes a simple backend interface for the NBD server. The key difference between this interface compared to `userfaultfd-go` is that it can also handle writes, thus making it possible to implement the pre-copy migration flow with it:
+
+```go
+type Backend interface {
+	io.ReaderAt
+	io.WriterAt
+
+	Size() (int64, error)
+	Sync() error
+}
+```
+
+A good example backend that implements this interface is a file backend; here, a simple implementation essentially just serves as a proxy to the file itself, keeping a key benefit of `userfaultfd-go`'s backend API design:
+
+```go
+func (b *FileBackend) ReadAt(p []byte, off int64) (n int, err error) {
+	n, err = b.file.ReadAt(p, off)
+}
+
+func (b *FileBackend) WriteAt(p []byte, off int64) (n int, err error) {
+	n, err = b.file.WriteAt(p, off)
+}
+
+func (b *FileBackend) Size() (int64, error) {
+	stat, err := b.file.Stat()
+	if err != nil {
+		return -1, err
+	}
+
+	return stat.Size(), nil
+}
+
+func (b *FileBackend) Sync() error {
+	return b.file.Sync()
+}
+```
+
+Starting the actual NBD server is possible by calling `Handle`, which takes any `net.Conn` as it's argument. This is another strength of `go-nbd`, as it makes it possible to use any transport layer that has compatible guarantees to TCP, such as WebRTC, too instead of relying on TCP only. It also doesn't require a `accept`/`dial`-style client/server model making it possible to use a P2P transport layer, and also makes switching to TLS as simple as passing in a TLS connection. If NBD service is to be provided over an already existing socket with different services, this also makes it possible to inspect e.g. the TLS SNI before connecting to NBD instead of an alternative service:
+
+```go
+func Handle(conn net.Conn, exports []Export, options *Options) error
+```
+
+In addition to passing a connection to the NBD server, any array of exports is passed to backend as well. An export (TODO: finish section on exports)
