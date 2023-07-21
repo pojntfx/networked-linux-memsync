@@ -1,3 +1,9 @@
+commit fdfa00770808c3fc7711c53512114f702bc8c8f2
+Author: Felicitas Pojtinger <felicitas@pojtinger.com>
+Date:   Fri Jul 21 16:51:41 2023 +0200
+
+    refactor: Rework rest of implementation section notes to make it possible to turn them into paragraphs
+
 commit 46008ee45b0e32ee36bf9befe5438147ab88e6cd
 Author: Felicitas Pojtinger <felicitas@pojtinger.com>
 Date:   Fri Jul 21 16:17:00 2023 +0200

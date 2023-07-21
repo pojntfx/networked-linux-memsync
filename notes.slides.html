@@ -132,14 +132,14 @@ Lifecycle for Mounts</a></li>
 Authentication</a></li>
 <li><a href="#optimizing-backends-for-high-rtt"><span class="toc-section-number">4.8</span> Optimizing Backends For High
 RTT</a></li>
-<li><a href="#optimizing-the-transport-protocol-for-throughput"><span class="toc-section-number">4.9</span> Optimizing The Transport Protocol
-For Throughput</a></li>
-<li><a href="#using-remote-stores-as-backends"><span class="toc-section-number">4.10</span> Using Remote Stores as
+<li><a href="#using-remote-stores-as-backends"><span class="toc-section-number">4.9</span> Using Remote Stores as
 Backends</a></li>
-<li><a href="#bi-directional-protocols-with-dudirekta"><span class="toc-section-number">4.11</span> Bi-Directional Protocols With
+<li><a href="#bi-directional-protocols-with-dudirekta"><span class="toc-section-number">4.10</span> Bi-Directional Protocols With
 Dudirekta</a></li>
-<li><a href="#connection-pooling-for-high-rtt-scenarios"><span class="toc-section-number">4.12</span> Connection Pooling For High RTT
+<li><a href="#connection-pooling-for-high-rtt-scenarios"><span class="toc-section-number">4.11</span> Connection Pooling For High RTT
 Scenarios</a></li>
+<li><a href="#optimizing-the-transport-protocol-for-throughput"><span class="toc-section-number">4.12</span> Optimizing The Transport Protocol
+For Throughput</a></li>
 </ul></li>
 <li><a href="#results"><span class="toc-section-number">5</span>
 Results</a>
@@ -1743,34 +1743,39 @@ work)</li>
 <li>For a read-only scenario, the <code>Pusher</code> step is simply
 skipped (code snippet from
 https://github.com/pojntfx/r3map/blob/main/pkg/mount/path_managed.go#L142-L169)</li>
+<li>Using this simple interface also makes the entire system very
+testable</li>
+<li>In the tests, a memory reader or file can be used as the local or
+remote <code>ReaderWriterAt</code>s and a simple table-driven test can
+be created (code snippet from
+https://github.com/pojntfx/r3map/blob/main/pkg/chunks/puller_test.go)</li>
+<li>Thanks to making these individual components (background pull, push,
+chunking, chunk validation) unit-testable on their own, edge cases (like
+different pull heuristics) can be tested easily, too</li>
+<li>With all of these components in place, the managed mounts API serves
+as a fast and efficient option to access almost any remote resource in
+memory</li>
 </ul></li>
 <li>Parallelizing NBD device initialization
 <ul>
-<li>If no background pulls are enabled, the creation of the
-<code>Puller</code> is simply skipped (code snippet from
-https://github.com/pojntfx/r3map/blob/main/pkg/mount/path_managed.go#L187-L222)</li>
-<li>This setup allows pulling from the remote <code>ReadWriterAt</code>
-before the NBD device is open</li>
-<li>This means that we can start pulling in the background as the NBD
-client and server are still starting (code snippet from
+<li>The background push/pull system allows pulling from the remote
+<code>ReadWriterAt</code> before the NBD device is open</li>
+<li>This is possible because the device doesn’t need to start accessing
+the data before it can start pulling</li>
+<li>As a result we can start pulling in the background as the NBD client
+and server are still starting (code snippet from
 https://github.com/pojntfx/r3map/blob/main/pkg/mount/path_managed.go#L251-L272)</li>
 <li>These two components typically start fairly quickly, but can still
 take multiple ms</li>
 <li>Often, it takes as long as one RTT, so parallelizing this startup
 process can significantly reduce the initial latency and pre-emptively
 pull quite a bit of data</li>
+<li>If no background pulls are enabled, the creation of the
+<code>Puller</code> is simply skipped (code snippet from
+https://github.com/pojntfx/r3map/blob/main/pkg/mount/path_managed.go#L187-L222)</li>
 </ul></li>
 <li>Implementing device lifecycles
 <ul>
-<li>Using this simple interface also makes the entire system very
-testable</li>
-<li>In the tests, a memory reader or file can be used as the local or
-remote <code>ReaderWriterAt</code>s and then a simple table-driven test
-can be used (code snippet from
-https://github.com/pojntfx/r3map/blob/main/pkg/chunks/puller_test.go)</li>
-<li>With all of these components in place, the managed mounts API serves
-as a fast and efficient option to access almost any remote resource in
-memory</li>
 <li>Similarly to how the direct mounts API used the basic path mount to
 build the file and <code>mmap</code> interfaces, the managed mount
 builds on this interface in order to provide the same interfaces</li>
@@ -1813,21 +1818,29 @@ pull-only algorithm</li>
 </ul>
 <h2 id="live-migration-for-mounts"><span class="header-section-number">4.6</span> Live Migration for Mounts</h2>
 <ul>
-<li>Optimization mounts for migration scenarios
+<li>Overview
 <ul>
+<li>As mentioned in Pull-Based Synchronization with Migrations before,
+the mount API is not optimal for a migration scenario</li>
+<li>Splitting the migration into two separate phases can help a lot to
+fix the biggest problem, the maximum guaranteed downtime</li>
 <li>The flexible architecture of the <code>ReadWriterAt</code>
-components allow the reuse of lots of code for both use cases</li>
+components allow the reuse of lots of code for both the mount API and
+the migration API</li>
 </ul></li>
 <li>Implementing the seeder
 <ul>
-<li>To achieve this, the seeder defines a simple read-only API with the
-familiar <code>ReadAt</code> methods, but also new APIs such as
-returning dirty chunks from <code>Sync</code> and adding a
-<code>Track</code> method (code snippet from
+<li>The seeder defines a simple read-only RPC API with the familiar
+<code>ReadAt</code> methods, but also new APIs such as returning dirty
+chunks from <code>Sync</code> and adding a <code>Track</code> method
+(code snippet from
 https://github.com/pojntfx/r3map/blob/main/pkg/services/seeder.go#L15-L21)</li>
 <li>Unlike the remote backend, a seeder also exposes a mount through a
 path, file or byte slice, so that as the migration is happening, the
 underlying data can still be accessed by the application</li>
+<li>This fixes the issue that the mount API had for migrations, where
+only one end of the API exposed it’s mount, while the other part simply
+served data</li>
 <li>The tracking aspect is implemented in the same modular and
 composable way as the syncer etc. - by using a
 <code>TrackingReadWriterAt</code> that is connected to the seeder’s
@@ -1976,33 +1989,7 @@ subsequent read</li>
 significantly improve the pull speed in scenarios where the backing disk
 is slow or the latency is high</li>
 </ul>
-<h2 id="optimizing-the-transport-protocol-for-throughput"><span class="header-section-number">4.9</span> Optimizing The Transport
-Protocol For Throughput</h2>
-<ul>
-<li>Despite these benefits, gRPC is not perfect however</li>
-<li>Protobuf specifically, while being faster than JSON, is not the
-fastest serialization framework that could be used</li>
-<li>This is especially true for large chunks of data, and becomes a real
-bottleneck if the connection between source and destination would allow
-for a high throughput</li>
-<li>This is where fRPC, a RPC library that is easy to replace gRPC with,
-becomes useful</li>
-<li>Because throughput and latency determine the maximum acceptable
-downtime of a migration/the initial latency for mounts, choosing the
-right RPC protocol is an important decision</li>
-<li>fRPC also uses the same proto3 DSL, which makes it an easy drop-in
-replacement, and it also supports multiplexing and connection
-polling</li>
-<li>Because of these similarities, the usage of fRPC in r3map is
-extremely similar to gRPC (code snippet from
-https://github.com/pojntfx/r3map/blob/main/pkg/services/seeder_frpc.go)</li>
-<li>A good way to test how well the RPC framework scales for concurrent
-requests is scaling the amount of pull workers, where dudirekta only
-gains marginally from increasing their number, whereas both gRPC and
-fRPC can increase throughput and decrease the initial latency by pulling
-more chunks pre-emptively</li>
-</ul>
-<h2 id="using-remote-stores-as-backends"><span class="header-section-number">4.10</span> Using Remote Stores as
+<h2 id="using-remote-stores-as-backends"><span class="header-section-number">4.9</span> Using Remote Stores as
 Backends</h2>
 <ul>
 <li>Using key-value stores as ephemeral mounts
@@ -2070,7 +2057,7 @@ creating the table etc. (code snippet from
 https://github.com/pojntfx/r3map/blob/main/cmd/r3map-direct-mount-benchmark/main.go#L369-L396)</li>
 </ul></li>
 </ul>
-<h2 id="bi-directional-protocols-with-dudirekta"><span class="header-section-number">4.11</span> Bi-Directional Protocols With
+<h2 id="bi-directional-protocols-with-dudirekta"><span class="header-section-number">4.10</span> Bi-Directional Protocols With
 Dudirekta</h2>
 <ul>
 <li>Another aspect that plays an important role in performance for
@@ -2154,15 +2141,18 @@ server</li>
 (example and code snippet from
 https://github.com/pojntfx/dudirekta/tree/main#1-define-local-functions)</li>
 <li>In addition to this, dudirekta works over any
-<code>io.ReadWriter</code></li>
+<code>io.ReadWriter</code>, making the actual transport layer choosable
+(which means that i.e. QUIC can be used to drastically reduce initial
+latency)</li>
 </ul>
-<h2 id="connection-pooling-for-high-rtt-scenarios"><span class="header-section-number">4.12</span> Connection Pooling For High
+<h2 id="connection-pooling-for-high-rtt-scenarios"><span class="header-section-number">4.11</span> Connection Pooling For High
 RTT Scenarios</h2>
 <ul>
-<li>This does however come at the cost of not being able to do
-connection pooling, since each client <code>dial</code>ing the server
-would mean that the server could not reference the multiple client
-connections as one composite client without changes to the protocol</li>
+<li>Dudirekta’s bi-directional RPCs do however come at the cost of not
+being able to do connection pooling, since each client
+<code>dial</code>ing the server would mean that the server could not
+reference the multiple client connections as one composite client
+without changes to the protocol</li>
 <li>While implementing such a pooling mechanism in the future could be
 interesting, it turned out to not be necessary thanks to the pull-based
 pre-copy solution described earlier</li>
@@ -2221,6 +2211,32 @@ having a protocol that allows for concurrent RPCs can do the same</li>
 requests, or creating a new connection for every request, gRPC is able
 to intelligently re-use existing connections for RPCs or create new
 ones, speeding up parallel requests</li>
+</ul>
+<h2 id="optimizing-the-transport-protocol-for-throughput"><span class="header-section-number">4.12</span> Optimizing The Transport
+Protocol For Throughput</h2>
+<ul>
+<li>Despite these benefits, gRPC is not perfect however</li>
+<li>Protobuf specifically, while being faster than JSON, is not the
+fastest serialization framework that could be used</li>
+<li>This is especially true for large chunks of data, and becomes a real
+bottleneck if the connection between source and destination would allow
+for a high throughput</li>
+<li>This is where fRPC, a RPC library that is easy to replace gRPC with,
+becomes useful</li>
+<li>Because throughput and latency determine the maximum acceptable
+downtime of a migration/the initial latency for mounts, choosing the
+right RPC protocol is an important decision</li>
+<li>fRPC also uses the same proto3 DSL, which makes it an easy drop-in
+replacement, and it also supports multiplexing and connection
+polling</li>
+<li>Because of these similarities, the usage of fRPC in r3map is
+extremely similar to gRPC (code snippet from
+https://github.com/pojntfx/r3map/blob/main/pkg/services/seeder_frpc.go)</li>
+<li>A good way to test how well the RPC framework scales for concurrent
+requests is scaling the amount of pull workers, where dudirekta only
+gains marginally from increasing their number, whereas both gRPC and
+fRPC can increase throughput and decrease the initial latency by pulling
+more chunks pre-emptively</li>
 </ul>
 </div>
 <div id="results" class="slide section level1" number="5">
@@ -2329,12 +2345,15 @@ hub), instead of having to push them to each destination on their
 own</li>
 <li>The hub simply forwards the messages to all the other
 destinations</li>
+<li>Thanks to this support for a star-based archicture, file-based
+synchronization might be a good choice for highly throughput-constrained
+networks</li>
 </ul>
 <h2 id="fuse"><span class="header-section-number">6.3</span> FUSE</h2>
 <ul>
-<li>FUSE does however also have downsides</li>
+<li>FUSE also has downsides</li>
 <li>It operates in user space, which means that it needs to do context
-switching</li>
+switching, esp. compared to a file system in kernel space</li>
 <li>Some advanced features aren’t available for a FUSE</li>
 <li>The overhead of FUSE (and implementing a completely custom file
 system) for synchronizing memory is still significant</li>
