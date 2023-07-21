@@ -730,7 +730,7 @@ csl: static/ieee.csl
   - This allows for handling multiple remote regions using a single server, and thus saving on initialization time and overhead
   - Using a proper file system however does introduce both storage overhead and complexity, which is why e.g. the FUSE approach was not chosen
 
-### Chunking, Push/Pull Mechanisms and Lifecycle for Mounts
+### Mounts
 
 - The `ReadWriterAt` pipeline
   - In order to implement the chunking system, we can use a abstraction layer that allows us to create a pipeline of readers/writers - the `ReadWriterAt`, combining an `io.ReaderAt` and a `io.WriterAt`
@@ -801,7 +801,7 @@ csl: static/ieee.csl
   - In order to cut down on unnecessary duplicate data transmissions, a central forwarding hub was implemented
   - This central forwarding hub does however add additional latency, which can be removed completely with the migration protocol's P2P, pull-only algorithm
 
-### Live Migration for Mounts
+### Live Migration
 
 - Overview
   - As mentioned in Pull-Based Synchronization with Migrations before, the mount API is not optimal for a migration scenario
@@ -977,6 +977,8 @@ csl: static/ieee.csl
 - Development of MB of pre-emptive pulls as RTT increases
 - Development of MB of pre-emptive pulls as number of workers increases
 - Development of MB of pre-emptive pulls as chunk size increases
+
+- `udev` vs. polling time for waiting until NBD device becomes available
 
 ### Throughput
 
