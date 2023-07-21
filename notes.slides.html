@@ -1716,9 +1716,6 @@ implement a read-only managed mount</li>
 </ul></li>
 <li>Background push
 <ul>
-<li>Chunks that have changed/are pushable are marked with
-<code>MarkOffsetPushable</code> (code snippet from
-https://github.com/pojntfx/r3map/blob/main/pkg/mount/path_managed.go#L171C24-L185)</li>
 <li>Once opened, the pusher starts a new goroutine in the background
 which calls <code>Sync</code> in a set recurring interval (code snippet
 from
@@ -1728,7 +1725,14 @@ launches workers in the background</li>
 <li>These workers all wait for a chunk to handle</li>
 <li>Once a worker receives a chunk, it reads it from the local
 <code>ReadWriter</code>, and copies it to the remote</li>
-<li>Safe access is ensures by individually locking each chunk</li>
+<li>In order to actually mark chunks that are pushable (chunks that have
+been written to or have already been synced from the remote), the
+progress callback is used to call the pusher’s
+<code>MarkOffsetPushable</code> method (code snippet from
+https://github.com/pojntfx/r3map/blob/main/pkg/mount/path_managed.go#L171C24-L185)</li>
+<li>Only these marked chunks are being considered to be pushed when a
+write occurs, so as to prevent syncing chunks that have not yet been
+made locally available</li>
 <li>The pusher also serves as a step in the <code>ReadWriterAt</code>
 pipeline</li>
 <li>In order to do this, it exposes <code>ReadAt</code> and
@@ -1736,14 +1740,17 @@ pipeline</li>
 <li><code>ReadAt</code> is a simple proxy, while <code>WriteAt</code>
 also marks a chunk as pushable (since it mutates data) before writing to
 the local <code>ReadWriterAt</code></li>
+<li>For a read-only scenario, the <code>Pusher</code> step is simply
+skipped (code snippet from
+https://github.com/pojntfx/r3map/blob/main/pkg/mount/path_managed.go#L142-L169)</li>
+</ul></li>
+<li>Benefits of managed mounts over direct mounts
+<ul>
 <li>For the direct mount, the NBD server was directly connected to the
 remote, while in this setup a pipeline of pullers, pushers, a syncer and
 an <code>ArbitraryReadWriter</code> is used (graphic of the four systems
 and how they are connected to each other vs. how the direct mounts
 work)</li>
-<li>For a read-only scenario, the <code>Pusher</code> step is simply
-skipped (code snippet from
-https://github.com/pojntfx/r3map/blob/main/pkg/mount/path_managed.go#L142-L169)</li>
 <li>Using this simple interface also makes the entire system very
 testable</li>
 <li>In the tests, a memory reader or file can be used as the local or
@@ -1753,9 +1760,6 @@ https://github.com/pojntfx/r3map/blob/main/pkg/chunks/puller_test.go)</li>
 <li>Thanks to making these individual components (background pull, push,
 chunking, chunk validation) unit-testable on their own, edge cases (like
 different pull heuristics) can be tested easily, too</li>
-<li>With all of these components in place, the managed mounts API serves
-as a fast and efficient option to access almost any remote resource in
-memory</li>
 </ul></li>
 <li>Parallelizing NBD device initialization
 <ul>
@@ -1788,6 +1792,9 @@ before <code>Sync()</code> is called on the syncer</li>
 https://github.com/pojntfx/r3map/blob/main/pkg/mount/file_managed.go#L34-L37)</li>
 <li>The same hooks system is also used to implement the correct
 lifecycle when <code>Close</code>ing the mount</li>
+<li>With all of these components in place, the managed mounts API serves
+as a fast and efficient option to access almost any remote resource in
+memory</li>
 </ul></li>
 <li>Optimization for WAN
 <ul>

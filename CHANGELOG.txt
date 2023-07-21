@@ -1,3 +1,9 @@
+commit c6261829db17b20b5cf29a3c4149543791b59a75
+Author: Felicitas Pojtinger <felicitas@pojtinger.com>
+Date:   Sat Jul 22 01:48:31 2023 +0200
+
+    feat: Add section for the background pull, push, pipeline and optimizations for the managed mount API
+
 commit 1d723d4d4e120bfd2f3a45f23d7a1e6228e6990c
 Author: Felicitas Pojtinger <felicitas@pojtinger.com>
 Date:   Fri Jul 21 23:47:06 2023 +0200

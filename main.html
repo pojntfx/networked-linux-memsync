@@ -329,8 +329,7 @@ Synchronization</a></li>
 Go</a></li>
 <li><a href="#nbd-with-go-nbd"><span class="toc-section-number">1.4.4</span> NBD with
 <code>go-nbd</code></a></li>
-<li><a href="#mounts"><span class="toc-section-number">1.4.5</span>
-Mounts</a></li>
+<li><a href="#managed-mounts"><span class="toc-section-number">1.4.5</span> Managed Mounts</a></li>
 </ul></li>
 </ul>
 </nav>
@@ -2527,9 +2526,9 @@ reads/writes that are aligned to the system’s page size, which is
 possible to implement in the specific application using the device to
 access a resource, but not in a generic way.</p>
 </section>
-<section id="combining-the-nbd-client-and-server" data-number="0.4.4.6">
+<section id="combining-the-nbd-client-and-server-to-a-mount" data-number="0.4.4.6">
 <h4 data-number="1.4.4.6"><span class="header-section-number">1.4.4.6</span> Combining the NBD Client
-and Server</h4>
+and Server to a Mount</h4>
 <p>When both the client and server are started on the same host, it is
 possible to connect them in an efficient way by creating a connected
 UNIX socket pair, returning a file descriptor for both the server and
@@ -2611,13 +2610,15 @@ potential latency overhead of mounting it.</p>
 the mount if it becomes OSS</p>
 </section>
 </section>
-<section id="mounts" data-number="0.4.5">
+<section id="managed-mounts" data-number="0.4.5">
 <h3 data-number="1.4.5"><span class="header-section-number">1.4.5</span>
-Mounts</h3>
+Managed Mounts</h3>
+<section id="stages" data-number="0.4.5.1">
+<h4 data-number="1.4.5.1"><span class="header-section-number">1.4.5.1</span> Stages</h4>
 <p>In order to implement a chunking system and related components, a
 pipeline of readers/writers is a useful abstraction layer; as a result,
 the mount API is based on a pipeline of multiple
-<code>ReadWriterAt</code>s:</p>
+<code>ReadWriterAt</code> stages:</p>
 <div class="sourceCode" id="cb48"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb48-1"><a href="#cb48-1" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> ReadWriterAt <span class="kw">interface</span> <span class="op">{</span></span>
 <span id="cb48-2"><a href="#cb48-2" aria-hidden="true" tabindex="-1"></a>    ReadAt<span class="op">(</span>p <span class="op">[]</span><span class="dt">byte</span><span class="op">,</span> off <span class="dt">int64</span><span class="op">)</span> <span class="op">(</span>n <span class="dt">int</span><span class="op">,</span> err <span class="dt">error</span><span class="op">)</span></span>
 <span id="cb48-3"><a href="#cb48-3" aria-hidden="true" tabindex="-1"></a>    WriteAt<span class="op">(</span>p <span class="op">[]</span><span class="dt">byte</span><span class="op">,</span> off <span class="dt">int64</span><span class="op">)</span> <span class="op">(</span>n <span class="dt">int</span><span class="op">,</span> err <span class="dt">error</span><span class="op">)</span></span>
@@ -2627,6 +2628,9 @@ the mount API is based on a pipeline of multiple
 backend, but can chain the <code>ReadAt</code> and <code>WriteAt</code>
 methods, which carry actual data, into a pipeline of other
 <code>ReadWriterAt</code>s.</p>
+</section>
+<section id="chunking-1" data-number="0.4.5.2">
+<h4 data-number="1.4.5.2"><span class="header-section-number">1.4.5.2</span> Chunking</h4>
 <p>One such <code>ReadWriterAt</code> is the the
 <code>ArbitraryReadWriterAt</code>. This chunking component allows
 breaking down a larger data stream into smaller chunks at aligned
@@ -2713,6 +2717,197 @@ the slice of data is a valid chunk size:</p>
 <span id="cb52-9"><a href="#cb52-9" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
 <span id="cb52-10"><a href="#cb52-10" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb52-11"><a href="#cb52-11" aria-hidden="true" tabindex="-1"></a><span class="co">// Continues with the operation</span></span></code></pre></div>
+</section>
+<section id="background-pull" data-number="0.4.5.3">
+<h4 data-number="1.4.5.3"><span class="header-section-number">1.4.5.3</span> Background Pull</h4>
+<p>The <code>Puller</code> component asynchronously pulls chunks in the
+background. It starts by sorting the chunks with the pull heuristic
+mentioned earlier, after which it starts a fixed number of worker
+threads in the background, each which ask for a chunk to pull:</p>
+<div class="sourceCode" id="cb53"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb53-1"><a href="#cb53-1" aria-hidden="true" tabindex="-1"></a><span class="co">// Sort the chunks according to the pull priority callback</span></span>
+<span id="cb53-2"><a href="#cb53-2" aria-hidden="true" tabindex="-1"></a>sort<span class="op">.</span>Slice<span class="op">(</span>chunkIndexes<span class="op">,</span> <span class="kw">func</span><span class="op">(</span>a<span class="op">,</span> b <span class="dt">int</span><span class="op">)</span> <span class="dt">bool</span> <span class="op">{</span></span>
+<span id="cb53-3"><a href="#cb53-3" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> pullPriority<span class="op">(</span>chunkIndexes<span class="op">[</span>a<span class="op">])</span> <span class="op">&gt;</span> pullPriority<span class="op">(</span>chunkIndexes<span class="op">[</span>b<span class="op">])</span></span>
+<span id="cb53-4"><a href="#cb53-4" aria-hidden="true" tabindex="-1"></a><span class="op">})</span></span>
+<span id="cb53-5"><a href="#cb53-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb53-6"><a href="#cb53-6" aria-hidden="true" tabindex="-1"></a><span class="co">// ...</span></span>
+<span id="cb53-7"><a href="#cb53-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb53-8"><a href="#cb53-8" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> <span class="op">{</span></span>
+<span id="cb53-9"><a href="#cb53-9" aria-hidden="true" tabindex="-1"></a>    <span class="co">// Get the next chunk</span></span>
+<span id="cb53-10"><a href="#cb53-10" aria-hidden="true" tabindex="-1"></a>    chunk <span class="op">:=</span> p<span class="op">.</span>getNextChunk<span class="op">()</span></span>
+<span id="cb53-11"><a href="#cb53-11" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb53-12"><a href="#cb53-12" aria-hidden="true" tabindex="-1"></a>    <span class="co">// Exit after all chunks have been pulled</span></span>
+<span id="cb53-13"><a href="#cb53-13" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> chunk <span class="op">&gt;=</span> p<span class="op">.</span>chunks <span class="op">{</span></span>
+<span id="cb53-14"><a href="#cb53-14" aria-hidden="true" tabindex="-1"></a>        <span class="cf">break</span></span>
+<span id="cb53-15"><a href="#cb53-15" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb53-16"><a href="#cb53-16" aria-hidden="true" tabindex="-1"></a>    <span class="co">// ...</span></span>
+<span id="cb53-17"><a href="#cb53-17" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb53-18"><a href="#cb53-18" aria-hidden="true" tabindex="-1"></a>    <span class="co">// Reading the chunk from the backend</span></span>
+<span id="cb53-19"><a href="#cb53-19" aria-hidden="true" tabindex="-1"></a>    _<span class="op">,</span> err <span class="op">:=</span> p<span class="op">.</span>backend<span class="op">.</span>ReadAt<span class="op">(</span><span class="bu">make</span><span class="op">([]</span><span class="dt">byte</span><span class="op">,</span> p<span class="op">.</span>chunkSize<span class="op">),</span> chunkIndex<span class="op">*</span>p<span class="op">.</span>chunkSize<span class="op">)</span></span>
+<span id="cb53-20"><a href="#cb53-20" aria-hidden="true" tabindex="-1"></a>    <span class="co">// ...</span></span>
+<span id="cb53-21"><a href="#cb53-21" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<p>Note that the puller itself does not copy any data from the
+destination; this is handled by a separate component. It simply reads
+from the next provided pipeline stage, which is expected to handle the
+actual copying process.</p>
+<p>An implementation of this stage is the
+<code>SyncedReadWriterAt</code>, which takes both a remote and local
+<code>ReadWriterAt</code> pipeline stage as it’s argument. If a chunk is
+read, i.e. by the puller component calling <code>ReadAt</code>, it is
+tracked and marked as remote by adding it to a local map. The chunk
+itself is then read from the remote reader and written to the local one,
+after which it is marked as locally available, meaning that on the
+second read it is fetched from the faster, local reader instead; a
+callback is used to make it possible to track the syncer’s pull
+progress:</p>
+<div class="sourceCode" id="cb54"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb54-1"><a href="#cb54-1" aria-hidden="true" tabindex="-1"></a><span class="co">// Track chunk</span></span>
+<span id="cb54-2"><a href="#cb54-2" aria-hidden="true" tabindex="-1"></a>chk <span class="op">:=</span> c<span class="op">.</span>getOrTrackChunk<span class="op">(</span>off<span class="op">)</span></span>
+<span id="cb54-3"><a href="#cb54-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb54-4"><a href="#cb54-4" aria-hidden="true" tabindex="-1"></a><span class="co">// If chunk is available locally, return it</span></span>
+<span id="cb54-5"><a href="#cb54-5" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> chk<span class="op">.</span>local <span class="op">{</span></span>
+<span id="cb54-6"><a href="#cb54-6" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> c<span class="op">.</span>local<span class="op">.</span>ReadAt<span class="op">(</span>p<span class="op">,</span> off<span class="op">)</span></span>
+<span id="cb54-7"><a href="#cb54-7" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb54-8"><a href="#cb54-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb54-9"><a href="#cb54-9" aria-hidden="true" tabindex="-1"></a><span class="co">// If chunk is not available locally, copy it from the remote, then mark the chunk as local</span></span>
+<span id="cb54-10"><a href="#cb54-10" aria-hidden="true" tabindex="-1"></a>c<span class="op">.</span>remote<span class="op">.</span>ReadAt<span class="op">(</span>p<span class="op">,</span> off<span class="op">)</span></span>
+<span id="cb54-11"><a href="#cb54-11" aria-hidden="true" tabindex="-1"></a>c<span class="op">.</span>local<span class="op">.</span>WriteAt<span class="op">(</span>p<span class="op">,</span> off<span class="op">)</span></span>
+<span id="cb54-12"><a href="#cb54-12" aria-hidden="true" tabindex="-1"></a>chk<span class="op">.</span>local <span class="op">=</span> <span class="ot">true</span></span>
+<span id="cb54-13"><a href="#cb54-13" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb54-14"><a href="#cb54-14" aria-hidden="true" tabindex="-1"></a><span class="co">// Enable progress tracking</span></span>
+<span id="cb54-15"><a href="#cb54-15" aria-hidden="true" tabindex="-1"></a>c<span class="op">.</span>onChunkIsLocal<span class="op">(</span>off<span class="op">)</span></span></code></pre></div>
+<p>Note that since this is a pipeline stage, this behavior also applies
+to reads that happen aside from those initiated by the
+<code>Puller</code>, meaning that any chunks that haven’t been fetched
+asynchronously before they are being accessed will be scheduled to be
+pulled immediately. The <code>WriteAt</code> implementation of this
+stage immediately marks and reports the chunk as available locally no
+matter whether it has been pulled before or not.</p>
+<p>The combination of the <code>SyncedReadWriterAt</code> stage and the
+<code>Puller</code> component implements a pre-copy migration system in
+an independently unit testable way, where the remote ressource is being
+pre-emptively copied to the destination system first. In addition to
+this however, since it can also schedule chunks to be available
+immediately, it has some of the characteristics of a post-copy migration
+system, too, where it is possible to fetch chunks as they become
+available, making it behave similarly to the <code>rr+</code>
+prefetching mechanism mentioned in “Remote Regions”<span class="citation" data-cites="aguilera2018remoteregions">[47]</span>.
+Using this combination, it is possible to implement the full read-only
+managed mount API.</p>
+</section>
+<section id="background-push" data-number="0.4.5.4">
+<h4 data-number="1.4.5.4"><span class="header-section-number">1.4.5.4</span> Background Push</h4>
+<p>In order to also allow for writes back to the remote source host, the
+background push component exists. Once it has been opened, it schedules
+recurring writebacks to the remote by calling <code>Sync</code>; once
+this is called by either the background worker system or another
+component, it launces writeback workers in the background. These wait to
+receive a chunk that needs to be written back; once they receive one,
+they read it from the local <code>ReadWriterAt</code> and copy it to the
+remote, after which the chunk is marked as no longer requiring
+writebacks:</p>
+<div class="sourceCode" id="cb55"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb55-1"><a href="#cb55-1" aria-hidden="true" tabindex="-1"></a><span class="co">// Wait until the worker gets a slot from a semaphore</span></span>
+<span id="cb55-2"><a href="#cb55-2" aria-hidden="true" tabindex="-1"></a>p<span class="op">.</span>workerSem <span class="op">&lt;-</span> <span class="kw">struct</span><span class="op">{}{}</span></span>
+<span id="cb55-3"><a href="#cb55-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb55-4"><a href="#cb55-4" aria-hidden="true" tabindex="-1"></a><span class="co">// First fetch from local ReaderAt, then copy to remote one</span></span>
+<span id="cb55-5"><a href="#cb55-5" aria-hidden="true" tabindex="-1"></a>b <span class="op">:=</span> <span class="bu">make</span><span class="op">([]</span><span class="dt">byte</span><span class="op">,</span> p<span class="op">.</span>chunkSize<span class="op">)</span></span>
+<span id="cb55-6"><a href="#cb55-6" aria-hidden="true" tabindex="-1"></a>p<span class="op">.</span>local<span class="op">.</span>ReadAt<span class="op">(</span>b<span class="op">,</span> off<span class="op">)</span></span>
+<span id="cb55-7"><a href="#cb55-7" aria-hidden="true" tabindex="-1"></a>p<span class="op">.</span>remote<span class="op">.</span>WriteAt<span class="op">(</span>b<span class="op">,</span> off<span class="op">)</span></span>
+<span id="cb55-8"><a href="#cb55-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb55-9"><a href="#cb55-9" aria-hidden="true" tabindex="-1"></a><span class="co">// Remove the chunk from the writeback queue</span></span>
+<span id="cb55-10"><a href="#cb55-10" aria-hidden="true" tabindex="-1"></a><span class="bu">delete</span><span class="op">(</span>p<span class="op">.</span>changedOffsets<span class="op">,</span> off<span class="op">)</span></span></code></pre></div>
+<p>In order to prevent chunks from being pushed back to the remote
+before they have been been pulled first or written to locally, the
+background push system is integrated into the
+<code>SyncedReadWriterAt</code> component. This is made possible by
+intercepting the offset passed to the progress callback, and only then
+marking it as ready:</p>
+<div class="sourceCode" id="cb56"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb56-1"><a href="#cb56-1" aria-hidden="true" tabindex="-1"></a>chunks<span class="op">.</span>NewSyncedReadWriterAt<span class="op">(</span>m<span class="op">.</span>remote<span class="op">,</span> local<span class="op">,</span> <span class="kw">func</span><span class="op">(</span>off <span class="dt">int64</span><span class="op">)</span> <span class="dt">error</span> <span class="op">{</span></span>
+<span id="cb56-2"><a href="#cb56-2" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> local<span class="op">.(*</span>chunks<span class="op">.</span>Pusher<span class="op">).</span>MarkOffsetPushable<span class="op">(</span>off<span class="op">)</span></span>
+<span id="cb56-3"><a href="#cb56-3" aria-hidden="true" tabindex="-1"></a><span class="op">})</span></span></code></pre></div>
+<p>Unlike the puller component, the pusher also functions as a pipeline
+step, and as such provides a <code>ReadAt</code> and
+<code>WriteAt</code> implementation. While <code>ReadAt</code> is a
+simple proxy forwarding the call to the next stage, <code>WriteAt</code>
+marks a chunk as pushable, causing it to be written back to the remote
+on the next writeback cycle, before writing the chunk to the next stage.
+If a managed mount is intended to be read-only, the pusher is simply not
+included in the pipeline.</p>
+</section>
+<section id="pipeline" data-number="0.4.5.5">
+<h4 data-number="1.4.5.5"><span class="header-section-number">1.4.5.5</span> Pipeline</h4>
+<p>For the direct mount system, the NBD server was connected directly to
+the remote; managed mounts on the other hand have an internal pipeline
+of pullers, pushers, a syncer, local and remote backends as well as a
+chunking system:</p>
+<p>TODO: Add graphic of the internal pipeline and how systems are
+connected to each other</p>
+<p>Using such a pipeline system of independent stages and other
+components also makes the system very testable. To do so, instead of
+providing a remote and local <code>ReadWriterAt</code> at the source and
+drain of the pipeline respectively, a simple in-memory or on-disk
+backend can be used in the unit tests. This makes the individual
+components unit-testable on their own, as well as making it possible to
+test and benchmark edge cases (such as reads that are smaller than a
+chunk size) and optimizations (like different pull heuristics) without
+complicated setup or teardown procedures, and without having to
+initialize the complete pipeline.</p>
+</section>
+<section id="concurrent-device-initialization" data-number="0.4.5.6">
+<h4 data-number="1.4.5.6"><span class="header-section-number">1.4.5.6</span> Concurrent Device
+Initialization</h4>
+<p>The background push/pull components allow pulling from the remote
+pipeline stage before the NBD device itself is open. This is possible
+because the device doesn’t need to start accessing the data in a
+post-copy sense to start the pull, and means that the pull process can
+be started as the NBD client and server are still initializing. Both
+components typically start quickly, but the initialization might still
+take multiple milliseconds. Often, this amounts to roughly one RTT,
+meaning that making this initialization procedure concurrent can
+signficantly reduce the initial read latency by pre-emptively pulling
+data. This is because even if the first chunks are being accessed right
+after the device has been started, they are already available to be read
+from the local backend instead of the remote, since they have been
+pulled during the initialization and thus before the mount has even been
+made available to application.</p>
+</section>
+<section id="device-lifecycles" data-number="0.4.5.7">
+<h4 data-number="1.4.5.7"><span class="header-section-number">1.4.5.7</span> Device Lifecycles</h4>
+<p>Similarly to how the direct mount API used the basic path mount to
+build the file and slice mounts, the managed mount API provides the same
+interfaces. In the case of managed mounts however, this is even more
+important, since the synchronization lifecycle needs to be taken into
+account. For example, in order to allow the <code>Sync()</code> API to
+work, the <code>mmap</code>ed region must be <code>msync</code>ed before
+the <code>SyncedReadWriterAt</code>’s <code>Sync()</code> method is
+called. In order to support these flows without tightly coupling the
+individual pipeline stages, a hooks system exists that allows for such
+actions to be registered from the managed mount, which is also used to
+implement the correct lifecycle for closing/tearing down a mount:</p>
+<div class="sourceCode" id="cb57"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb57-1"><a href="#cb57-1" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> ManagedMountHooks <span class="kw">struct</span> <span class="op">{</span></span>
+<span id="cb57-2"><a href="#cb57-2" aria-hidden="true" tabindex="-1"></a>    OnBeforeSync <span class="kw">func</span><span class="op">()</span> <span class="dt">error</span></span>
+<span id="cb57-3"><a href="#cb57-3" aria-hidden="true" tabindex="-1"></a>    OnBeforeClose <span class="kw">func</span><span class="op">()</span> <span class="dt">error</span></span>
+<span id="cb57-4"><a href="#cb57-4" aria-hidden="true" tabindex="-1"></a>    OnChunkIsLocal <span class="kw">func</span><span class="op">(</span>off <span class="dt">int64</span><span class="op">)</span> <span class="dt">error</span></span>
+<span id="cb57-5"><a href="#cb57-5" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+</section>
+<section id="wan-optimization" data-number="0.4.5.8">
+<h4 data-number="1.4.5.8"><span class="header-section-number">1.4.5.8</span> WAN Optimization</h4>
+<p>While the managed mount system functions as a hybrid pre- and
+post-copy system, optimizations are implemented that make it more viable
+in a WAN scenario compared to a typical pre-copy system by using a
+unidirectional API. Usually, a pre-copy system pushes changes to the
+destination host. In many WAN scenarios however, NATs prevent a direct
+connection. Moreover, since the source host needs to keep track of which
+chunks have already been pulled, the system becomes stateful on the
+source host and events such as network outages need to be recoverable
+from.</p>
+<p>By using the pull-only, unidirectional API to emulate the pre-copy
+setup, the destination can simply keep track of which chunks it still
+needs to pull itself, meaning that if there is a network outage, it can
+just resume pulling or decide to restart the pre-copy process. Unlike
+the pre-copy system used for the file synchronization/hashing approach,
+this also means that destination hosts don’t need to subscribe to a
+central multiplexing hub, and adding clients to the topology is easy
+since their pull progress state does not need to be stored anywhere
+except the destination node.</p>
 <div id="refs" class="references csl-bib-body" role="doc-bibliography">
 <div id="ref-linux2023docs" class="csl-entry" role="doc-biblioentry">
 <div class="csl-left-margin">[1] </div><div class="csl-right-inline">T.
@@ -2960,7 +3155,15 @@ L. K. Contributors, <span>“NBD kernel module in the linux kernel source
 tree.”</span> <a href="https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/drivers/block/nbd.c#n2592" class="uri">https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/drivers/block/nbd.c#n2592</a>,
 2023.</div>
 </div>
+<div id="ref-aguilera2018remoteregions" class="csl-entry" role="doc-biblioentry">
+<div class="csl-left-margin">[47] </div><div class="csl-right-inline">M.
+K. Aguilera <em>et al.</em>, <span>“Remote regions: A simple abstraction
+for remote memory,”</span> in <em>Proceedings of the 2018 USENIX
+conference on usenix annual technical conference</em>, 2018, pp.
+775–787.</div>
 </div>
+</div>
+</section>
 </section>
 </section>
 </body>
