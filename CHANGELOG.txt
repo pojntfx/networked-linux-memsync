@@ -1,3 +1,9 @@
+commit 1d723d4d4e120bfd2f3a45f23d7a1e6228e6990c
+Author: Felicitas Pojtinger <felicitas@pojtinger.com>
+Date:   Fri Jul 21 23:47:06 2023 +0200
+
+    feat: Add introduction section to mounts
+
 commit 26afb4072ac2b9df64bee3689b092df967dad1e2
 Author: Felicitas Pojtinger <felicitas@pojtinger.com>
 Date:   Fri Jul 21 20:19:35 2023 +0200

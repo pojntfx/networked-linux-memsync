@@ -329,6 +329,8 @@ Synchronization</a></li>
 Go</a></li>
 <li><a href="#nbd-with-go-nbd"><span class="toc-section-number">1.4.4</span> NBD with
 <code>go-nbd</code></a></li>
+<li><a href="#mounts"><span class="toc-section-number">1.4.5</span>
+Mounts</a></li>
 </ul></li>
 </ul>
 </nav>
@@ -2599,11 +2601,118 @@ accesses a resource, where a file on this filesystem can then be
 <code>open</code>ed/<code>mmap</code>ed similarly to the FUSE approach.
 This is particularly useful if there are multiple memory regions which
 all belong to the same application to synchronize, as it removes the
-need to start multiple block devices. This solution can be implemented
-by i.e. calling <code>mkfs.ext4</code> on a block device directly or by
-formatting the NBD backend ahead of time, which does however come at the
-cost of storing and transferring the file system metadata as well as the
+need to start multiple block devices and reduces the latency overhead
+associated with it. This solution can be implemented by i.e. calling
+<code>mkfs.ext4</code> on a block device directly or by formatting the
+NBD backend ahead of time, which does however come at the cost of
+storing and transferring the file system metadata as well as the
 potential latency overhead of mounting it.</p>
+<p>TODO: Reference voltools and how it works as a fast way of formatting
+the mount if it becomes OSS</p>
+</section>
+</section>
+<section id="mounts" data-number="0.4.5">
+<h3 data-number="1.4.5"><span class="header-section-number">1.4.5</span>
+Mounts</h3>
+<p>In order to implement a chunking system and related components, a
+pipeline of readers/writers is a useful abstraction layer; as a result,
+the mount API is based on a pipeline of multiple
+<code>ReadWriterAt</code>s:</p>
+<div class="sourceCode" id="cb48"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb48-1"><a href="#cb48-1" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> ReadWriterAt <span class="kw">interface</span> <span class="op">{</span></span>
+<span id="cb48-2"><a href="#cb48-2" aria-hidden="true" tabindex="-1"></a>    ReadAt<span class="op">(</span>p <span class="op">[]</span><span class="dt">byte</span><span class="op">,</span> off <span class="dt">int64</span><span class="op">)</span> <span class="op">(</span>n <span class="dt">int</span><span class="op">,</span> err <span class="dt">error</span><span class="op">)</span></span>
+<span id="cb48-3"><a href="#cb48-3" aria-hidden="true" tabindex="-1"></a>    WriteAt<span class="op">(</span>p <span class="op">[]</span><span class="dt">byte</span><span class="op">,</span> off <span class="dt">int64</span><span class="op">)</span> <span class="op">(</span>n <span class="dt">int</span><span class="op">,</span> err <span class="dt">error</span><span class="op">)</span></span>
+<span id="cb48-4"><a href="#cb48-4" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<p>This way, it is possible to forward calls to the NBD backends like
+<code>Size</code> and <code>Sync</code> directly to the underlying
+backend, but can chain the <code>ReadAt</code> and <code>WriteAt</code>
+methods, which carry actual data, into a pipeline of other
+<code>ReadWriterAt</code>s.</p>
+<p>One such <code>ReadWriterAt</code> is the the
+<code>ArbitraryReadWriterAt</code>. This chunking component allows
+breaking down a larger data stream into smaller chunks at aligned
+offsets, effectively making every read and write an aligned operation.
+In <code>ReadAt</code>, it calculates the index of the chunk that the
+currently read offset falls into as well as the offset within the chunk,
+after which it reads the entire chunk from the backend into a buffer,
+copies the requested portion of the buffer into the input slice, and
+repeats the process until all requested data is read:</p>
+<div class="sourceCode" id="cb49"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb49-1"><a href="#cb49-1" aria-hidden="true" tabindex="-1"></a>totalRead <span class="op">:=</span> <span class="dv">0</span></span>
+<span id="cb49-2"><a href="#cb49-2" aria-hidden="true" tabindex="-1"></a>remaining <span class="op">:=</span> <span class="bu">len</span><span class="op">(</span>p<span class="op">)</span></span>
+<span id="cb49-3"><a href="#cb49-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb49-4"><a href="#cb49-4" aria-hidden="true" tabindex="-1"></a>buf <span class="op">:=</span> <span class="bu">make</span><span class="op">([]</span><span class="dt">byte</span><span class="op">,</span> a<span class="op">.</span>chunkSize<span class="op">)</span></span>
+<span id="cb49-5"><a href="#cb49-5" aria-hidden="true" tabindex="-1"></a><span class="co">// Repeat until all chunks that need to be fetched have been fetched</span></span>
+<span id="cb49-6"><a href="#cb49-6" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> remaining <span class="op">&gt;</span> <span class="dv">0</span> <span class="op">{</span></span>
+<span id="cb49-7"><a href="#cb49-7" aria-hidden="true" tabindex="-1"></a>    <span class="co">// Calculating the chunk and offset within the chunk</span></span>
+<span id="cb49-8"><a href="#cb49-8" aria-hidden="true" tabindex="-1"></a>    chunkIndex <span class="op">:=</span> off <span class="op">/</span> a<span class="op">.</span>chunkSize</span>
+<span id="cb49-9"><a href="#cb49-9" aria-hidden="true" tabindex="-1"></a>    indexedOffset <span class="op">:=</span> off <span class="op">%</span> a<span class="op">.</span>chunkSize</span>
+<span id="cb49-10"><a href="#cb49-10" aria-hidden="true" tabindex="-1"></a>    readSize <span class="op">:=</span> <span class="dt">int64</span><span class="op">(</span>min<span class="op">(</span>remaining<span class="op">,</span> <span class="dt">int</span><span class="op">(</span>a<span class="op">.</span>chunkSize<span class="op">-</span>indexedOffset<span class="op">)))</span></span>
+<span id="cb49-11"><a href="#cb49-11" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb49-12"><a href="#cb49-12" aria-hidden="true" tabindex="-1"></a>    <span class="co">// Reading from the next `ReadWriterAt` in the pipeline</span></span>
+<span id="cb49-13"><a href="#cb49-13" aria-hidden="true" tabindex="-1"></a>    _<span class="op">,</span> err <span class="op">:=</span> a<span class="op">.</span>backend<span class="op">.</span>ReadAt<span class="op">(</span>buf<span class="op">,</span> chunkIndex<span class="op">*</span>a<span class="op">.</span>chunkSize<span class="op">)</span></span>
+<span id="cb49-14"><a href="#cb49-14" aria-hidden="true" tabindex="-1"></a>    <span class="co">// ...</span></span>
+<span id="cb49-15"><a href="#cb49-15" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb49-16"><a href="#cb49-16" aria-hidden="true" tabindex="-1"></a>    <span class="bu">copy</span><span class="op">(</span>p<span class="op">[</span>totalRead<span class="op">:],</span> buf<span class="op">[</span>indexedOffset<span class="op">:</span>indexedOffset<span class="op">+</span>readSize<span class="op">])</span></span>
+<span id="cb49-17"><a href="#cb49-17" aria-hidden="true" tabindex="-1"></a>    <span class="co">// ...</span></span>
+<span id="cb49-18"><a href="#cb49-18" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb49-19"><a href="#cb49-19" aria-hidden="true" tabindex="-1"></a>    remaining <span class="op">-=</span> <span class="dt">int</span><span class="op">(</span>readSize<span class="op">)</span></span>
+<span id="cb49-20"><a href="#cb49-20" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<p>The writer is implemented in a similar way; it starts by calculating
+the chunk and offset within the chunk. If an entire chunk is being
+written to at an aligned offset, it completely bypasses the chunking
+system, and writes the data directly to the backend so as to prevent
+unnecessary copies:</p>
+<div class="sourceCode" id="cb50"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb50-1"><a href="#cb50-1" aria-hidden="true" tabindex="-1"></a><span class="co">// Calculating the chunk and offset within the chunk</span></span>
+<span id="cb50-2"><a href="#cb50-2" aria-hidden="true" tabindex="-1"></a>chunkIndex <span class="op">:=</span> off <span class="op">/</span> a<span class="op">.</span>chunkSize</span>
+<span id="cb50-3"><a href="#cb50-3" aria-hidden="true" tabindex="-1"></a>indexedOffset <span class="op">:=</span> off <span class="op">%</span> a<span class="op">.</span>chunkSize</span>
+<span id="cb50-4"><a href="#cb50-4" aria-hidden="true" tabindex="-1"></a>writeSize <span class="op">:=</span> <span class="dt">int</span><span class="op">(</span>min<span class="op">(</span>remaining<span class="op">,</span> <span class="dt">int</span><span class="op">(</span>a<span class="op">.</span>chunkSize<span class="op">-</span>indexedOffset<span class="op">)))</span></span>
+<span id="cb50-5"><a href="#cb50-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb50-6"><a href="#cb50-6" aria-hidden="true" tabindex="-1"></a><span class="co">// Full chunk is covered by the write request, no need to read</span></span>
+<span id="cb50-7"><a href="#cb50-7" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> indexedOffset <span class="op">==</span> <span class="dv">0</span> <span class="op">&amp;&amp;</span> writeSize <span class="op">==</span> <span class="dt">int</span><span class="op">(</span>a<span class="op">.</span>chunkSize<span class="op">)</span> <span class="op">{</span></span>
+<span id="cb50-8"><a href="#cb50-8" aria-hidden="true" tabindex="-1"></a>    _<span class="op">,</span> err <span class="op">=</span> a<span class="op">.</span>backend<span class="op">.</span>WriteAt<span class="op">(</span>p<span class="op">[</span>totalWritten<span class="op">:</span>totalWritten<span class="op">+</span>writeSize<span class="op">],</span> chunkIndex<span class="op">*</span>a<span class="op">.</span>chunkSize<span class="op">)</span></span>
+<span id="cb50-9"><a href="#cb50-9" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb50-10"><a href="#cb50-10" aria-hidden="true" tabindex="-1"></a><span class="co">// ...</span></span></code></pre></div>
+<p>If this is not the case, and only parts of a chunk need to be
+written, it first reads the complete chunk into a buffer, modifies the
+buffer with the data that was changed, and then writes the entire buffer
+back until all data has been written:</p>
+<div class="sourceCode" id="cb51"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb51-1"><a href="#cb51-1" aria-hidden="true" tabindex="-1"></a><span class="co">// Read the existing chunk</span></span>
+<span id="cb51-2"><a href="#cb51-2" aria-hidden="true" tabindex="-1"></a>_<span class="op">,</span> err <span class="op">=</span> a<span class="op">.</span>backend<span class="op">.</span>ReadAt<span class="op">(</span>buf<span class="op">,</span> chunkIndex<span class="op">*</span>a<span class="op">.</span>chunkSize<span class="op">)</span></span>
+<span id="cb51-3"><a href="#cb51-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb51-4"><a href="#cb51-4" aria-hidden="true" tabindex="-1"></a><span class="co">// Modify the chunk with the provided data</span></span>
+<span id="cb51-5"><a href="#cb51-5" aria-hidden="true" tabindex="-1"></a><span class="bu">copy</span><span class="op">(</span>buf<span class="op">[</span>indexedOffset<span class="op">:],</span> p<span class="op">[</span>totalWritten<span class="op">:</span>totalWritten<span class="op">+</span>writeSize<span class="op">])</span></span>
+<span id="cb51-6"><a href="#cb51-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb51-7"><a href="#cb51-7" aria-hidden="true" tabindex="-1"></a><span class="co">// Write back the updated chunk</span></span>
+<span id="cb51-8"><a href="#cb51-8" aria-hidden="true" tabindex="-1"></a>_<span class="op">,</span> err <span class="op">=</span> a<span class="op">.</span>backend<span class="op">.</span>WriteAt<span class="op">(</span>buf<span class="op">,</span> chunkIndex<span class="op">*</span>a<span class="op">.</span>chunkSize<span class="op">)</span></span></code></pre></div>
+<p>This simple implementation can be used to efficiently allow reading
+and writing data of arbitrary length at arbitrary offsets, even if the
+backend only supports aligned reads and writes.</p>
+<p>In addition to this chunking system, there is also a
+<code>ChunkedReadWriterAt</code>, which ensures that the limits
+concerning a backend’s maximum chunk size and aligned reads/writes are
+being respected. Some backends, i.e. a backend where each chunk is
+represented by a file, might only support writing to aligned offsets,
+but don’t support checking for this behavior; in this example, if a
+chunk with a larger chunk size is written to the backend, depending on
+the implementation, this could result in this chunk file’s size being
+extended, which could lead to a DoS attack vector. It can also be of
+relevance if a client instead of a server is expected to implement
+chunking, and the server should simply enforce that the aligned reads
+and writes are being provided.</p>
+<p>In order to check if a read or write is aligned, this
+<code>ReadWriterAt</code> checks whether an operation is done to an
+offset that is multiples of the chunk size, and whether the length of
+the slice of data is a valid chunk size:</p>
+<div class="sourceCode" id="cb52"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb52-1"><a href="#cb52-1" aria-hidden="true" tabindex="-1"></a><span class="co">// Check if provided data is valid</span></span>
+<span id="cb52-2"><a href="#cb52-2" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> off<span class="op">%</span>c<span class="op">.</span>chunkSize <span class="op">!=</span> <span class="dv">0</span> <span class="op">||</span> <span class="dt">int64</span><span class="op">(</span><span class="bu">len</span><span class="op">(</span>p<span class="op">))</span> <span class="op">!=</span> c<span class="op">.</span>chunkSize <span class="op">{</span></span>
+<span id="cb52-3"><a href="#cb52-3" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> <span class="dv">0</span><span class="op">,</span> ErrInvalidOffset</span>
+<span id="cb52-4"><a href="#cb52-4" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb52-5"><a href="#cb52-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb52-6"><a href="#cb52-6" aria-hidden="true" tabindex="-1"></a><span class="co">// Check if offset is valid</span></span>
+<span id="cb52-7"><a href="#cb52-7" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> off <span class="op">&lt;</span> <span class="dv">0</span> <span class="op">||</span> off <span class="op">&gt;=</span> <span class="dt">int64</span><span class="op">(</span>c<span class="op">.</span>chunkSize<span class="op">*</span>c<span class="op">.</span>chunks<span class="op">)</span> <span class="op">{</span></span>
+<span id="cb52-8"><a href="#cb52-8" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> <span class="dv">0</span><span class="op">,</span> ErrInvalidReadSize</span>
+<span id="cb52-9"><a href="#cb52-9" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb52-10"><a href="#cb52-10" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb52-11"><a href="#cb52-11" aria-hidden="true" tabindex="-1"></a><span class="co">// Continues with the operation</span></span></code></pre></div>
 <div id="refs" class="references csl-bib-body" role="doc-bibliography">
 <div id="ref-linux2023docs" class="csl-entry" role="doc-biblioentry">
 <div class="csl-left-margin">[1] </div><div class="csl-right-inline">T.
@@ -2852,7 +2961,6 @@ tree.”</span> <a href="https://git.kernel.org/pub/scm/linux/kernel/git/torvald
 2023.</div>
 </div>
 </div>
-</section>
 </section>
 </section>
 </body>
