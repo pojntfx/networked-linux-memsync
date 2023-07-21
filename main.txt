@@ -59,6 +59,10 @@ Felicitas Pojtinger (Stuttgart Media University)
     -   4.4 NBD with go-nbd
         -   4.4.1 Overview
         -   4.4.2 Server
+        -   4.4.3 Client
+        -   4.4.4 Client Lifecycle
+        -   4.4.5 Optimizing Access to the Block Device
+        -   4.4.6 Combining the NBD Client and Server
 
 Introduction
 
@@ -1924,35 +1928,35 @@ NBD with go-nbd
 
 Overview
 
-In order to implement the NBD synchronization approach, we need to
-create a NBD server. Due to a lack of a lean and maintained NBD library
-for Go, a new pure NBD library, go-nbd, was implemented. This does not
-rely on CGo or a pre-existing NBD C library like nbdkit, which means
-that a lot of the issues around this ecosystem and complexities and
-performance issues around CGo call overhead[44] can be avoided. Unlike
-many existing libraries, go-nbd also provides both a NBD server and
-client implementation, making it possible to switch out i.e. the
-system-provided nbd-client command with pure Go too.
+Due to a lack of existing, lean and maintained NBD libraries for Go, a
+custom pure Go NBD library was implemented. Most NBD libraries also only
+provide a server and no the client component, but both are needed for
+the NBD-based migration approach to work. By not having to rely on CGo
+or a pre-existing NBD library like nbdkit, this custom library can also
+skip a significant amount of the overhead that is typically associated
+with C interoperability, particularly in the context of concurrency in
+Go with CGo [44].
 
 Server
 
-go-nbd exposes a simple backend interface for the NBD server. The key
-difference between this interface compared to userfaultfd-go is that it
-can also handle writes, thus making it possible to implement the
-pre-copy migration flow with it:
+The NBD server is implemented completely in userspace, and there are no
+kernel components involved. The backend interface that is expected by
+the server is very simple and only requires four methods to be
+implemented; ReadAt, WriteAt, Size and Sync:
 
     type Backend interface {
-        io.ReaderAt
-        io.WriterAt
-
+        ReadAt(p []byte, off int64) (n int, err error)
+        WriteAt(p []byte, off int64) (n int, err error)
         Size() (int64, error)
         Sync() error
     }
 
-A good example backend that implements this interface is a file backend;
-here, a simple implementation essentially just serves as a proxy to the
-file itself, keeping a key benefit of userfaultfd-go’s backend API
-design:
+The key difference between this backend design and the one used for
+userfaultfd-go is that they also support writes and other operations
+that would typically be expected for a complete block device, such as
+flushing data with Sync(). An example implementation of this backend is
+the file backend; since a file is conceptually similar to a block
+device, the overhead of creating the backend is minimal:
 
     func (b *FileBackend) ReadAt(p []byte, off int64) (n int, err error) {
         n, err = b.file.ReadAt(p, off)
@@ -1964,10 +1968,7 @@ design:
 
     func (b *FileBackend) Size() (int64, error) {
         stat, err := b.file.Stat()
-        if err != nil {
-            return -1, err
-        }
-
+        // ..
         return stat.Size(), nil
     }
 
@@ -1975,22 +1976,469 @@ design:
         return b.file.Sync()
     }
 
-Starting the actual NBD server is possible by calling Handle, which
-takes any net.Conn as it’s argument. This is another strength of go-nbd,
-as it makes it possible to use any transport layer that has compatible
-guarantees to TCP, such as WebRTC, too instead of relying on TCP only.
-It also doesn’t require a accept/dial-style client/server model making
-it possible to use a P2P transport layer, and also makes switching to
-TLS as simple as passing in a TLS connection. If NBD service is to be
-provided over an already existing socket with different services, this
-also makes it possible to inspect e.g. the TLS SNI before connecting to
-NBD instead of an alternative service:
+In order to serve such a backend, go-nbd exposes Handle function:
 
     func Handle(conn net.Conn, exports []Export, options *Options) error
 
-In addition to passing a connection to the NBD server, any array of
-exports is passed to backend as well. An export (TODO: finish section on
-exports)
+By not depending on a specific transport layer and instead only
+depending on a generic net.Conn, it is possible to easily integrate
+go-nbd in existing client/server systems or to switch out the typical
+TCP transport layer with i.e. QUIC. By not requiring dial/accept
+semantics it is also possible to use a P2P communication layer for
+peer-to-peer NBD such as WebRTC with weron[45], which also provides the
+necessary net.Conn interface.
+
+In addition to this net.Conn, options can be provided to the server;
+these include the ability to make the server read-only by blocking write
+operations, or to set the preferred block size. The actual backend is
+linked to the server through the concept of an export:
+
+    type Export struct {
+        Name        string
+        Description string
+
+        Backend backend.Backend
+    }
+
+This allows a single server to expose multiple backends that are
+identified with a name and description, which can, in the memory
+synchronization scenario, be used to identify multiple shared memory
+regions.
+
+To make the implementation of the NBD protocol easier, negotation and
+transmission phase headers and and other structured data is modelled
+using Go structs:
+
+    // ...
+    type NegotiationOptionHeader struct {
+        OptionMagic uint64
+        ID          uint32
+        Length      uint32
+    }
+
+    type NegotiationReplyHeader struct {
+        ReplyMagic uint64
+        ID         uint32
+        Type       uint32
+        Length     uint32
+    }
+    // ...
+
+In order to keep the actual handshake as simple as possible, only the
+fixed newstyle handshake is implemented, which also makes the
+implementation compliant with the baseline specification as defined by
+the protocol[25]. The negotiation starts by the server sending the
+negotiation header to the NBD client and ignoring the client’s flags:
+
+    // Sending the negotiation header
+    binary.Write(conn, binary.BigEndian, protocol.NegotiationNewstyleHeader{
+        OldstyleMagic:  protocol.NEGOTIATION_MAGIC_OLDSTYLE,
+        OptionMagic:    protocol.NEGOTIATION_MAGIC_OPTION,
+        HandshakeFlags: protocol.NEGOTIATION_HANDSHAKE_FLAG_FIXED_NEWSTYLE,
+    })
+
+    // Discard client flags (uint32)
+    _, err := io.CopyN(io.Discard, conn, 4)
+    // ...
+
+The option negotiation phase is implemented using a simple loop, which
+either breaks on success or returns in the case of an error. For the Go
+implementation, it is possible to use the binary package to correctly
+encode and decode the NBD packets and then switching on the encoded
+option ID:
+
+    for {
+        // Read the header
+        var optionHeader protocol.NegotiationOptionHeader
+        binary.Read(conn, binary.BigEndian, &optionHeader)
+
+        //  Validate the packet
+        if optionHeader.OptionMagic != protocol.NEGOTIATION_MAGIC_OPTION {
+            return ErrInvalidMagic
+        }
+
+        // Handle the option by it's ID
+        switch optionHeader.ID {
+            // ...
+        }
+    }
+
+In this handshake, the NEGOTIATION_ID_OPTION_INFO and
+NEGOTIATION_ID_OPTION_GO options exchange information about the chosen
+export (i.e. block size, export size, name and description), and if GO
+is specified, immediately continue on to the transmission phase. If an
+export is not found, the server aborts the connection. In order to allow
+for enumeration of available exports, the NEGOTIATION_ID_OPTION_LIST
+allows for returning the list of exports to the client, and
+NEGOTIATION_ID_OPTION_ABORT allows aborting handshake, which can be
+necessary if i.e. the NEGOTIATION_ID_OPTION_INFO was chosen but the
+client can’t handle the exposed export, i.e. due to it not supporting
+the advertised block size.
+
+The actual transmission phase is implemented in a similar way, by
+reading headers in a loop, switchin on the message type and handling it
+accordingly. TRANSMISSION_TYPE_REQUEST_READ forwards a read request to
+the selected export’s backend and sends the relevant chunk to the
+client, TRANSMISSION_TYPE_REQUEST_WRITE reads the offset and chunk from
+the client, and writes it to the export’s backend:
+
+    // Reading the chunk to be written from the client's connection
+    n, err := io.ReadAtLeast(conn, b[:requestHeader.Length], int(requestHeader.Length))
+    // ...
+
+    // Writing it to the backend
+    export.Backend.WriteAt(b[:n], int64(requestHeader.Offset))
+
+    // Acknowledging the write to the client
+    binary.Write(conn, binary.BigEndian, protocol.TransmissionReplyHeader{
+        ReplyMagic: protocol.TRANSMISSION_MAGIC_REPLY,
+        Error:      0,
+        Handle:     requestHeader.Handle,
+    })
+
+It is here that the read-only option is implemented by sending a
+permission error in case of writes:
+
+    if options.ReadOnly {
+        // Discard the write command's data
+        _, err := io.CopyN(io.Discard, conn, int64(requestHeader.Length))
+
+        // Sending the error reply
+        binary.Write(conn, binary.BigEndian, protocol.TransmissionReplyHeader{
+            ReplyMagic: protocol.TRANSMISSION_MAGIC_REPLY,
+            Error:      protocol.TRANSMISSION_ERROR_EPERM,
+            Handle:     requestHeader.Handle,
+        })
+
+        break
+    }
+
+Finally, the TRANSMISSION_TYPE_REQUEST_DISC transmission message type
+gracefully disconnects the client from the server and causes the backend
+to sync, i.e. to flush and outstanding writes to disk. This is
+especially important in order to support the lifecycle of the migration
+API.
+
+Client
+
+Unlike the server, the client is implemented by using both the kernel’s
+NBD client and a userspace component. In order to use the kernel NBD
+client, it is necessary to first find a free NBD device (/dev/nbd*);
+these devices are allocated by the kernel NBD module and can be
+specified with the nbds_max parameter[46]. In order to find a free
+device, we can either specify it manually, or check sysfs for a NBD
+device that reports a zero size:
+
+    // Using a glob on sysfs for the NBD device size
+    statPaths, err := filepath.Glob(path.Join("/sys", "block", "nbd*", "size"))
+    // ...
+
+    // Finding the first device that reports a zero zsize
+    for _, statPath := range statPaths {
+        rsize, err := os.ReadFile(statPath)
+        // ...
+
+        size, err := strconv.ParseInt(strings.TrimSpace(string(rsize)), 10, 64)
+        // ...
+
+        if size == 0 {
+            return filepath.Join("/dev", filepath.Base(filepath.Dir(statPath))), nil
+        }
+    }
+
+After a free NBD device has been found, the client can be started by
+calling Connect with a net.Conn and options, similarly to the server:
+
+    func Connect(conn net.Conn, device *os.File, options *Options) error
+
+This time, the options can define additonal information such as the
+client’s preferred blocksize, connection timeouts or requested export
+name, which, in this scenario, can be used to refer to a specific memory
+region. The kernel’s NBD device is then configured to use the
+connection; the relevant ioctl constants are extracted by using CGo, or
+hard-coded values if CGo is not available:
+
+    // Only use CGo if it is available
+    //go:build linux && cgo
+
+    // Importing the kernel headers
+    /*
+    #include <sys/ioctl.h>
+    #include <linux/nbd.h>
+    */
+    import "C"
+
+    const (
+        // Extracting the `ioctl` numbers with `CGo`
+        NEGOTIATION_IOCTL_SET_SOCK        = C.NBD_SET_SOCK
+        // ...
+    )
+
+The handshake for the NBD cleint is negotiated in userspace by Go.
+Similarly to the server, the client only supports the “fixed newstyle”
+negotiatiation and aborts otherwise. The negotiation is once again
+implemented as a simple loop similarly to the server with it switching
+on the type; on NEGOTIATION_TYPE_REPLY_INFO, the client receives the
+export size, and with NEGOTIATION_TYPE_INFO_BLOCKSIZE it receives the
+used block size, which it then valides to be within the specified bounds
+and as a valid power of two, falling back to the preffered block size
+supplied by the options if possible:
+
+    // Falling back to the client's prefered block size if none is provided, and checking if the server's advertised size is within the clients's bounds as supplied by the options
+    if options.BlockSize == 0 {
+        chosenBlockSize = info.PreferredBlockSize
+    } else if options.BlockSize >= info.MinimumBlockSize && options.BlockSize <= info.MaximumBlockSize {
+        chosenBlockSize = options.BlockSize
+    } else {
+        return ErrUnsupportedServerBlockSize
+    }
+
+    // Validating upper and lower supported bounds set by the kernel's NBD client
+    if chosenBlockSize > MaximumBlockSize {
+        return ErrMaximumBlockSize
+    } else if chosenBlockSize < MinimumBlockSize {
+        return ErrMinimumBlockSize
+    }
+
+    // Validating that the chosen block size is a power of two
+    if !((chosenBlockSize > 0) && ((chosenBlockSize & (chosenBlockSize - 1)) == 0)) {
+        return ErrBlockSizeNotPowerOfTwo
+    }
+
+After this relevant metadata has been fetched from the server, the
+kernel NBD client is further configured with these values using ioctl,
+after which the DO_IT ioctl number is used to asynchronously start the
+kernel’s NBD client:
+
+    syscall.Syscall(
+        syscall.SYS_IOCTL,
+        device.Fd(),
+        ioctl.NEGOTIATION_IOCTL_SET_BLOCKSIZE,
+        uintptr(chosenBlockSize),
+    )
+
+    // ...
+
+    go func() {
+        syscall.Syscall(
+            syscall.SYS_IOCTL,
+            device.Fd(),
+            ioctl.NEGOTIATION_IOCTL_DO_IT,
+            0,
+        )
+        // ...
+    }()
+
+In addition to being able to configure the client itself, the client
+library can also be used to list the exports of a server; for this,
+another handshake is initiated, but this time the
+NEGOTIATION_ID_OPTION_LIST option is provided, after which the client
+reads the export information from the server and disconnects:
+
+    exportNames := []string{}
+    for {
+        // Reading the export name's length
+        var exportNameLength uint32
+        if err := binary.Read(info, binary.BigEndian, &exportNameLength); err != nil {
+            // All the exports have been received
+            if errors.Is(err, io.EOF) {
+                break
+            }
+            // ...
+        }
+
+        // Reading the export name
+        exportName := make([]byte, exportNameLength)
+        io.ReadFull(info, exportName)
+
+        exportNames = append(exportNames, string(exportName))
+    }
+
+Client Lifecycle
+
+The final DO_IT ioctl never returns until it is disconnected, meaning
+that an external system must be used to detect whether the device is
+actually ready. There are two fundamental ways of doing this: By polling
+sysfs for the size parameter as it was done for finding an unused NBD
+device, or by using udev.
+
+udev manages devices in Linux, and as a device becomes available, the
+kernel sends an event using this subsystem. By subscribing to this
+system with the expected NBD device name to catch when it becomes
+available, it is possible to have a reliable and idiomatic way of
+detecting the ready state:
+
+    // Connecting to `udev`
+    udevConn.Connect(netlink.UdevEvent)
+
+    // Subscribing to events for the device name
+    udevConn.Monitor(udevReadyCh, udevErrCh, &netlink.RuleDefinitions{
+        Rules: []netlink.RuleDefinition{
+            {
+                Env: map[string]string{
+                    "DEVNAME": device.Name(),
+                },
+            },
+        },
+    })
+
+    // Waiting for the device to become available
+    go func() {
+        // ...
+        <-udevReadyCh
+
+        options.OnConnected()
+    }()
+
+In reality however, due to overheads in udev, it can be faster to use
+polling instead of the even system, which is why it is possible to set
+the ReadyCheckUdev option in the NBD client to false, which uses polling
+instead:
+
+    // Opening up the NBD device's size file in `sysfs`
+    sizeFile, err := os.Open(filepath.Join("/sys", "block", filepath.Base(device.Name()), "size"))
+
+    for {
+        // Reading the size file and parsing it's contents as a number
+        sizeFile.Seek(0, io.SeekStart)
+        io.ReadAll(sizeFile)
+        size, err := strconv.ParseInt(strings.TrimSpace(string(rsize)), 10, 64)
+
+        // If the size is no longer reported as zero, return
+        if size > 0 {
+            options.OnConnected()
+
+            return
+        }
+
+        // If the device is not yet ready, sleep until the next polling cycle
+        time.Sleep(options.ReadyCheckPollInterval)
+    }
+
+Similarly to the setup lifecycle, the teardown lifecycle is also as an
+asynchronous operation. It works by calling three ioctls on the NBD
+device’s file descriptor, causing it to disconnect from the server and
+causing the prior DO_IT syscall to return, which in turn causes the
+prior call to Connect to return:
+
+    // Complete any remaining reads/writes
+    syscall.Syscall(
+        syscall.SYS_IOCTL,
+        device.Fd(),
+        ioctl.TRANSMISSION_IOCTL_CLEAR_QUE,
+        0,
+    )
+
+    // Disconnect from the NBD server
+    syscall.Syscall(
+        syscall.SYS_IOCTL,
+        device.Fd(),
+        ioctl.TRANSMISSION_IOCTL_DISCONNECT,
+        0,
+    )
+
+    // Disassociate the socket from the NBD device so that it can be used again
+    syscall.Syscall(
+        syscall.SYS_IOCTL,
+        device.Fd(),
+        ioctl.TRANSMISSION_IOCTL_CLEAR_SOCK,
+        0,
+    )
+
+Optimizing Access to the Block Device
+
+When opening the block devie that the client is connected to, the kernel
+usually provides a caching/buffer mechanism, requiring an expensive sync
+syscall to flush outstanding changes to the NBD client. As mentioend
+earlier, by using O_DIRECT it is possible to skip this caching layer and
+write all changes directly to the NBD client and thus the server, which
+is particularly useful in a case where both the client and server are on
+the same host, and the amount of time for syncing should be minimal, as
+is the case for a migration scenario. Using O_DIRECT however does come
+with the downside of requiring reads/writes that are aligned to the
+system’s page size, which is possible to implement in the specific
+application using the device to access a resource, but not in a generic
+way.
+
+Combining the NBD Client and Server
+
+When both the client and server are started on the same host, it is
+possible to connect them in an efficient way by creating a connected
+UNIX socket pair, returning a file descriptor for both the server and
+the client respectively, after which both components can be started in a
+new goroutine:
+
+    // Creating the socket pair
+    fds, err := syscall.Socketpair(syscall.AF_UNIX, syscall.SOCK_STREAM, 0)
+    // ..
+
+    // Starting the server on file descriptor 1
+    go func() {
+        sf := os.NewFile(uintptr(fds[0]), "server")
+
+        c, err := net.FileConn(sf)
+
+        sc := c.(*net.UnixConn)
+
+        server.Handle(
+            d.sc,
+            // ...
+        )
+    }()
+
+    // Starting the client on file descriptor 1
+    go func() {
+        cf := os.NewFile(uintptr(fds[1]), "client")
+
+        c, err := net.FileConn(cf)
+
+        cc := c.(*net.UnixConn)
+        // ...
+
+        client.Connect(d.cc, /* ... */)
+    }()
+
+This once again shows the benefit of not requiring a specific transport
+layer or accept semantics for the NBD library, as this makes it possible
+to skip the usually required TCP handshake for NBD.
+
+This form of a combined client and server on the local device, with the
+server’s backend providing the actual ressource, forms a direct path
+mount - where the path to the block device can be passed to the
+application consuming or providing the ressource, which can then choose
+to open, mmap etc. it. In addition to this simple path-based mount, a
+file mount is provided. This simply opens up the path as a file, so that
+it can be accessed with the common read/write syscalls; the benefit over
+simply using the path mount and handling the access in the application
+consuming the ressource is that common pitfalls around the lifecycle
+(Close and Sync) can be handled within the mount API directly.
+
+The direct slice mount works similarly to the file mount, with the
+difference being that it mmaps the NBD device, bringing a variety of
+benefits such as not requiring syscalls to read/write from the memory
+region as mentioned before. The benefit of using the slice API over
+simply using the direct path mount API letting the application mmap the
+block device itself is once again the lifecycle, where Close and Sync
+handle the complexities of managing mmaped regions, esp. around garbage
+collection and flushing, in the mount directly. As for the API design,
+another aspect however is critical; thanks to it providing a standard Go
+slice instead of a file, it is possible to use this interface to provide
+streaming ability to applications that expect to work with a []byte,
+without requiring changes to the application itself:
+
+    func (d *DirectSliceMount) Open() ([]byte, error)
+
+It is also possible to format the backend for a NBD server/mount with a
+filesystem and mount the underlying filesystem on the host that accesses
+a resource, where a file on this filesystem can then be opened/mmaped
+similarly to the FUSE approach. This is particularly useful if there are
+multiple memory regions which all belong to the same application to
+synchronize, as it removes the need to start multiple block devices.
+This solution can be implemented by i.e. calling mkfs.ext4 on a block
+device directly or by formatting the NBD backend ahead of time, which
+does however come at the cost of storing and transferring the file
+system metadata as well as the potential latency overhead of mounting
+it.
 
 [1] T. kernel development community, “Quick start.”
 https://www.kernel.org/doc/html/next/rust/quick-start.html, 2023.
@@ -2157,3 +2605,11 @@ implementation.” https://github.com/jakWai01/sile-fystem, 2022.
 
 [44] T. Grieger, “The cost and complexity of cgo.” Dec. 2015.Available:
 https://www.cockroachlabs.com/blog/the-cost-and-complexity-of-cgo/
+
+[45] F. Pojtinger, “Weron: Overlay networks based on WebRTC.”
+https://github.com/pojntfx/weron, 2023.
+
+[46] T. L. K. Contributors, “NBD kernel module in the linux kernel
+source tree.”
+https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/drivers/block/nbd.c#n2592,
+2023.

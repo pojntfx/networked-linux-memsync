@@ -40,8 +40,8 @@ Felicitas Pojtinger (Stuttgart Media University)
     -   4.2 File-Based Synchronization
     -   4.3 FUSE Implementation in Go
     -   4.4 NBD with go-nbd
-    -   4.5 Chunking, Push/Pull Mechanisms and Lifecycle for Mounts
-    -   4.6 Live Migration for Mounts
+    -   4.5 Mounts
+    -   4.6 Live Migration
     -   4.7 Pluggable Encryption and Authentication
     -   4.8 Optimizing Backends For High RTT
     -   4.9 Using Remote Stores as Backends
@@ -1332,7 +1332,7 @@ NBD with go-nbd
         overhead and complexity, which is why e.g. the FUSE approach was
         not chosen
 
-Chunking, Push/Pull Mechanisms and Lifecycle for Mounts
+Mounts
 
 -   The ReadWriterAt pipeline
     -   In order to implement the chunking system, we can use a
@@ -1507,7 +1507,7 @@ Chunking, Push/Pull Mechanisms and Lifecycle for Mounts
         which can be removed completely with the migration protocol’s
         P2P, pull-only algorithm
 
-Live Migration for Mounts
+Live Migration
 
 -   Overview
     -   As mentioned in Pull-Based Synchronization with Migrations
@@ -1930,6 +1930,8 @@ Latency
     increases
 
 -   Development of MB of pre-emptive pulls as chunk size increases
+
+-   udev vs. polling time for waiting until NBD device becomes available
 
 Throughput
 

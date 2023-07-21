@@ -280,10 +280,9 @@ Synchronization</a></li>
 Go</a></li>
 <li><a href="#nbd-with-go-nbd"><span class="toc-section-number">1.4.4</span> NBD with
 <code>go-nbd</code></a></li>
-<li><a href="#chunking-pushpull-mechanisms-and-lifecycle-for-mounts"><span class="toc-section-number">1.4.5</span> Chunking, Push/Pull Mechanisms
-and Lifecycle for Mounts</a></li>
-<li><a href="#live-migration-for-mounts"><span class="toc-section-number">1.4.6</span> Live Migration for
+<li><a href="#mounts"><span class="toc-section-number">1.4.5</span>
 Mounts</a></li>
+<li><a href="#live-migration"><span class="toc-section-number">1.4.6</span> Live Migration</a></li>
 <li><a href="#pluggable-encryption-and-authentication"><span class="toc-section-number">1.4.7</span> Pluggable Encryption and
 Authentication</a></li>
 <li><a href="#optimizing-backends-for-high-rtt"><span class="toc-section-number">1.4.8</span> Optimizing Backends For High
@@ -1842,9 +1841,9 @@ chosen</li>
 </ul></li>
 </ul>
 </section>
-<section id="chunking-pushpull-mechanisms-and-lifecycle-for-mounts" data-number="0.4.5">
+<section id="mounts" data-number="0.4.5">
 <h3 data-number="1.4.5"><span class="header-section-number">1.4.5</span>
-Chunking, Push/Pull Mechanisms and Lifecycle for Mounts</h3>
+Mounts</h3>
 <ul>
 <li>The <code>ReadWriterAt</code> pipeline
 <ul>
@@ -2036,9 +2035,9 @@ pull-only algorithm</li>
 </ul></li>
 </ul>
 </section>
-<section id="live-migration-for-mounts" data-number="0.4.6">
+<section id="live-migration" data-number="0.4.6">
 <h3 data-number="1.4.6"><span class="header-section-number">1.4.6</span>
-Live Migration for Mounts</h3>
+Live Migration</h3>
 <ul>
 <li>Overview
 <ul>
@@ -2492,6 +2491,8 @@ increases</p></li>
 increases</p></li>
 <li><p>Development of MB of pre-emptive pulls as chunk size
 increases</p></li>
+<li><p><code>udev</code> vs. polling time for waiting until NBD device
+becomes available</p></li>
 </ul>
 </section>
 <section id="throughput" data-number="0.5.2">

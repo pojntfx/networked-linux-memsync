@@ -125,9 +125,9 @@ Synchronization</a></li>
 <li><a href="#fuse-implementation-in-go"><span class="toc-section-number">4.3</span> FUSE Implementation in Go</a></li>
 <li><a href="#nbd-with-go-nbd"><span class="toc-section-number">4.4</span> NBD with
 <code>go-nbd</code></a></li>
-<li><a href="#chunking-pushpull-mechanisms-and-lifecycle-for-mounts"><span class="toc-section-number">4.5</span> Chunking, Push/Pull Mechanisms and
-Lifecycle for Mounts</a></li>
-<li><a href="#live-migration-for-mounts"><span class="toc-section-number">4.6</span> Live Migration for Mounts</a></li>
+<li><a href="#mounts"><span class="toc-section-number">4.5</span>
+Mounts</a></li>
+<li><a href="#live-migration"><span class="toc-section-number">4.6</span> Live Migration</a></li>
 <li><a href="#pluggable-encryption-and-authentication"><span class="toc-section-number">4.7</span> Pluggable Encryption and
 Authentication</a></li>
 <li><a href="#optimizing-backends-for-high-rtt"><span class="toc-section-number">4.8</span> Optimizing Backends For High
@@ -1625,8 +1625,8 @@ overhead and complexity, which is why e.g. the FUSE approach was not
 chosen</li>
 </ul></li>
 </ul>
-<h2 id="chunking-pushpull-mechanisms-and-lifecycle-for-mounts"><span class="header-section-number">4.5</span> Chunking, Push/Pull Mechanisms
-and Lifecycle for Mounts</h2>
+<h2 id="mounts"><span class="header-section-number">4.5</span>
+Mounts</h2>
 <ul>
 <li>The <code>ReadWriterAt</code> pipeline
 <ul>
@@ -1817,7 +1817,8 @@ which can be removed completely with the migration protocol’s P2P,
 pull-only algorithm</li>
 </ul></li>
 </ul>
-<h2 id="live-migration-for-mounts"><span class="header-section-number">4.6</span> Live Migration for Mounts</h2>
+<h2 id="live-migration"><span class="header-section-number">4.6</span>
+Live Migration</h2>
 <ul>
 <li>Overview
 <ul>
@@ -2256,6 +2257,8 @@ increases</p></li>
 increases</p></li>
 <li><p>Development of MB of pre-emptive pulls as chunk size
 increases</p></li>
+<li><p><code>udev</code> vs. polling time for waiting until NBD device
+becomes available</p></li>
 </ul>
 <h2 id="throughput"><span class="header-section-number">5.2</span>
 Throughput</h2>

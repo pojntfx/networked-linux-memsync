@@ -219,6 +219,13 @@ Protocol</a></li>
 Overview</a></li>
 <li><a href="#server"><span class="toc-section-number">4.4.2</span>
 Server</a></li>
+<li><a href="#client"><span class="toc-section-number">4.4.3</span>
+Client</a></li>
+<li><a href="#client-lifecycle"><span class="toc-section-number">4.4.4</span> Client Lifecycle</a></li>
+<li><a href="#optimizing-access-to-the-block-device"><span class="toc-section-number">4.4.5</span> Optimizing Access to the Block
+Device</a></li>
+<li><a href="#combining-the-nbd-client-and-server"><span class="toc-section-number">4.4.6</span> Combining the NBD Client and
+Server</a></li>
 </ul></li>
 </ul></li>
 </ul>
@@ -1907,33 +1914,34 @@ mentioned later led to this approach not being pursued further.</p>
 NBD with <code>go-nbd</code></h2>
 <h3 id="overview-2"><span class="header-section-number">4.4.1</span>
 Overview</h3>
-<p>In order to implement the NBD synchronization approach, we need to
-create a NBD server. Due to a lack of a lean and maintained NBD library
-for Go, a new pure NBD library, <code>go-nbd</code>, was implemented.
-This does not rely on CGo or a pre-existing NBD C library like
-<code>nbdkit</code>, which means that a lot of the issues around this
-ecosystem and complexities and performance issues around CGo call
-overhead<span class="citation">[44]</span> can be avoided. Unlike many
-existing libraries, <code>go-nbd</code> also provides both a NBD server
-and client implementation, making it possible to switch out i.e. the
-system-provided <code>nbd-client</code> command with pure Go too.</p>
+<p>Due to a lack of existing, lean and maintained NBD libraries for Go,
+a custom pure Go NBD library was implemented. Most NBD libraries also
+only provide a server and no the client component, but both are needed
+for the NBD-based migration approach to work. By not having to rely on
+CGo or a pre-existing NBD library like <code>nbdkit</code>, this custom
+library can also skip a significant amount of the overhead that is
+typically associated with C interoperability, particularly in the
+context of concurrency in Go with CGo <span class="citation">[44]</span>.</p>
 <h3 id="server"><span class="header-section-number">4.4.2</span>
 Server</h3>
-<p><code>go-nbd</code> exposes a simple backend interface for the NBD
-server. The key difference between this interface compared to
-<code>userfaultfd-go</code> is that it can also handle writes, thus
-making it possible to implement the pre-copy migration flow with it:</p>
+<p>The NBD server is implemented completely in userspace, and there are
+no kernel components involved. The backend interface that is expected by
+the server is very simple and only requires four methods to be
+implemented; <code>ReadAt</code>, <code>WriteAt</code>,
+<code>Size</code> and <code>Sync</code>:</p>
 <div class="sourceCode" id="cb28"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb28-1"><a href="#cb28-1" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> Backend <span class="kw">interface</span> <span class="op">{</span></span>
-<span id="cb28-2"><a href="#cb28-2" aria-hidden="true" tabindex="-1"></a>    io<span class="op">.</span>ReaderAt</span>
-<span id="cb28-3"><a href="#cb28-3" aria-hidden="true" tabindex="-1"></a>    io<span class="op">.</span>WriterAt</span>
-<span id="cb28-4"><a href="#cb28-4" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb28-5"><a href="#cb28-5" aria-hidden="true" tabindex="-1"></a>    Size<span class="op">()</span> <span class="op">(</span><span class="dt">int64</span><span class="op">,</span> <span class="dt">error</span><span class="op">)</span></span>
-<span id="cb28-6"><a href="#cb28-6" aria-hidden="true" tabindex="-1"></a>    Sync<span class="op">()</span> <span class="dt">error</span></span>
-<span id="cb28-7"><a href="#cb28-7" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
-<p>A good example backend that implements this interface is a file
-backend; here, a simple implementation essentially just serves as a
-proxy to the file itself, keeping a key benefit of
-<code>userfaultfd-go</code>’s backend API design:</p>
+<span id="cb28-2"><a href="#cb28-2" aria-hidden="true" tabindex="-1"></a>    ReadAt<span class="op">(</span>p <span class="op">[]</span><span class="dt">byte</span><span class="op">,</span> off <span class="dt">int64</span><span class="op">)</span> <span class="op">(</span>n <span class="dt">int</span><span class="op">,</span> err <span class="dt">error</span><span class="op">)</span></span>
+<span id="cb28-3"><a href="#cb28-3" aria-hidden="true" tabindex="-1"></a>    WriteAt<span class="op">(</span>p <span class="op">[]</span><span class="dt">byte</span><span class="op">,</span> off <span class="dt">int64</span><span class="op">)</span> <span class="op">(</span>n <span class="dt">int</span><span class="op">,</span> err <span class="dt">error</span><span class="op">)</span></span>
+<span id="cb28-4"><a href="#cb28-4" aria-hidden="true" tabindex="-1"></a>    Size<span class="op">()</span> <span class="op">(</span><span class="dt">int64</span><span class="op">,</span> <span class="dt">error</span><span class="op">)</span></span>
+<span id="cb28-5"><a href="#cb28-5" aria-hidden="true" tabindex="-1"></a>    Sync<span class="op">()</span> <span class="dt">error</span></span>
+<span id="cb28-6"><a href="#cb28-6" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<p>The key difference between this backend design and the one used for
+<code>userfaultfd-go</code> is that they also support writes and other
+operations that would typically be expected for a complete block device,
+such as flushing data with <code>Sync()</code>. An example
+implementation of this backend is the file backend; since a file is
+conceptually similar to a block device, the overhead of creating the
+backend is minimal:</p>
 <div class="sourceCode" id="cb29"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb29-1"><a href="#cb29-1" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> <span class="op">(</span>b <span class="op">*</span>FileBackend<span class="op">)</span> ReadAt<span class="op">(</span>p <span class="op">[]</span><span class="dt">byte</span><span class="op">,</span> off <span class="dt">int64</span><span class="op">)</span> <span class="op">(</span>n <span class="dt">int</span><span class="op">,</span> err <span class="dt">error</span><span class="op">)</span> <span class="op">{</span></span>
 <span id="cb29-2"><a href="#cb29-2" aria-hidden="true" tabindex="-1"></a>    n<span class="op">,</span> err <span class="op">=</span> b<span class="op">.</span>file<span class="op">.</span>ReadAt<span class="op">(</span>p<span class="op">,</span> off<span class="op">)</span></span>
 <span id="cb29-3"><a href="#cb29-3" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
@@ -1944,31 +1952,449 @@ proxy to the file itself, keeping a key benefit of
 <span id="cb29-8"><a href="#cb29-8" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb29-9"><a href="#cb29-9" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> <span class="op">(</span>b <span class="op">*</span>FileBackend<span class="op">)</span> Size<span class="op">()</span> <span class="op">(</span><span class="dt">int64</span><span class="op">,</span> <span class="dt">error</span><span class="op">)</span> <span class="op">{</span></span>
 <span id="cb29-10"><a href="#cb29-10" aria-hidden="true" tabindex="-1"></a>    stat<span class="op">,</span> err <span class="op">:=</span> b<span class="op">.</span>file<span class="op">.</span>Stat<span class="op">()</span></span>
-<span id="cb29-11"><a href="#cb29-11" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> err <span class="op">!=</span> <span class="ot">nil</span> <span class="op">{</span></span>
-<span id="cb29-12"><a href="#cb29-12" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> <span class="op">-</span><span class="dv">1</span><span class="op">,</span> err</span>
-<span id="cb29-13"><a href="#cb29-13" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb29-11"><a href="#cb29-11" aria-hidden="true" tabindex="-1"></a>    <span class="co">// ..</span></span>
+<span id="cb29-12"><a href="#cb29-12" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> stat<span class="op">.</span>Size<span class="op">(),</span> <span class="ot">nil</span></span>
+<span id="cb29-13"><a href="#cb29-13" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
 <span id="cb29-14"><a href="#cb29-14" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb29-15"><a href="#cb29-15" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> stat<span class="op">.</span>Size<span class="op">(),</span> <span class="ot">nil</span></span>
-<span id="cb29-16"><a href="#cb29-16" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
-<span id="cb29-17"><a href="#cb29-17" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb29-18"><a href="#cb29-18" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> <span class="op">(</span>b <span class="op">*</span>FileBackend<span class="op">)</span> Sync<span class="op">()</span> <span class="dt">error</span> <span class="op">{</span></span>
-<span id="cb29-19"><a href="#cb29-19" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> b<span class="op">.</span>file<span class="op">.</span>Sync<span class="op">()</span></span>
-<span id="cb29-20"><a href="#cb29-20" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
-<p>Starting the actual NBD server is possible by calling
-<code>Handle</code>, which takes any <code>net.Conn</code> as it’s
-argument. This is another strength of <code>go-nbd</code>, as it makes
-it possible to use any transport layer that has compatible guarantees to
-TCP, such as WebRTC, too instead of relying on TCP only. It also doesn’t
-require a <code>accept</code>/<code>dial</code>-style client/server
-model making it possible to use a P2P transport layer, and also makes
-switching to TLS as simple as passing in a TLS connection. If NBD
-service is to be provided over an already existing socket with different
-services, this also makes it possible to inspect e.g. the TLS SNI before
-connecting to NBD instead of an alternative service:</p>
+<span id="cb29-15"><a href="#cb29-15" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> <span class="op">(</span>b <span class="op">*</span>FileBackend<span class="op">)</span> Sync<span class="op">()</span> <span class="dt">error</span> <span class="op">{</span></span>
+<span id="cb29-16"><a href="#cb29-16" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> b<span class="op">.</span>file<span class="op">.</span>Sync<span class="op">()</span></span>
+<span id="cb29-17"><a href="#cb29-17" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<p>In order to serve such a backend, <code>go-nbd</code> exposes
+<code>Handle</code> function:</p>
 <div class="sourceCode" id="cb30"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb30-1"><a href="#cb30-1" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> Handle<span class="op">(</span>conn net<span class="op">.</span>Conn<span class="op">,</span> exports <span class="op">[]</span>Export<span class="op">,</span> options <span class="op">*</span>Options<span class="op">)</span> <span class="dt">error</span></span></code></pre></div>
-<p>In addition to passing a connection to the NBD server, any array of
-exports is passed to backend as well. An export (TODO: finish section on
-exports)</p>
+<p>By not depending on a specific transport layer and instead only
+depending on a generic <code>net.Conn</code>, it is possible to easily
+integrate <code>go-nbd</code> in existing client/server systems or to
+switch out the typical TCP transport layer with i.e. QUIC. By not
+requiring <code>dial/accept</code> semantics it is also possible to use
+a P2P communication layer for peer-to-peer NBD such as WebRTC with
+weron<span class="citation">[45]</span>, which also provides the
+necessary <code>net.Conn</code> interface.</p>
+<p>In addition to this <code>net.Conn</code>, options can be provided to
+the server; these include the ability to make the server read-only by
+blocking write operations, or to set the preferred block size. The
+actual backend is linked to the server through the concept of an
+export:</p>
+<div class="sourceCode" id="cb31"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb31-1"><a href="#cb31-1" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> Export <span class="kw">struct</span> <span class="op">{</span></span>
+<span id="cb31-2"><a href="#cb31-2" aria-hidden="true" tabindex="-1"></a>    Name        <span class="dt">string</span></span>
+<span id="cb31-3"><a href="#cb31-3" aria-hidden="true" tabindex="-1"></a>    Description <span class="dt">string</span></span>
+<span id="cb31-4"><a href="#cb31-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb31-5"><a href="#cb31-5" aria-hidden="true" tabindex="-1"></a>    Backend backend<span class="op">.</span>Backend</span>
+<span id="cb31-6"><a href="#cb31-6" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<p>This allows a single server to expose multiple backends that are
+identified with a name and description, which can, in the memory
+synchronization scenario, be used to identify multiple shared memory
+regions.</p>
+<p>To make the implementation of the NBD protocol easier, negotation and
+transmission phase headers and and other structured data is modelled
+using Go structs:</p>
+<div class="sourceCode" id="cb32"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb32-1"><a href="#cb32-1" aria-hidden="true" tabindex="-1"></a><span class="co">// ...</span></span>
+<span id="cb32-2"><a href="#cb32-2" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> NegotiationOptionHeader <span class="kw">struct</span> <span class="op">{</span></span>
+<span id="cb32-3"><a href="#cb32-3" aria-hidden="true" tabindex="-1"></a>    OptionMagic <span class="dt">uint64</span></span>
+<span id="cb32-4"><a href="#cb32-4" aria-hidden="true" tabindex="-1"></a>    ID          <span class="dt">uint32</span></span>
+<span id="cb32-5"><a href="#cb32-5" aria-hidden="true" tabindex="-1"></a>    Length      <span class="dt">uint32</span></span>
+<span id="cb32-6"><a href="#cb32-6" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb32-7"><a href="#cb32-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb32-8"><a href="#cb32-8" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> NegotiationReplyHeader <span class="kw">struct</span> <span class="op">{</span></span>
+<span id="cb32-9"><a href="#cb32-9" aria-hidden="true" tabindex="-1"></a>    ReplyMagic <span class="dt">uint64</span></span>
+<span id="cb32-10"><a href="#cb32-10" aria-hidden="true" tabindex="-1"></a>    ID         <span class="dt">uint32</span></span>
+<span id="cb32-11"><a href="#cb32-11" aria-hidden="true" tabindex="-1"></a>    Type       <span class="dt">uint32</span></span>
+<span id="cb32-12"><a href="#cb32-12" aria-hidden="true" tabindex="-1"></a>    Length     <span class="dt">uint32</span></span>
+<span id="cb32-13"><a href="#cb32-13" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb32-14"><a href="#cb32-14" aria-hidden="true" tabindex="-1"></a><span class="co">// ...</span></span></code></pre></div>
+<p>In order to keep the actual handshake as simple as possible, only the
+fixed newstyle handshake is implemented, which also makes the
+implementation compliant with the baseline specification as defined by
+the protocol<span class="citation">[25]</span>. The negotiation starts
+by the server sending the negotiation header to the NBD client and
+ignoring the client’s flags:</p>
+<div class="sourceCode" id="cb33"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb33-1"><a href="#cb33-1" aria-hidden="true" tabindex="-1"></a><span class="co">// Sending the negotiation header</span></span>
+<span id="cb33-2"><a href="#cb33-2" aria-hidden="true" tabindex="-1"></a>binary<span class="op">.</span>Write<span class="op">(</span>conn<span class="op">,</span> binary<span class="op">.</span>BigEndian<span class="op">,</span> protocol<span class="op">.</span>NegotiationNewstyleHeader<span class="op">{</span></span>
+<span id="cb33-3"><a href="#cb33-3" aria-hidden="true" tabindex="-1"></a>    OldstyleMagic<span class="op">:</span>  protocol<span class="op">.</span>NEGOTIATION_MAGIC_OLDSTYLE<span class="op">,</span></span>
+<span id="cb33-4"><a href="#cb33-4" aria-hidden="true" tabindex="-1"></a>    OptionMagic<span class="op">:</span>    protocol<span class="op">.</span>NEGOTIATION_MAGIC_OPTION<span class="op">,</span></span>
+<span id="cb33-5"><a href="#cb33-5" aria-hidden="true" tabindex="-1"></a>    HandshakeFlags<span class="op">:</span> protocol<span class="op">.</span>NEGOTIATION_HANDSHAKE_FLAG_FIXED_NEWSTYLE<span class="op">,</span></span>
+<span id="cb33-6"><a href="#cb33-6" aria-hidden="true" tabindex="-1"></a><span class="op">})</span></span>
+<span id="cb33-7"><a href="#cb33-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb33-8"><a href="#cb33-8" aria-hidden="true" tabindex="-1"></a><span class="co">// Discard client flags (uint32)</span></span>
+<span id="cb33-9"><a href="#cb33-9" aria-hidden="true" tabindex="-1"></a>_<span class="op">,</span> err <span class="op">:=</span> io<span class="op">.</span>CopyN<span class="op">(</span>io<span class="op">.</span>Discard<span class="op">,</span> conn<span class="op">,</span> <span class="dv">4</span><span class="op">)</span></span>
+<span id="cb33-10"><a href="#cb33-10" aria-hidden="true" tabindex="-1"></a><span class="co">// ...</span></span></code></pre></div>
+<p>The option negotiation phase is implemented using a simple loop,
+which either breaks on success or returns in the case of an error. For
+the Go implementation, it is possible to use the <code>binary</code>
+package to correctly encode and decode the NBD packets and then
+switching on the encoded option ID:</p>
+<div class="sourceCode" id="cb34"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb34-1"><a href="#cb34-1" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> <span class="op">{</span></span>
+<span id="cb34-2"><a href="#cb34-2" aria-hidden="true" tabindex="-1"></a>    <span class="co">// Read the header</span></span>
+<span id="cb34-3"><a href="#cb34-3" aria-hidden="true" tabindex="-1"></a>    <span class="kw">var</span> optionHeader protocol<span class="op">.</span>NegotiationOptionHeader</span>
+<span id="cb34-4"><a href="#cb34-4" aria-hidden="true" tabindex="-1"></a>    binary<span class="op">.</span>Read<span class="op">(</span>conn<span class="op">,</span> binary<span class="op">.</span>BigEndian<span class="op">,</span> <span class="op">&amp;</span>optionHeader<span class="op">)</span></span>
+<span id="cb34-5"><a href="#cb34-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb34-6"><a href="#cb34-6" aria-hidden="true" tabindex="-1"></a>    <span class="co">//  Validate the packet</span></span>
+<span id="cb34-7"><a href="#cb34-7" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> optionHeader<span class="op">.</span>OptionMagic <span class="op">!=</span> protocol<span class="op">.</span>NEGOTIATION_MAGIC_OPTION <span class="op">{</span></span>
+<span id="cb34-8"><a href="#cb34-8" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> ErrInvalidMagic</span>
+<span id="cb34-9"><a href="#cb34-9" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb34-10"><a href="#cb34-10" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb34-11"><a href="#cb34-11" aria-hidden="true" tabindex="-1"></a>    <span class="co">// Handle the option by it&#39;s ID</span></span>
+<span id="cb34-12"><a href="#cb34-12" aria-hidden="true" tabindex="-1"></a>    <span class="cf">switch</span> optionHeader<span class="op">.</span>ID <span class="op">{</span></span>
+<span id="cb34-13"><a href="#cb34-13" aria-hidden="true" tabindex="-1"></a>        <span class="co">// ...</span></span>
+<span id="cb34-14"><a href="#cb34-14" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb34-15"><a href="#cb34-15" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<p>In this handshake, the <code>NEGOTIATION_ID_OPTION_INFO</code> and
+<code>NEGOTIATION_ID_OPTION_GO</code> options exchange information about
+the chosen export (i.e. block size, export size, name and description),
+and if <code>GO</code> is specified, immediately continue on to the
+transmission phase. If an export is not found, the server aborts the
+connection. In order to allow for enumeration of available exports, the
+<code>NEGOTIATION_ID_OPTION_LIST</code> allows for returning the list of
+exports to the client, and <code>NEGOTIATION_ID_OPTION_ABORT</code>
+allows aborting handshake, which can be necessary if i.e. the
+<code>NEGOTIATION_ID_OPTION_INFO</code> was chosen but the client can’t
+handle the exposed export, i.e. due to it not supporting the advertised
+block size.</p>
+<p>The actual transmission phase is implemented in a similar way, by
+reading headers in a loop, switchin on the message type and handling it
+accordingly. <code>TRANSMISSION_TYPE_REQUEST_READ</code> forwards a read
+request to the selected export’s backend and sends the relevant chunk to
+the client, <code>TRANSMISSION_TYPE_REQUEST_WRITE</code> reads the
+offset and chunk from the client, and writes it to the export’s
+backend:</p>
+<div class="sourceCode" id="cb35"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb35-1"><a href="#cb35-1" aria-hidden="true" tabindex="-1"></a><span class="co">// Reading the chunk to be written from the client&#39;s connection</span></span>
+<span id="cb35-2"><a href="#cb35-2" aria-hidden="true" tabindex="-1"></a>n<span class="op">,</span> err <span class="op">:=</span> io<span class="op">.</span>ReadAtLeast<span class="op">(</span>conn<span class="op">,</span> b<span class="op">[:</span>requestHeader<span class="op">.</span>Length<span class="op">],</span> <span class="dt">int</span><span class="op">(</span>requestHeader<span class="op">.</span>Length<span class="op">))</span></span>
+<span id="cb35-3"><a href="#cb35-3" aria-hidden="true" tabindex="-1"></a><span class="co">// ...</span></span>
+<span id="cb35-4"><a href="#cb35-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb35-5"><a href="#cb35-5" aria-hidden="true" tabindex="-1"></a><span class="co">// Writing it to the backend</span></span>
+<span id="cb35-6"><a href="#cb35-6" aria-hidden="true" tabindex="-1"></a>export<span class="op">.</span>Backend<span class="op">.</span>WriteAt<span class="op">(</span>b<span class="op">[:</span>n<span class="op">],</span> <span class="dt">int64</span><span class="op">(</span>requestHeader<span class="op">.</span>Offset<span class="op">))</span></span>
+<span id="cb35-7"><a href="#cb35-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb35-8"><a href="#cb35-8" aria-hidden="true" tabindex="-1"></a><span class="co">// Acknowledging the write to the client</span></span>
+<span id="cb35-9"><a href="#cb35-9" aria-hidden="true" tabindex="-1"></a>binary<span class="op">.</span>Write<span class="op">(</span>conn<span class="op">,</span> binary<span class="op">.</span>BigEndian<span class="op">,</span> protocol<span class="op">.</span>TransmissionReplyHeader<span class="op">{</span></span>
+<span id="cb35-10"><a href="#cb35-10" aria-hidden="true" tabindex="-1"></a>    ReplyMagic<span class="op">:</span> protocol<span class="op">.</span>TRANSMISSION_MAGIC_REPLY<span class="op">,</span></span>
+<span id="cb35-11"><a href="#cb35-11" aria-hidden="true" tabindex="-1"></a>    Error<span class="op">:</span>      <span class="dv">0</span><span class="op">,</span></span>
+<span id="cb35-12"><a href="#cb35-12" aria-hidden="true" tabindex="-1"></a>    Handle<span class="op">:</span>     requestHeader<span class="op">.</span>Handle<span class="op">,</span></span>
+<span id="cb35-13"><a href="#cb35-13" aria-hidden="true" tabindex="-1"></a><span class="op">})</span></span></code></pre></div>
+<p>It is here that the read-only option is implemented by sending a
+permission error in case of writes:</p>
+<div class="sourceCode" id="cb36"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb36-1"><a href="#cb36-1" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> options<span class="op">.</span>ReadOnly <span class="op">{</span></span>
+<span id="cb36-2"><a href="#cb36-2" aria-hidden="true" tabindex="-1"></a>    <span class="co">// Discard the write command&#39;s data</span></span>
+<span id="cb36-3"><a href="#cb36-3" aria-hidden="true" tabindex="-1"></a>    _<span class="op">,</span> err <span class="op">:=</span> io<span class="op">.</span>CopyN<span class="op">(</span>io<span class="op">.</span>Discard<span class="op">,</span> conn<span class="op">,</span> <span class="dt">int64</span><span class="op">(</span>requestHeader<span class="op">.</span>Length<span class="op">))</span></span>
+<span id="cb36-4"><a href="#cb36-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb36-5"><a href="#cb36-5" aria-hidden="true" tabindex="-1"></a>    <span class="co">// Sending the error reply</span></span>
+<span id="cb36-6"><a href="#cb36-6" aria-hidden="true" tabindex="-1"></a>    binary<span class="op">.</span>Write<span class="op">(</span>conn<span class="op">,</span> binary<span class="op">.</span>BigEndian<span class="op">,</span> protocol<span class="op">.</span>TransmissionReplyHeader<span class="op">{</span></span>
+<span id="cb36-7"><a href="#cb36-7" aria-hidden="true" tabindex="-1"></a>        ReplyMagic<span class="op">:</span> protocol<span class="op">.</span>TRANSMISSION_MAGIC_REPLY<span class="op">,</span></span>
+<span id="cb36-8"><a href="#cb36-8" aria-hidden="true" tabindex="-1"></a>        Error<span class="op">:</span>      protocol<span class="op">.</span>TRANSMISSION_ERROR_EPERM<span class="op">,</span></span>
+<span id="cb36-9"><a href="#cb36-9" aria-hidden="true" tabindex="-1"></a>        Handle<span class="op">:</span>     requestHeader<span class="op">.</span>Handle<span class="op">,</span></span>
+<span id="cb36-10"><a href="#cb36-10" aria-hidden="true" tabindex="-1"></a>    <span class="op">})</span></span>
+<span id="cb36-11"><a href="#cb36-11" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb36-12"><a href="#cb36-12" aria-hidden="true" tabindex="-1"></a>    <span class="cf">break</span></span>
+<span id="cb36-13"><a href="#cb36-13" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<p>Finally, the <code>TRANSMISSION_TYPE_REQUEST_DISC</code> transmission
+message type gracefully disconnects the client from the server and
+causes the backend to sync, i.e. to flush and outstanding writes to
+disk. This is especially important in order to support the lifecycle of
+the migration API.</p>
+<h3 id="client"><span class="header-section-number">4.4.3</span>
+Client</h3>
+<p>Unlike the server, the client is implemented by using both the
+kernel’s NBD client and a userspace component. In order to use the
+kernel NBD client, it is necessary to first find a free NBD device
+(<code>/dev/nbd*</code>); these devices are allocated by the kernel NBD
+module and can be specified with the <code>nbds_max</code>
+parameter<span class="citation">[46]</span>. In order to find a free
+device, we can either specify it manually, or check <code>sysfs</code>
+for a NBD device that reports a zero size:</p>
+<div class="sourceCode" id="cb37"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb37-1"><a href="#cb37-1" aria-hidden="true" tabindex="-1"></a><span class="co">// Using a glob on sysfs for the NBD device size</span></span>
+<span id="cb37-2"><a href="#cb37-2" aria-hidden="true" tabindex="-1"></a>statPaths<span class="op">,</span> err <span class="op">:=</span> filepath<span class="op">.</span>Glob<span class="op">(</span>path<span class="op">.</span>Join<span class="op">(</span><span class="st">&quot;/sys&quot;</span><span class="op">,</span> <span class="st">&quot;block&quot;</span><span class="op">,</span> <span class="st">&quot;nbd*&quot;</span><span class="op">,</span> <span class="st">&quot;size&quot;</span><span class="op">))</span></span>
+<span id="cb37-3"><a href="#cb37-3" aria-hidden="true" tabindex="-1"></a><span class="co">// ...</span></span>
+<span id="cb37-4"><a href="#cb37-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb37-5"><a href="#cb37-5" aria-hidden="true" tabindex="-1"></a><span class="co">// Finding the first device that reports a zero zsize</span></span>
+<span id="cb37-6"><a href="#cb37-6" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> _<span class="op">,</span> statPath <span class="op">:=</span> <span class="kw">range</span> statPaths <span class="op">{</span></span>
+<span id="cb37-7"><a href="#cb37-7" aria-hidden="true" tabindex="-1"></a>    rsize<span class="op">,</span> err <span class="op">:=</span> os<span class="op">.</span>ReadFile<span class="op">(</span>statPath<span class="op">)</span></span>
+<span id="cb37-8"><a href="#cb37-8" aria-hidden="true" tabindex="-1"></a>    <span class="co">// ...</span></span>
+<span id="cb37-9"><a href="#cb37-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb37-10"><a href="#cb37-10" aria-hidden="true" tabindex="-1"></a>    size<span class="op">,</span> err <span class="op">:=</span> strconv<span class="op">.</span>ParseInt<span class="op">(</span>strings<span class="op">.</span>TrimSpace<span class="op">(</span><span class="dt">string</span><span class="op">(</span>rsize<span class="op">)),</span> <span class="dv">10</span><span class="op">,</span> <span class="dv">64</span><span class="op">)</span></span>
+<span id="cb37-11"><a href="#cb37-11" aria-hidden="true" tabindex="-1"></a>    <span class="co">// ...</span></span>
+<span id="cb37-12"><a href="#cb37-12" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb37-13"><a href="#cb37-13" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> size <span class="op">==</span> <span class="dv">0</span> <span class="op">{</span></span>
+<span id="cb37-14"><a href="#cb37-14" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> filepath<span class="op">.</span>Join<span class="op">(</span><span class="st">&quot;/dev&quot;</span><span class="op">,</span> filepath<span class="op">.</span>Base<span class="op">(</span>filepath<span class="op">.</span>Dir<span class="op">(</span>statPath<span class="op">))),</span> <span class="ot">nil</span></span>
+<span id="cb37-15"><a href="#cb37-15" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb37-16"><a href="#cb37-16" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<p>After a free NBD device has been found, the client can be started by
+calling <code>Connect</code> with a <code>net.Conn</code> and options,
+similarly to the server:</p>
+<div class="sourceCode" id="cb38"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb38-1"><a href="#cb38-1" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> Connect<span class="op">(</span>conn net<span class="op">.</span>Conn<span class="op">,</span> device <span class="op">*</span>os<span class="op">.</span>File<span class="op">,</span> options <span class="op">*</span>Options<span class="op">)</span> <span class="dt">error</span></span></code></pre></div>
+<p>This time, the options can define additonal information such as the
+client’s preferred blocksize, connection timeouts or requested export
+name, which, in this scenario, can be used to refer to a specific memory
+region. The kernel’s NBD device is then configured to use the
+connection; the relevant <code>ioctl</code> constants are extracted by
+using CGo, or hard-coded values if CGo is not available:</p>
+<div class="sourceCode" id="cb39"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb39-1"><a href="#cb39-1" aria-hidden="true" tabindex="-1"></a><span class="co">// Only use CGo if it is available</span></span>
+<span id="cb39-2"><a href="#cb39-2" aria-hidden="true" tabindex="-1"></a><span class="co">//go:build linux &amp;&amp; cgo</span></span>
+<span id="cb39-3"><a href="#cb39-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb39-4"><a href="#cb39-4" aria-hidden="true" tabindex="-1"></a><span class="co">// Importing the kernel headers</span></span>
+<span id="cb39-5"><a href="#cb39-5" aria-hidden="true" tabindex="-1"></a><span class="co">/*</span></span>
+<span id="cb39-6"><a href="#cb39-6" aria-hidden="true" tabindex="-1"></a><span class="co">#include &lt;sys/ioctl.h&gt;</span></span>
+<span id="cb39-7"><a href="#cb39-7" aria-hidden="true" tabindex="-1"></a><span class="co">#include &lt;linux/nbd.h&gt;</span></span>
+<span id="cb39-8"><a href="#cb39-8" aria-hidden="true" tabindex="-1"></a><span class="co">*/</span></span>
+<span id="cb39-9"><a href="#cb39-9" aria-hidden="true" tabindex="-1"></a><span class="kw">import</span> <span class="st">&quot;C&quot;</span></span>
+<span id="cb39-10"><a href="#cb39-10" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb39-11"><a href="#cb39-11" aria-hidden="true" tabindex="-1"></a><span class="kw">const</span> <span class="op">(</span></span>
+<span id="cb39-12"><a href="#cb39-12" aria-hidden="true" tabindex="-1"></a>    <span class="co">// Extracting the `ioctl` numbers with `CGo`</span></span>
+<span id="cb39-13"><a href="#cb39-13" aria-hidden="true" tabindex="-1"></a>    NEGOTIATION_IOCTL_SET_SOCK        <span class="op">=</span> C<span class="op">.</span>NBD_SET_SOCK</span>
+<span id="cb39-14"><a href="#cb39-14" aria-hidden="true" tabindex="-1"></a>    <span class="co">// ...</span></span>
+<span id="cb39-15"><a href="#cb39-15" aria-hidden="true" tabindex="-1"></a><span class="op">)</span></span></code></pre></div>
+<p>The handshake for the NBD cleint is negotiated in userspace by Go.
+Similarly to the server, the client only supports the “fixed newstyle”
+negotiatiation and aborts otherwise. The negotiation is once again
+implemented as a simple loop similarly to the server with it switching
+on the type; on <code>NEGOTIATION_TYPE_REPLY_INFO</code>, the client
+receives the export size, and with
+<code>NEGOTIATION_TYPE_INFO_BLOCKSIZE</code> it receives the used block
+size, which it then valides to be within the specified bounds and as a
+valid power of two, falling back to the preffered block size supplied by
+the options if possible:</p>
+<div class="sourceCode" id="cb40"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb40-1"><a href="#cb40-1" aria-hidden="true" tabindex="-1"></a><span class="co">// Falling back to the client&#39;s prefered block size if none is provided, and checking if the server&#39;s advertised size is within the clients&#39;s bounds as supplied by the options</span></span>
+<span id="cb40-2"><a href="#cb40-2" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> options<span class="op">.</span>BlockSize <span class="op">==</span> <span class="dv">0</span> <span class="op">{</span></span>
+<span id="cb40-3"><a href="#cb40-3" aria-hidden="true" tabindex="-1"></a>    chosenBlockSize <span class="op">=</span> info<span class="op">.</span>PreferredBlockSize</span>
+<span id="cb40-4"><a href="#cb40-4" aria-hidden="true" tabindex="-1"></a><span class="op">}</span> <span class="cf">else</span> <span class="cf">if</span> options<span class="op">.</span>BlockSize <span class="op">&gt;=</span> info<span class="op">.</span>MinimumBlockSize <span class="op">&amp;&amp;</span> options<span class="op">.</span>BlockSize <span class="op">&lt;=</span> info<span class="op">.</span>MaximumBlockSize <span class="op">{</span></span>
+<span id="cb40-5"><a href="#cb40-5" aria-hidden="true" tabindex="-1"></a>    chosenBlockSize <span class="op">=</span> options<span class="op">.</span>BlockSize</span>
+<span id="cb40-6"><a href="#cb40-6" aria-hidden="true" tabindex="-1"></a><span class="op">}</span> <span class="cf">else</span> <span class="op">{</span></span>
+<span id="cb40-7"><a href="#cb40-7" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> ErrUnsupportedServerBlockSize</span>
+<span id="cb40-8"><a href="#cb40-8" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb40-9"><a href="#cb40-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb40-10"><a href="#cb40-10" aria-hidden="true" tabindex="-1"></a><span class="co">// Validating upper and lower supported bounds set by the kernel&#39;s NBD client</span></span>
+<span id="cb40-11"><a href="#cb40-11" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> chosenBlockSize <span class="op">&gt;</span> MaximumBlockSize <span class="op">{</span></span>
+<span id="cb40-12"><a href="#cb40-12" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> ErrMaximumBlockSize</span>
+<span id="cb40-13"><a href="#cb40-13" aria-hidden="true" tabindex="-1"></a><span class="op">}</span> <span class="cf">else</span> <span class="cf">if</span> chosenBlockSize <span class="op">&lt;</span> MinimumBlockSize <span class="op">{</span></span>
+<span id="cb40-14"><a href="#cb40-14" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> ErrMinimumBlockSize</span>
+<span id="cb40-15"><a href="#cb40-15" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb40-16"><a href="#cb40-16" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb40-17"><a href="#cb40-17" aria-hidden="true" tabindex="-1"></a><span class="co">// Validating that the chosen block size is a power of two</span></span>
+<span id="cb40-18"><a href="#cb40-18" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> <span class="op">!((</span>chosenBlockSize <span class="op">&gt;</span> <span class="dv">0</span><span class="op">)</span> <span class="op">&amp;&amp;</span> <span class="op">((</span>chosenBlockSize <span class="op">&amp;</span> <span class="op">(</span>chosenBlockSize <span class="op">-</span> <span class="dv">1</span><span class="op">))</span> <span class="op">==</span> <span class="dv">0</span><span class="op">))</span> <span class="op">{</span></span>
+<span id="cb40-19"><a href="#cb40-19" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> ErrBlockSizeNotPowerOfTwo</span>
+<span id="cb40-20"><a href="#cb40-20" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<p>After this relevant metadata has been fetched from the server, the
+kernel NBD client is further configured with these values using
+<code>ioctl</code>, after which the <code>DO_IT</code>
+<code>ioctl</code> number is used to asynchronously start the kernel’s
+NBD client:</p>
+<div class="sourceCode" id="cb41"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb41-1"><a href="#cb41-1" aria-hidden="true" tabindex="-1"></a>syscall<span class="op">.</span>Syscall<span class="op">(</span></span>
+<span id="cb41-2"><a href="#cb41-2" aria-hidden="true" tabindex="-1"></a>    syscall<span class="op">.</span>SYS_IOCTL<span class="op">,</span></span>
+<span id="cb41-3"><a href="#cb41-3" aria-hidden="true" tabindex="-1"></a>    device<span class="op">.</span>Fd<span class="op">(),</span></span>
+<span id="cb41-4"><a href="#cb41-4" aria-hidden="true" tabindex="-1"></a>    ioctl<span class="op">.</span>NEGOTIATION_IOCTL_SET_BLOCKSIZE<span class="op">,</span></span>
+<span id="cb41-5"><a href="#cb41-5" aria-hidden="true" tabindex="-1"></a>    <span class="dt">uintptr</span><span class="op">(</span>chosenBlockSize<span class="op">),</span></span>
+<span id="cb41-6"><a href="#cb41-6" aria-hidden="true" tabindex="-1"></a><span class="op">)</span></span>
+<span id="cb41-7"><a href="#cb41-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb41-8"><a href="#cb41-8" aria-hidden="true" tabindex="-1"></a><span class="co">// ...</span></span>
+<span id="cb41-9"><a href="#cb41-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb41-10"><a href="#cb41-10" aria-hidden="true" tabindex="-1"></a><span class="cf">go</span> <span class="kw">func</span><span class="op">()</span> <span class="op">{</span></span>
+<span id="cb41-11"><a href="#cb41-11" aria-hidden="true" tabindex="-1"></a>    syscall<span class="op">.</span>Syscall<span class="op">(</span></span>
+<span id="cb41-12"><a href="#cb41-12" aria-hidden="true" tabindex="-1"></a>        syscall<span class="op">.</span>SYS_IOCTL<span class="op">,</span></span>
+<span id="cb41-13"><a href="#cb41-13" aria-hidden="true" tabindex="-1"></a>        device<span class="op">.</span>Fd<span class="op">(),</span></span>
+<span id="cb41-14"><a href="#cb41-14" aria-hidden="true" tabindex="-1"></a>        ioctl<span class="op">.</span>NEGOTIATION_IOCTL_DO_IT<span class="op">,</span></span>
+<span id="cb41-15"><a href="#cb41-15" aria-hidden="true" tabindex="-1"></a>        <span class="dv">0</span><span class="op">,</span></span>
+<span id="cb41-16"><a href="#cb41-16" aria-hidden="true" tabindex="-1"></a>    <span class="op">)</span></span>
+<span id="cb41-17"><a href="#cb41-17" aria-hidden="true" tabindex="-1"></a>    <span class="co">// ...</span></span>
+<span id="cb41-18"><a href="#cb41-18" aria-hidden="true" tabindex="-1"></a><span class="op">}()</span></span></code></pre></div>
+<p>In addition to being able to configure the client itself, the client
+library can also be used to list the exports of a server; for this,
+another handshake is initiated, but this time the
+<code>NEGOTIATION_ID_OPTION_LIST</code> option is provided, after which
+the client reads the export information from the server and
+disconnects:</p>
+<div class="sourceCode" id="cb42"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb42-1"><a href="#cb42-1" aria-hidden="true" tabindex="-1"></a>exportNames <span class="op">:=</span> <span class="op">[]</span><span class="dt">string</span><span class="op">{}</span></span>
+<span id="cb42-2"><a href="#cb42-2" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> <span class="op">{</span></span>
+<span id="cb42-3"><a href="#cb42-3" aria-hidden="true" tabindex="-1"></a>    <span class="co">// Reading the export name&#39;s length</span></span>
+<span id="cb42-4"><a href="#cb42-4" aria-hidden="true" tabindex="-1"></a>    <span class="kw">var</span> exportNameLength <span class="dt">uint32</span></span>
+<span id="cb42-5"><a href="#cb42-5" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> err <span class="op">:=</span> binary<span class="op">.</span>Read<span class="op">(</span>info<span class="op">,</span> binary<span class="op">.</span>BigEndian<span class="op">,</span> <span class="op">&amp;</span>exportNameLength<span class="op">);</span> err <span class="op">!=</span> <span class="ot">nil</span> <span class="op">{</span></span>
+<span id="cb42-6"><a href="#cb42-6" aria-hidden="true" tabindex="-1"></a>        <span class="co">// All the exports have been received</span></span>
+<span id="cb42-7"><a href="#cb42-7" aria-hidden="true" tabindex="-1"></a>        <span class="cf">if</span> errors<span class="op">.</span>Is<span class="op">(</span>err<span class="op">,</span> io<span class="op">.</span>EOF<span class="op">)</span> <span class="op">{</span></span>
+<span id="cb42-8"><a href="#cb42-8" aria-hidden="true" tabindex="-1"></a>            <span class="cf">break</span></span>
+<span id="cb42-9"><a href="#cb42-9" aria-hidden="true" tabindex="-1"></a>        <span class="op">}</span></span>
+<span id="cb42-10"><a href="#cb42-10" aria-hidden="true" tabindex="-1"></a>        <span class="co">// ...</span></span>
+<span id="cb42-11"><a href="#cb42-11" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb42-12"><a href="#cb42-12" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb42-13"><a href="#cb42-13" aria-hidden="true" tabindex="-1"></a>    <span class="co">// Reading the export name</span></span>
+<span id="cb42-14"><a href="#cb42-14" aria-hidden="true" tabindex="-1"></a>    exportName <span class="op">:=</span> <span class="bu">make</span><span class="op">([]</span><span class="dt">byte</span><span class="op">,</span> exportNameLength<span class="op">)</span></span>
+<span id="cb42-15"><a href="#cb42-15" aria-hidden="true" tabindex="-1"></a>    io<span class="op">.</span>ReadFull<span class="op">(</span>info<span class="op">,</span> exportName<span class="op">)</span></span>
+<span id="cb42-16"><a href="#cb42-16" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb42-17"><a href="#cb42-17" aria-hidden="true" tabindex="-1"></a>    exportNames <span class="op">=</span> <span class="bu">append</span><span class="op">(</span>exportNames<span class="op">,</span> <span class="dt">string</span><span class="op">(</span>exportName<span class="op">))</span></span>
+<span id="cb42-18"><a href="#cb42-18" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<h3 id="client-lifecycle"><span class="header-section-number">4.4.4</span> Client Lifecycle</h3>
+<p>The final <code>DO_IT</code> <code>ioctl</code> never returns until
+it is disconnected, meaning that an external system must be used to
+detect whether the device is actually ready. There are two fundamental
+ways of doing this: By polling <code>sysfs</code> for the size parameter
+as it was done for finding an unused NBD device, or by using
+<code>udev</code>.</p>
+<p><code>udev</code> manages devices in Linux, and as a device becomes
+available, the kernel sends an event using this subsystem. By
+subscribing to this system with the expected NBD device name to catch
+when it becomes available, it is possible to have a reliable and
+idiomatic way of detecting the ready state:</p>
+<div class="sourceCode" id="cb43"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb43-1"><a href="#cb43-1" aria-hidden="true" tabindex="-1"></a><span class="co">// Connecting to `udev`</span></span>
+<span id="cb43-2"><a href="#cb43-2" aria-hidden="true" tabindex="-1"></a>udevConn<span class="op">.</span>Connect<span class="op">(</span>netlink<span class="op">.</span>UdevEvent<span class="op">)</span></span>
+<span id="cb43-3"><a href="#cb43-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb43-4"><a href="#cb43-4" aria-hidden="true" tabindex="-1"></a><span class="co">// Subscribing to events for the device name</span></span>
+<span id="cb43-5"><a href="#cb43-5" aria-hidden="true" tabindex="-1"></a>udevConn<span class="op">.</span>Monitor<span class="op">(</span>udevReadyCh<span class="op">,</span> udevErrCh<span class="op">,</span> <span class="op">&amp;</span>netlink<span class="op">.</span>RuleDefinitions<span class="op">{</span></span>
+<span id="cb43-6"><a href="#cb43-6" aria-hidden="true" tabindex="-1"></a>    Rules<span class="op">:</span> <span class="op">[]</span>netlink<span class="op">.</span>RuleDefinition<span class="op">{</span></span>
+<span id="cb43-7"><a href="#cb43-7" aria-hidden="true" tabindex="-1"></a>        <span class="op">{</span></span>
+<span id="cb43-8"><a href="#cb43-8" aria-hidden="true" tabindex="-1"></a>            Env<span class="op">:</span> <span class="kw">map</span><span class="op">[</span><span class="dt">string</span><span class="op">]</span><span class="dt">string</span><span class="op">{</span></span>
+<span id="cb43-9"><a href="#cb43-9" aria-hidden="true" tabindex="-1"></a>                <span class="st">&quot;DEVNAME&quot;</span><span class="op">:</span> device<span class="op">.</span>Name<span class="op">(),</span></span>
+<span id="cb43-10"><a href="#cb43-10" aria-hidden="true" tabindex="-1"></a>            <span class="op">},</span></span>
+<span id="cb43-11"><a href="#cb43-11" aria-hidden="true" tabindex="-1"></a>        <span class="op">},</span></span>
+<span id="cb43-12"><a href="#cb43-12" aria-hidden="true" tabindex="-1"></a>    <span class="op">},</span></span>
+<span id="cb43-13"><a href="#cb43-13" aria-hidden="true" tabindex="-1"></a><span class="op">})</span></span>
+<span id="cb43-14"><a href="#cb43-14" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb43-15"><a href="#cb43-15" aria-hidden="true" tabindex="-1"></a><span class="co">// Waiting for the device to become available</span></span>
+<span id="cb43-16"><a href="#cb43-16" aria-hidden="true" tabindex="-1"></a><span class="cf">go</span> <span class="kw">func</span><span class="op">()</span> <span class="op">{</span></span>
+<span id="cb43-17"><a href="#cb43-17" aria-hidden="true" tabindex="-1"></a>    <span class="co">// ...</span></span>
+<span id="cb43-18"><a href="#cb43-18" aria-hidden="true" tabindex="-1"></a>    <span class="op">&lt;-</span>udevReadyCh</span>
+<span id="cb43-19"><a href="#cb43-19" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb43-20"><a href="#cb43-20" aria-hidden="true" tabindex="-1"></a>    options<span class="op">.</span>OnConnected<span class="op">()</span></span>
+<span id="cb43-21"><a href="#cb43-21" aria-hidden="true" tabindex="-1"></a><span class="op">}()</span></span></code></pre></div>
+<p>In reality however, due to overheads in <code>udev</code>, it can be
+faster to use polling instead of the even system, which is why it is
+possible to set the <code>ReadyCheckUdev</code> option in the NBD client
+to <code>false</code>, which uses polling instead:</p>
+<div class="sourceCode" id="cb44"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb44-1"><a href="#cb44-1" aria-hidden="true" tabindex="-1"></a><span class="co">// Opening up the NBD device&#39;s size file in `sysfs`</span></span>
+<span id="cb44-2"><a href="#cb44-2" aria-hidden="true" tabindex="-1"></a>sizeFile<span class="op">,</span> err <span class="op">:=</span> os<span class="op">.</span>Open<span class="op">(</span>filepath<span class="op">.</span>Join<span class="op">(</span><span class="st">&quot;/sys&quot;</span><span class="op">,</span> <span class="st">&quot;block&quot;</span><span class="op">,</span> filepath<span class="op">.</span>Base<span class="op">(</span>device<span class="op">.</span>Name<span class="op">()),</span> <span class="st">&quot;size&quot;</span><span class="op">))</span></span>
+<span id="cb44-3"><a href="#cb44-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb44-4"><a href="#cb44-4" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> <span class="op">{</span></span>
+<span id="cb44-5"><a href="#cb44-5" aria-hidden="true" tabindex="-1"></a>    <span class="co">// Reading the size file and parsing it&#39;s contents as a number</span></span>
+<span id="cb44-6"><a href="#cb44-6" aria-hidden="true" tabindex="-1"></a>    sizeFile<span class="op">.</span>Seek<span class="op">(</span><span class="dv">0</span><span class="op">,</span> io<span class="op">.</span>SeekStart<span class="op">)</span></span>
+<span id="cb44-7"><a href="#cb44-7" aria-hidden="true" tabindex="-1"></a>    io<span class="op">.</span>ReadAll<span class="op">(</span>sizeFile<span class="op">)</span></span>
+<span id="cb44-8"><a href="#cb44-8" aria-hidden="true" tabindex="-1"></a>    size<span class="op">,</span> err <span class="op">:=</span> strconv<span class="op">.</span>ParseInt<span class="op">(</span>strings<span class="op">.</span>TrimSpace<span class="op">(</span><span class="dt">string</span><span class="op">(</span>rsize<span class="op">)),</span> <span class="dv">10</span><span class="op">,</span> <span class="dv">64</span><span class="op">)</span></span>
+<span id="cb44-9"><a href="#cb44-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb44-10"><a href="#cb44-10" aria-hidden="true" tabindex="-1"></a>    <span class="co">// If the size is no longer reported as zero, return</span></span>
+<span id="cb44-11"><a href="#cb44-11" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> size <span class="op">&gt;</span> <span class="dv">0</span> <span class="op">{</span></span>
+<span id="cb44-12"><a href="#cb44-12" aria-hidden="true" tabindex="-1"></a>        options<span class="op">.</span>OnConnected<span class="op">()</span></span>
+<span id="cb44-13"><a href="#cb44-13" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb44-14"><a href="#cb44-14" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span></span>
+<span id="cb44-15"><a href="#cb44-15" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb44-16"><a href="#cb44-16" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb44-17"><a href="#cb44-17" aria-hidden="true" tabindex="-1"></a>    <span class="co">// If the device is not yet ready, sleep until the next polling cycle</span></span>
+<span id="cb44-18"><a href="#cb44-18" aria-hidden="true" tabindex="-1"></a>    time<span class="op">.</span>Sleep<span class="op">(</span>options<span class="op">.</span>ReadyCheckPollInterval<span class="op">)</span></span>
+<span id="cb44-19"><a href="#cb44-19" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<p>Similarly to the setup lifecycle, the teardown lifecycle is also as
+an asynchronous operation. It works by calling three <code>ioctl</code>s
+on the NBD device’s file descriptor, causing it to disconnect from the
+server and causing the prior <code>DO_IT</code> syscall to return, which
+in turn causes the prior call to <code>Connect</code> to return:</p>
+<div class="sourceCode" id="cb45"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb45-1"><a href="#cb45-1" aria-hidden="true" tabindex="-1"></a><span class="co">// Complete any remaining reads/writes</span></span>
+<span id="cb45-2"><a href="#cb45-2" aria-hidden="true" tabindex="-1"></a>syscall<span class="op">.</span>Syscall<span class="op">(</span></span>
+<span id="cb45-3"><a href="#cb45-3" aria-hidden="true" tabindex="-1"></a>    syscall<span class="op">.</span>SYS_IOCTL<span class="op">,</span></span>
+<span id="cb45-4"><a href="#cb45-4" aria-hidden="true" tabindex="-1"></a>    device<span class="op">.</span>Fd<span class="op">(),</span></span>
+<span id="cb45-5"><a href="#cb45-5" aria-hidden="true" tabindex="-1"></a>    ioctl<span class="op">.</span>TRANSMISSION_IOCTL_CLEAR_QUE<span class="op">,</span></span>
+<span id="cb45-6"><a href="#cb45-6" aria-hidden="true" tabindex="-1"></a>    <span class="dv">0</span><span class="op">,</span></span>
+<span id="cb45-7"><a href="#cb45-7" aria-hidden="true" tabindex="-1"></a><span class="op">)</span></span>
+<span id="cb45-8"><a href="#cb45-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb45-9"><a href="#cb45-9" aria-hidden="true" tabindex="-1"></a><span class="co">// Disconnect from the NBD server</span></span>
+<span id="cb45-10"><a href="#cb45-10" aria-hidden="true" tabindex="-1"></a>syscall<span class="op">.</span>Syscall<span class="op">(</span></span>
+<span id="cb45-11"><a href="#cb45-11" aria-hidden="true" tabindex="-1"></a>    syscall<span class="op">.</span>SYS_IOCTL<span class="op">,</span></span>
+<span id="cb45-12"><a href="#cb45-12" aria-hidden="true" tabindex="-1"></a>    device<span class="op">.</span>Fd<span class="op">(),</span></span>
+<span id="cb45-13"><a href="#cb45-13" aria-hidden="true" tabindex="-1"></a>    ioctl<span class="op">.</span>TRANSMISSION_IOCTL_DISCONNECT<span class="op">,</span></span>
+<span id="cb45-14"><a href="#cb45-14" aria-hidden="true" tabindex="-1"></a>    <span class="dv">0</span><span class="op">,</span></span>
+<span id="cb45-15"><a href="#cb45-15" aria-hidden="true" tabindex="-1"></a><span class="op">)</span></span>
+<span id="cb45-16"><a href="#cb45-16" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb45-17"><a href="#cb45-17" aria-hidden="true" tabindex="-1"></a><span class="co">// Disassociate the socket from the NBD device so that it can be used again</span></span>
+<span id="cb45-18"><a href="#cb45-18" aria-hidden="true" tabindex="-1"></a>syscall<span class="op">.</span>Syscall<span class="op">(</span></span>
+<span id="cb45-19"><a href="#cb45-19" aria-hidden="true" tabindex="-1"></a>    syscall<span class="op">.</span>SYS_IOCTL<span class="op">,</span></span>
+<span id="cb45-20"><a href="#cb45-20" aria-hidden="true" tabindex="-1"></a>    device<span class="op">.</span>Fd<span class="op">(),</span></span>
+<span id="cb45-21"><a href="#cb45-21" aria-hidden="true" tabindex="-1"></a>    ioctl<span class="op">.</span>TRANSMISSION_IOCTL_CLEAR_SOCK<span class="op">,</span></span>
+<span id="cb45-22"><a href="#cb45-22" aria-hidden="true" tabindex="-1"></a>    <span class="dv">0</span><span class="op">,</span></span>
+<span id="cb45-23"><a href="#cb45-23" aria-hidden="true" tabindex="-1"></a><span class="op">)</span></span></code></pre></div>
+<h3 id="optimizing-access-to-the-block-device"><span class="header-section-number">4.4.5</span> Optimizing Access to the
+Block Device</h3>
+<p>When <code>open</code>ing the block devie that the client is
+connected to, the kernel usually provides a caching/buffer mechanism,
+requiring an expensive <code>sync</code> syscall to flush outstanding
+changes to the NBD client. As mentioend earlier, by using
+<code>O_DIRECT</code> it is possible to skip this caching layer and
+write all changes directly to the NBD client and thus the server, which
+is particularly useful in a case where both the client and server are on
+the same host, and the amount of time for <code>sync</code>ing should be
+minimal, as is the case for a migration scenario. Using
+<code>O_DIRECT</code> however does come with the downside of requiring
+reads/writes that are aligned to the system’s page size, which is
+possible to implement in the specific application using the device to
+access a resource, but not in a generic way.</p>
+<h3 id="combining-the-nbd-client-and-server"><span class="header-section-number">4.4.6</span> Combining the NBD Client and
+Server</h3>
+<p>When both the client and server are started on the same host, it is
+possible to connect them in an efficient way by creating a connected
+UNIX socket pair, returning a file descriptor for both the server and
+the client respectively, after which both components can be started in a
+new goroutine:</p>
+<div class="sourceCode" id="cb46"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb46-1"><a href="#cb46-1" aria-hidden="true" tabindex="-1"></a><span class="co">// Creating the socket pair</span></span>
+<span id="cb46-2"><a href="#cb46-2" aria-hidden="true" tabindex="-1"></a>fds<span class="op">,</span> err <span class="op">:=</span> syscall<span class="op">.</span>Socketpair<span class="op">(</span>syscall<span class="op">.</span>AF_UNIX<span class="op">,</span> syscall<span class="op">.</span>SOCK_STREAM<span class="op">,</span> <span class="dv">0</span><span class="op">)</span></span>
+<span id="cb46-3"><a href="#cb46-3" aria-hidden="true" tabindex="-1"></a><span class="co">// ..</span></span>
+<span id="cb46-4"><a href="#cb46-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb46-5"><a href="#cb46-5" aria-hidden="true" tabindex="-1"></a><span class="co">// Starting the server on file descriptor 1</span></span>
+<span id="cb46-6"><a href="#cb46-6" aria-hidden="true" tabindex="-1"></a><span class="cf">go</span> <span class="kw">func</span><span class="op">()</span> <span class="op">{</span></span>
+<span id="cb46-7"><a href="#cb46-7" aria-hidden="true" tabindex="-1"></a>    sf <span class="op">:=</span> os<span class="op">.</span>NewFile<span class="op">(</span><span class="dt">uintptr</span><span class="op">(</span>fds<span class="op">[</span><span class="dv">0</span><span class="op">]),</span> <span class="st">&quot;server&quot;</span><span class="op">)</span></span>
+<span id="cb46-8"><a href="#cb46-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb46-9"><a href="#cb46-9" aria-hidden="true" tabindex="-1"></a>    c<span class="op">,</span> err <span class="op">:=</span> net<span class="op">.</span>FileConn<span class="op">(</span>sf<span class="op">)</span></span>
+<span id="cb46-10"><a href="#cb46-10" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb46-11"><a href="#cb46-11" aria-hidden="true" tabindex="-1"></a>    sc <span class="op">:=</span> c<span class="op">.(*</span>net<span class="op">.</span>UnixConn<span class="op">)</span></span>
+<span id="cb46-12"><a href="#cb46-12" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb46-13"><a href="#cb46-13" aria-hidden="true" tabindex="-1"></a>    server<span class="op">.</span>Handle<span class="op">(</span></span>
+<span id="cb46-14"><a href="#cb46-14" aria-hidden="true" tabindex="-1"></a>        d<span class="op">.</span>sc<span class="op">,</span></span>
+<span id="cb46-15"><a href="#cb46-15" aria-hidden="true" tabindex="-1"></a>        <span class="co">// ...</span></span>
+<span id="cb46-16"><a href="#cb46-16" aria-hidden="true" tabindex="-1"></a>    <span class="op">)</span></span>
+<span id="cb46-17"><a href="#cb46-17" aria-hidden="true" tabindex="-1"></a><span class="op">}()</span></span>
+<span id="cb46-18"><a href="#cb46-18" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb46-19"><a href="#cb46-19" aria-hidden="true" tabindex="-1"></a><span class="co">// Starting the client on file descriptor 1</span></span>
+<span id="cb46-20"><a href="#cb46-20" aria-hidden="true" tabindex="-1"></a><span class="cf">go</span> <span class="kw">func</span><span class="op">()</span> <span class="op">{</span></span>
+<span id="cb46-21"><a href="#cb46-21" aria-hidden="true" tabindex="-1"></a>    cf <span class="op">:=</span> os<span class="op">.</span>NewFile<span class="op">(</span><span class="dt">uintptr</span><span class="op">(</span>fds<span class="op">[</span><span class="dv">1</span><span class="op">]),</span> <span class="st">&quot;client&quot;</span><span class="op">)</span></span>
+<span id="cb46-22"><a href="#cb46-22" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb46-23"><a href="#cb46-23" aria-hidden="true" tabindex="-1"></a>    c<span class="op">,</span> err <span class="op">:=</span> net<span class="op">.</span>FileConn<span class="op">(</span>cf<span class="op">)</span></span>
+<span id="cb46-24"><a href="#cb46-24" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb46-25"><a href="#cb46-25" aria-hidden="true" tabindex="-1"></a>    cc <span class="op">:=</span> c<span class="op">.(*</span>net<span class="op">.</span>UnixConn<span class="op">)</span></span>
+<span id="cb46-26"><a href="#cb46-26" aria-hidden="true" tabindex="-1"></a>    <span class="co">// ...</span></span>
+<span id="cb46-27"><a href="#cb46-27" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb46-28"><a href="#cb46-28" aria-hidden="true" tabindex="-1"></a>    client<span class="op">.</span>Connect<span class="op">(</span>d<span class="op">.</span>cc<span class="op">,</span> <span class="co">/* ... */</span><span class="op">)</span></span>
+<span id="cb46-29"><a href="#cb46-29" aria-hidden="true" tabindex="-1"></a><span class="op">}()</span></span></code></pre></div>
+<p>This once again shows the benefit of not requiring a specific
+transport layer or <code>accept</code> semantics for the NBD library, as
+this makes it possible to skip the usually required TCP handshake for
+NBD.</p>
+<p>This form of a combined client and server on the local device, with
+the server’s backend providing the actual ressource, forms a direct path
+mount - where the path to the block device can be passed to the
+application consuming or providing the ressource, which can then choose
+to <code>open</code>, <code>mmap</code> etc. it. In addition to this
+simple path-based mount, a file mount is provided. This simply opens up
+the path as a file, so that it can be accessed with the common
+<code>read</code>/<code>write</code> syscalls; the benefit over simply
+using the path mount and handling the access in the application
+consuming the ressource is that common pitfalls around the lifecycle
+(<code>Close</code> and <code>Sync</code>) can be handled within the
+mount API directly.</p>
+<p>The direct slice mount works similarly to the file mount, with the
+difference being that it <code>mmap</code>s the NBD device, bringing a
+variety of benefits such as not requiring syscalls to read/write from
+the memory region as mentioned before. The benefit of using the slice
+API over simply using the direct path mount API letting the application
+<code>mmap</code> the block device itself is once again the lifecycle,
+where <code>Close</code> and <code>Sync</code> handle the complexities
+of managing <code>mmap</code>ed regions, esp. around garbage collection
+and flushing, in the mount directly. As for the API design, another
+aspect however is critical; thanks to it providing a standard Go slice
+instead of a file, it is possible to use this interface to provide
+streaming ability to applications that expect to work with a
+<code>[]byte</code>, without requiring changes to the application
+itself:</p>
+<div class="sourceCode" id="cb47"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb47-1"><a href="#cb47-1" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> <span class="op">(</span>d <span class="op">*</span>DirectSliceMount<span class="op">)</span> Open<span class="op">()</span> <span class="op">([]</span><span class="dt">byte</span><span class="op">,</span> <span class="dt">error</span><span class="op">)</span></span></code></pre></div>
+<p>It is also possible to format the backend for a NBD server/mount with
+a filesystem and mount the underlying filesystem on the host that
+accesses a resource, where a file on this filesystem can then be
+<code>open</code>ed/<code>mmap</code>ed similarly to the FUSE approach.
+This is particularly useful if there are multiple memory regions which
+all belong to the same application to synchronize, as it removes the
+need to start multiple block devices. This solution can be implemented
+by i.e. calling <code>mkfs.ext4</code> on a block device directly or by
+formatting the NBD backend ahead of time, which does however come at the
+cost of storing and transferring the file system metadata as well as the
+potential latency overhead of mounting it.</p>
 <div id="refs" class="references csl-bib-body">
 <div id="ref-linux2023docs" class="csl-entry">
 <div class="csl-left-margin">[1] </div><div class="csl-right-inline">T.
@@ -2205,6 +2631,16 @@ generic FUSE implementation</span>.”</span> <a href="https://github.com/jakWai
 <div class="csl-left-margin">[44] </div><div class="csl-right-inline">T.
 Grieger, <span>“The cost and complexity of cgo.”</span> Dec.
 2015.Available: <a href="https://www.cockroachlabs.com/blog/the-cost-and-complexity-of-cgo/">https://www.cockroachlabs.com/blog/the-cost-and-complexity-of-cgo/</a></div>
+</div>
+<div id="ref-pojtinger2023weron" class="csl-entry">
+<div class="csl-left-margin">[45] </div><div class="csl-right-inline">F.
+Pojtinger, <span>“Weron: Overlay networks based on WebRTC.”</span> <a href="https://github.com/pojntfx/weron" class="uri">https://github.com/pojntfx/weron</a>, 2023.</div>
+</div>
+<div id="ref-linux2023nbd" class="csl-entry">
+<div class="csl-left-margin">[46] </div><div class="csl-right-inline">T.
+L. K. Contributors, <span>“NBD kernel module in the linux kernel source
+tree.”</span> <a href="https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/drivers/block/nbd.c#n2592" class="uri">https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/drivers/block/nbd.c#n2592</a>,
+2023.</div>
 </div>
 </div>
 </div>
