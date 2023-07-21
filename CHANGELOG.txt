@@ -1,3 +1,9 @@
+commit d38fb42a48328669d11e80f0743bf8faad0505a3
+Author: Felicitas Pojtinger <felicitas@pojtinger.com>
+Date:   Fri Jul 21 17:21:21 2023 +0200
+
+    refactor: Rework discussion and usecases section
+
 commit fdfa00770808c3fc7711c53512114f702bc8c8f2
 Author: Felicitas Pojtinger <felicitas@pojtinger.com>
 Date:   Fri Jul 21 16:51:41 2023 +0200
