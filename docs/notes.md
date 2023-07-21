@@ -28,8 +28,8 @@ csl: static/ieee.csl
 ## Introduction
 
 - Research question: Could memory be the universal way to access and migrate state?
-- Why efficient memory synchronization is the missing key component
-- High-level use cases for memory synchronization in the industry today
+- Why efficient memory synchronization is the missing key component for it to be that universal way
+- High-level use cases for memory synchronization in the industry today (VM live migration, accessing remote ressources transparently)
 
 ## Technology
 
@@ -1005,37 +1005,41 @@ csl: static/ieee.csl
 
 ### Userfaults
 
-- As we can see, using `userfaultfd` we are able to map almost any object into memory
+- By using `userfaultfd` we are able to map almost any object into memory
 - This approach is very clean and has comparatively little overhead, but also has significant architecture-related problems that limit its uses
 - The first big problem is only being able to catch page faults - that means we can only ever respond the first time a chunk of memory gets accessed, all future requests will return the memory directly from RAM on the destination host
-- This prevents us from using this approach for remote resources that update over
+- This prevents us from using this approach for remote resources that update over time
 - Also prevents us from using it for things that might have concurrent writers/shared resources, since there would be no way of updating the conflicting section
 - Essentially makes this system only usable for a read-only "mount" of a remote resource, not really synchronization
-- Also prevents pulling chunks before they are being accessed without layers of indirection
+- Only a viable solution for post-copy migration
+- Also prevents pulling chunks before they are being accessed without additional layers of indirection
 - The `userfaultfd` API socket is also synchronous, so each chunk needs to be sent one after the other, meaning that it is very vulnerable to long RTT values
 - Also means that the initial latency will be at minimum the RTT to the remote source, and (without caching) so will be each future request
-- The biggest problem however: All of these drawbacks mean that in real-life usecases, the maximum throughput, even if a local process handles page faults on a modern computer, is ~50MB/s
+- The biggest problem however: All of these drawbacks mean that in real-life usecases, the maximum throughput, even if the RTT is 0 and it runs on a modern computer, is only ~500MB/s, and gets drastically worse as RTT increases due to the synchronous reads
+- Problem with such a low throughput is also that the network speed quickly becomes the limit
 - In summary, while this approach is interesting and very idiomatic to Go, for most data, esp. larger datasets and in high-latency scenarios/in WAN, we need a better solution
 
 ### File-Based Synchronization
 
 - Similarly to `userfaultfd`, this system also has limitations
 - While `userfaultfd` was only able to catch reads, this system is only able to catch writes to the file
+- Only a viable solution for pre-copy migration
 - Essentially this system is write-only, and it is very inefficient to add hosts to the network later on
 - As a result, if there are many possible destinations to migrate state too, a star-based architecture with a central forwarding hub can be used
 - The static topology of this approach can be used to only ever require hashing on one of the destinations and the source instead of all of them
 - This way, we only need to push the changes to one component (the hub), instead of having to push them to each destination on their own
 - The hub simply forwards the messages to all the other destinations
-- Thanks to this support for a star-based archicture, file-based synchronization might be a good choice for highly throughput-constrained networks
+- Thanks to this support for a star-based archicture, file-based synchronization might be a good choice for highly throughput-constrained networks, where the potentially higher maximum downtime is acceptable
 
 ### FUSE
 
+- FUSE can provide both a solution for pre- and post-copy migration
 - FUSE also has downsides
 - It operates in user space, which means that it needs to do context switching, esp. compared to a file system in kernel space
-- Some advanced features aren't available for a FUSE
-- The overhead of FUSE (and implementing a completely custom file system) for synchronizing memory is still significant
-- If possible, the optimal solution would be to not expose a full file system to track changes, but rather a single file
-- As a result of this, the significant implementation overhead of such a file system led to it not being chosen
+- Some advanced file system features aren't available for a FUSE
+- The overhead of FUSE (and implementing a completely custom file system) for synchronizing memory is significant
+- The optimal solution would be to not expose a full file system to track changes, but rather a single file
+- As a result of this, the significant implementation overhead of such a file system led to it not being chosen, since NBD is available as an alternative
 
 ### NBD
 
@@ -1061,7 +1065,7 @@ csl: static/ieee.csl
   - Even with this however, it is hard to implement even a simple backend, and the CGo overhead is a significant drawback (code snippet from https://github.com/pojntfx/webpipe/blob/main/pkg/devices/trace_device.go)
   - The last alternative to NBD devices would be to extend the kernel with a new construct that allows for essentially a virtual file to be `mmap`ed, not a block device
   - This could use a custom protocol that is optimized for this use case instead of a full block device
-  - Because of the extensive setup required to implement such a system however, and the possibility of `ublk` providing a performant alternative in the future, going forward with NBD was chosen for now
+  - Because of the extensive setup required to implement such a system however, and the possibility of `ublk` providing a performant alternative in the future, going forward with NBD was chosen for now, since it provides a stable base to build the mounts and migration APIs on
 
 ### Mounts and Live Migration
 
@@ -1076,7 +1080,7 @@ csl: static/ieee.csl
 - Comparing mount vs. migration API performance
   - It is interesting to look at how the migration API performs compared to the single-phase mount API
   - The mounts API should have a shorter total latency, but a higher "downtime" since it needs to initialize the device first
-- Comparing it to RegionFS, An existing remote memory system
+- Comparing this API to RegionFS, an existing remote memory system
   - A similar approach was made in RegionFS[@aguilera2018remoteregions]
   - RegionFS is implemented as a kernel module, but it is functionally similar to how this API exposes a NBD device for memory interaction
   - In RegionFS, the regions file system is mounted to a path, which then exposes regions as virtual files
@@ -1086,13 +1090,13 @@ csl: static/ieee.csl
   - It is also not designed to be used for a potential migration scenarios, which the modular approach of r3map allows for
   - While Remote Regions' file system approach does allow for authorization based on permissions, it doesn't specify how authentication could work
   - In terms of the wire protocol, Remote Regions also seems to target mostly LAN with protocols like RDMA comm modules, while r3map targets mostly WAN with a pluggable transport protocol interface
-- Issues with the implementation
+- Issues with the r3map implementation
   - While the managed mounts API mostly works, there are some issues with it being implemented in Go
   - This is mostly due to deadlocking issues; if the GC tries to release memory, it has to stop the world
   - If the `mmap` API is used, it is possible that the GC tries to manage the underlying slice, or tries to release memory as data is being copied from the mount
   - Because the NBD server that provides the byte slice is also running in the same process, this causes a deadlock as the server that provides the backend for the mount is also frozen (https://github.com/pojntfx/r3map/blob/main/pkg/mount/slice_managed.go#L70-L93)
   - A workaround for this is to lock the `mmap`ed region into memory, but this will also cause all chunks to be fetched, which leads to a high `Open()` latency
-  - This is fixable by simply starting the server in separate thread, and then `mmap`ing
+  - This is fixable by simply starting the server in separate process or other context where the GC does not cause it to stop, and then `mmap`ing
   - Issues like this however are hard to fix, and point to Go potentially not being the correct language to use for this part of the system
   - In the future, using a language without a GC (such as Rust) could provide a good alternative
   - While the current API is Go-specific, it could also be exposed through a different interface to make it usable in Go
@@ -1102,9 +1106,9 @@ csl: static/ieee.csl
 #### Remote Swap With `ram-dl`
 
 - ram-dl is a fun experiment
-- Tech demo for r3map
+- Is a tech demo for r3map
 - Uses the fRPC backend to expand local system memory
-- Can allow mounting a remote system's RAM locally
+- Allows mounting a remote system's RAM locally
 - Can be used to inspect a remote system's memory contents
 - Is based on the direct mount API
 - Uses mkswap, swapon and swapoff (code snippet from https://github.com/pojntfx/ram-dl/blob/main/cmd/ram-dl/main.go#L170-L190)
@@ -1147,7 +1151,7 @@ csl: static/ieee.csl
 - LTFS is a kernel module filesystem for tape drives that makes them a file system the same way as STFS
 - But is its own filesystem, while tapisk allows using any existing and tested filesystem on top of the generic block device
 - Doesn't support the caching, making it hard to use for memory mapping, too
-- Tapisk also shows how minimal it is: While LTFS is 10s of thousands of SLOC, tapisk achieves the same and more in just under 350 SLOC
+- Tapisk again shows how minimal the overhead of r3map is: While LTFS is 10s of thousands of SLOC, tapisk achieves a similar feature set in just under 350 SLOC
 
 #### Improving File Storage Solutions
 
@@ -1262,13 +1266,13 @@ csl: static/ieee.csl
 ## Summary
 
 - Looking back at all synchronization options and comparing ease of implementation, CPU load and network traffic between them
-- Summary of the different approaches, and how the new solutions might make it possible to use memory as the universal access format
+- Summary of the different approaches, and how the new solutions presented might make it finally possible to use memory as the universal access format
 
 ## Conclusion
 
-- Answer to the research question (Could memory be the universal way to access and migrate state?)
-- What would be possible if memory became the universal way to access state?
-- Further research recommendations (e.g. `ublk`)
+- Answer to the research question (Could memory be the universal way to access and migrate state? - Yes!)
+- What would be possible if memory became the universal way to access state (short recap of the ideas for use cases)
+- Further research recommendations (e.g. using `ublk` instead of NBD)
 
 ## References
 
