@@ -763,21 +763,21 @@ csl: static/ieee.csl
   - Using this `Puller` interface, it is possible to implement a read-only managed mount
   - This is very similar the `rr+` prefetching mechanism from "Remote Regions" (reference atc18-aguilera)
 - Background push
-  - Chunks that have changed/are pushable are marked with `MarkOffsetPushable` (code snippet from https://github.com/pojntfx/r3map/blob/main/pkg/mount/path_managed.go#L171C24-L185)
   - Once opened, the pusher starts a new goroutine in the background which calls `Sync` in a set recurring interval (code snippet from https://github.com/pojntfx/r3map/blob/main/pkg/chunks/pusher.go)
   - Once sync is called by this background worker system or manually, it launches workers in the background
   - These workers all wait for a chunk to handle
   - Once a worker receives a chunk, it reads it from the local `ReadWriter`, and copies it to the remote
-  - Safe access is ensures by individually locking each chunk
+  - In order to actually mark chunks that are pushable (chunks that have been written to or have already been synced from the remote), the progress callback is used to call the pusher's `MarkOffsetPushable` method (code snippet from https://github.com/pojntfx/r3map/blob/main/pkg/mount/path_managed.go#L171C24-L185)
+  - Only these marked chunks are being considered to be pushed when a write occurs, so as to prevent syncing chunks that have not yet been made locally available
   - The pusher also serves as a step in the `ReadWriterAt` pipeline
   - In order to do this, it exposes `ReadAt` and `WriteAt`
   - `ReadAt` is a simple proxy, while `WriteAt` also marks a chunk as pushable (since it mutates data) before writing to the local `ReadWriterAt`
-  - For the direct mount, the NBD server was directly connected to the remote, while in this setup a pipeline of pullers, pushers, a syncer and an `ArbitraryReadWriter` is used (graphic of the four systems and how they are connected to each other vs. how the direct mounts work)
   - For a read-only scenario, the `Pusher` step is simply skipped (code snippet from https://github.com/pojntfx/r3map/blob/main/pkg/mount/path_managed.go#L142-L169)
+- Benefits of managed mounts over direct mounts
+  - For the direct mount, the NBD server was directly connected to the remote, while in this setup a pipeline of pullers, pushers, a syncer and an `ArbitraryReadWriter` is used (graphic of the four systems and how they are connected to each other vs. how the direct mounts work)
   - Using this simple interface also makes the entire system very testable
   - In the tests, a memory reader or file can be used as the local or remote `ReaderWriterAt`s and a simple table-driven test can be created (code snippet from https://github.com/pojntfx/r3map/blob/main/pkg/chunks/puller_test.go)
   - Thanks to making these individual components (background pull, push, chunking, chunk validation) unit-testable on their own, edge cases (like different pull heuristics) can be tested easily, too
-  - With all of these components in place, the managed mounts API serves as a fast and efficient option to access almost any remote resource in memory
 - Parallelizing NBD device initialization
   - The background push/pull system allows pulling from the remote `ReadWriterAt` before the NBD device is open
   - This is possible because the device doesn't need to start accessing the data before it can start pulling
@@ -791,6 +791,7 @@ csl: static/ieee.csl
   - For example, in order to allow for a `Sync()` API, e.g. the `msync` on the `mmap`ed file must happen before `Sync()` is called on the syncer
   - This is done through a hooks system (code snippet from https://github.com/pojntfx/r3map/blob/main/pkg/mount/file_managed.go#L34-L37)
   - The same hooks system is also used to implement the correct lifecycle when `Close`ing the mount
+  - With all of these components in place, the managed mounts API serves as a fast and efficient option to access almost any remote resource in memory
 - Optimization for WAN
   - Another optimization that has been made to support this WAN deployment scenario is the pull-only architecture
   - Usually, a pre-copy system pushes changes to the destination in the migration API

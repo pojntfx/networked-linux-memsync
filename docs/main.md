@@ -1337,7 +1337,7 @@ syscall.Syscall(
 
 When `open`ing the block devie that the client is connected to, the kernel usually provides a caching/buffer mechanism, requiring an expensive `sync` syscall to flush outstanding changes to the NBD client. As mentioend earlier, by using `O_DIRECT` it is possible to skip this caching layer and write all changes directly to the NBD client and thus the server, which is particularly useful in a case where both the client and server are on the same host, and the amount of time for `sync`ing should be minimal, as is the case for a migration scenario. Using `O_DIRECT` however does come with the downside of requiring reads/writes that are aligned to the system's page size, which is possible to implement in the specific application using the device to access a resource, but not in a generic way.
 
-#### Combining the NBD Client and Server
+#### Combining the NBD Client and Server to a Mount
 
 When both the client and server are started on the same host, it is possible to connect them in an efficient way by creating a connected UNIX socket pair, returning a file descriptor for both the server and the client respectively, after which both components can be started in a new goroutine:
 
@@ -1387,9 +1387,11 @@ It is also possible to format the backend for a NBD server/mount with a filesyst
 
 TODO: Reference voltools and how it works as a fast way of formatting the mount if it becomes OSS
 
-### Mounts
+### Managed Mounts
 
-In order to implement a chunking system and related components, a pipeline of readers/writers is a useful abstraction layer; as a result, the mount API is based on a pipeline of multiple `ReadWriterAt`s:
+#### Stages
+
+In order to implement a chunking system and related components, a pipeline of readers/writers is a useful abstraction layer; as a result, the mount API is based on a pipeline of multiple `ReadWriterAt` stages:
 
 ```go
 type ReadWriterAt interface {
@@ -1399,6 +1401,8 @@ type ReadWriterAt interface {
 ```
 
 This way, it is possible to forward calls to the NBD backends like `Size` and `Sync` directly to the underlying backend, but can chain the `ReadAt` and `WriteAt` methods, which carry actual data, into a pipeline of other `ReadWriterAt`s.
+
+#### Chunking
 
 One such `ReadWriterAt` is the the `ArbitraryReadWriterAt`. This chunking component allows breaking down a larger data stream into smaller chunks at aligned offsets, effectively making every read and write an aligned operation. In `ReadAt`, it calculates the index of the chunk that the currently read offset falls into as well as the offset within the chunk, after which it reads the entire chunk from the backend into a buffer, copies the requested portion of the buffer into the input slice, and repeats the process until all requested data is read:
 
@@ -1472,3 +1476,114 @@ if off < 0 || off >= int64(c.chunkSize*c.chunks) {
 
 // Continues with the operation
 ```
+
+#### Background Pull
+
+The `Puller` component asynchronously pulls chunks in the background. It starts by sorting the chunks with the pull heuristic mentioned earlier, after which it starts a fixed number of worker threads in the background, each which ask for a chunk to pull:
+
+```go
+// Sort the chunks according to the pull priority callback
+sort.Slice(chunkIndexes, func(a, b int) bool {
+	return pullPriority(chunkIndexes[a]) > pullPriority(chunkIndexes[b])
+})
+
+// ...
+
+for {
+	// Get the next chunk
+	chunk := p.getNextChunk()
+
+	// Exit after all chunks have been pulled
+	if chunk >= p.chunks {
+		break
+	}
+	// ...
+
+	// Reading the chunk from the backend
+	_, err := p.backend.ReadAt(make([]byte, p.chunkSize), chunkIndex*p.chunkSize)
+	// ...
+}
+```
+
+Note that the puller itself does not copy any data from the destination; this is handled by a separate component. It simply reads from the next provided pipeline stage, which is expected to handle the actual copying process.
+
+An implementation of this stage is the `SyncedReadWriterAt`, which takes both a remote and local `ReadWriterAt` pipeline stage as it's argument. If a chunk is read, i.e. by the puller component calling `ReadAt`, it is tracked and marked as remote by adding it to a local map. The chunk itself is then read from the remote reader and written to the local one, after which it is marked as locally available, meaning that on the second read it is fetched from the faster, local reader instead; a callback is used to make it possible to track the syncer's pull progress:
+
+```go
+// Track chunk
+chk := c.getOrTrackChunk(off)
+
+// If chunk is available locally, return it
+if chk.local {
+	return c.local.ReadAt(p, off)
+}
+
+// If chunk is not available locally, copy it from the remote, then mark the chunk as local
+c.remote.ReadAt(p, off)
+c.local.WriteAt(p, off)
+chk.local = true
+
+// Enable progress tracking
+c.onChunkIsLocal(off)
+```
+
+Note that since this is a pipeline stage, this behavior also applies to reads that happen aside from those initiated by the `Puller`, meaning that any chunks that haven't been fetched asynchronously before they are being accessed will be scheduled to be pulled immediately. The `WriteAt` implementation of this stage immediately marks and reports the chunk as available locally no matter whether it has been pulled before or not.
+
+The combination of the `SyncedReadWriterAt` stage and the `Puller` component implements a pre-copy migration system in an independently unit testable way, where the remote ressource is being pre-emptively copied to the destination system first. In addition to this however, since it can also schedule chunks to be available immediately, it has some of the characteristics of a post-copy migration system, too, where it is possible to fetch chunks as they become available, making it behave similarly to the `rr+` prefetching mechanism mentioned in "Remote Regions"[@aguilera2018remoteregions]. Using this combination, it is possible to implement the full read-only managed mount API.
+
+#### Background Push
+
+In order to also allow for writes back to the remote source host, the background push component exists. Once it has been opened, it schedules recurring writebacks to the remote by calling `Sync`; once this is called by either the background worker system or another component, it launces writeback workers in the background. These wait to receive a chunk that needs to be written back; once they receive one, they read it from the local `ReadWriterAt` and copy it to the remote, after which the chunk is marked as no longer requiring writebacks:
+
+```go
+// Wait until the worker gets a slot from a semaphore
+p.workerSem <- struct{}{}
+
+// First fetch from local ReaderAt, then copy to remote one
+b := make([]byte, p.chunkSize)
+p.local.ReadAt(b, off)
+p.remote.WriteAt(b, off)
+
+// Remove the chunk from the writeback queue
+delete(p.changedOffsets, off)
+```
+
+In order to prevent chunks from being pushed back to the remote before they have been been pulled first or written to locally, the background push system is integrated into the `SyncedReadWriterAt` component. This is made possible by intercepting the offset passed to the progress callback, and only then marking it as ready:
+
+```go
+chunks.NewSyncedReadWriterAt(m.remote, local, func(off int64) error {
+	return local.(*chunks.Pusher).MarkOffsetPushable(off)
+})
+```
+
+Unlike the puller component, the pusher also functions as a pipeline step, and as such provides a `ReadAt` and `WriteAt` implementation. While `ReadAt` is a simple proxy forwarding the call to the next stage, `WriteAt` marks a chunk as pushable, causing it to be written back to the remote on the next writeback cycle, before writing the chunk to the next stage. If a managed mount is intended to be read-only, the pusher is simply not included in the pipeline.
+
+#### Pipeline
+
+For the direct mount system, the NBD server was connected directly to the remote; managed mounts on the other hand have an internal pipeline of pullers, pushers, a syncer, local and remote backends as well as a chunking system:
+
+TODO: Add graphic of the internal pipeline and how systems are connected to each other
+
+Using such a pipeline system of independent stages and other components also makes the system very testable. To do so, instead of providing a remote and local `ReadWriterAt` at the source and drain of the pipeline respectively, a simple in-memory or on-disk backend can be used in the unit tests. This makes the individual components unit-testable on their own, as well as making it possible to test and benchmark edge cases (such as reads that are smaller than a chunk size) and optimizations (like different pull heuristics) without complicated setup or teardown procedures, and without having to initialize the complete pipeline.
+
+#### Concurrent Device Initialization
+
+The background push/pull components allow pulling from the remote pipeline stage before the NBD device itself is open. This is possible because the device doesn't need to start accessing the data in a post-copy sense to start the pull, and means that the pull process can be started as the NBD client and server are still initializing. Both components typically start quickly, but the initialization might still take multiple milliseconds. Often, this amounts to roughly one RTT, meaning that making this initialization procedure concurrent can signficantly reduce the initial read latency by pre-emptively pulling data. This is because even if the first chunks are being accessed right after the device has been started, they are already available to be read from the local backend instead of the remote, since they have been pulled during the initialization and thus before the mount has even been made available to application.
+
+#### Device Lifecycles
+
+Similarly to how the direct mount API used the basic path mount to build the file and slice mounts, the managed mount API provides the same interfaces. In the case of managed mounts however, this is even more important, since the synchronization lifecycle needs to be taken into account. For example, in order to allow the `Sync()` API to work, the `mmap`ed region must be `msync`ed before the `SyncedReadWriterAt`'s `Sync()` method is called. In order to support these flows without tightly coupling the individual pipeline stages, a hooks system exists that allows for such actions to be registered from the managed mount, which is also used to implement the correct lifecycle for closing/tearing down a mount:
+
+```go
+type ManagedMountHooks struct {
+	OnBeforeSync func() error
+	OnBeforeClose func() error
+	OnChunkIsLocal func(off int64) error
+}
+```
+
+#### WAN Optimization
+
+While the managed mount system functions as a hybrid pre- and post-copy system, optimizations are implemented that make it more viable in a WAN scenario compared to a typical pre-copy system by using a unidirectional API. Usually, a pre-copy system pushes changes to the destination host. In many WAN scenarios however, NATs prevent a direct connection. Moreover, since the source host needs to keep track of which chunks have already been pulled, the system becomes stateful on the source host and events such as network outages need to be recoverable from.
+
+By using the pull-only, unidirectional API to emulate the pre-copy setup, the destination can simply keep track of which chunks it still needs to pull itself, meaning that if there is a network outage, it can just resume pulling or decide to restart the pre-copy process. Unlike the pre-copy system used for the file synchronization/hashing approach, this also means that destination hosts don't need to subscribe to a central multiplexing hub, and adding clients to the topology is easy since their pull progress state does not need to be stored anywhere except the destination node.
