@@ -1383,4 +1383,92 @@ The direct slice mount works similarly to the file mount, with the difference be
 func (d *DirectSliceMount) Open() ([]byte, error)
 ```
 
-It is also possible to format the backend for a NBD server/mount with a filesystem and mount the underlying filesystem on the host that accesses a resource, where a file on this filesystem can then be `open`ed/`mmap`ed similarly to the FUSE approach. This is particularly useful if there are multiple memory regions which all belong to the same application to synchronize, as it removes the need to start multiple block devices. This solution can be implemented by i.e. calling `mkfs.ext4` on a block device directly or by formatting the NBD backend ahead of time, which does however come at the cost of storing and transferring the file system metadata as well as the potential latency overhead of mounting it.
+It is also possible to format the backend for a NBD server/mount with a filesystem and mount the underlying filesystem on the host that accesses a resource, where a file on this filesystem can then be `open`ed/`mmap`ed similarly to the FUSE approach. This is particularly useful if there are multiple memory regions which all belong to the same application to synchronize, as it removes the need to start multiple block devices and reduces the latency overhead associated with it. This solution can be implemented by i.e. calling `mkfs.ext4` on a block device directly or by formatting the NBD backend ahead of time, which does however come at the cost of storing and transferring the file system metadata as well as the potential latency overhead of mounting it.
+
+TODO: Reference voltools and how it works as a fast way of formatting the mount if it becomes OSS
+
+### Mounts
+
+In order to implement a chunking system and related components, a pipeline of readers/writers is a useful abstraction layer; as a result, the mount API is based on a pipeline of multiple `ReadWriterAt`s:
+
+```go
+type ReadWriterAt interface {
+	ReadAt(p []byte, off int64) (n int, err error)
+	WriteAt(p []byte, off int64) (n int, err error)
+}
+```
+
+This way, it is possible to forward calls to the NBD backends like `Size` and `Sync` directly to the underlying backend, but can chain the `ReadAt` and `WriteAt` methods, which carry actual data, into a pipeline of other `ReadWriterAt`s.
+
+One such `ReadWriterAt` is the the `ArbitraryReadWriterAt`. This chunking component allows breaking down a larger data stream into smaller chunks at aligned offsets, effectively making every read and write an aligned operation. In `ReadAt`, it calculates the index of the chunk that the currently read offset falls into as well as the offset within the chunk, after which it reads the entire chunk from the backend into a buffer, copies the requested portion of the buffer into the input slice, and repeats the process until all requested data is read:
+
+```go
+totalRead := 0
+remaining := len(p)
+
+buf := make([]byte, a.chunkSize)
+// Repeat until all chunks that need to be fetched have been fetched
+for remaining > 0 {
+	// Calculating the chunk and offset within the chunk
+	chunkIndex := off / a.chunkSize
+	indexedOffset := off % a.chunkSize
+	readSize := int64(min(remaining, int(a.chunkSize-indexedOffset)))
+
+	// Reading from the next `ReadWriterAt` in the pipeline
+	_, err := a.backend.ReadAt(buf, chunkIndex*a.chunkSize)
+	// ...
+
+	copy(p[totalRead:], buf[indexedOffset:indexedOffset+readSize])
+	// ...
+
+	remaining -= int(readSize)
+}
+```
+
+The writer is implemented in a similar way; it starts by calculating the chunk and offset within the chunk. If an entire chunk is being written to at an aligned offset, it completely bypasses the chunking system, and writes the data directly to the backend so as to prevent unnecessary copies:
+
+```go
+// Calculating the chunk and offset within the chunk
+chunkIndex := off / a.chunkSize
+indexedOffset := off % a.chunkSize
+writeSize := int(min(remaining, int(a.chunkSize-indexedOffset)))
+
+// Full chunk is covered by the write request, no need to read
+if indexedOffset == 0 && writeSize == int(a.chunkSize) {
+	_, err = a.backend.WriteAt(p[totalWritten:totalWritten+writeSize], chunkIndex*a.chunkSize)
+}
+// ...
+```
+
+If this is not the case, and only parts of a chunk need to be written, it first reads the complete chunk into a buffer, modifies the buffer with the data that was changed, and then writes the entire buffer back until all data has been written:
+
+```go
+// Read the existing chunk
+_, err = a.backend.ReadAt(buf, chunkIndex*a.chunkSize)
+
+// Modify the chunk with the provided data
+copy(buf[indexedOffset:], p[totalWritten:totalWritten+writeSize])
+
+// Write back the updated chunk
+_, err = a.backend.WriteAt(buf, chunkIndex*a.chunkSize)
+```
+
+This simple implementation can be used to efficiently allow reading and writing data of arbitrary length at arbitrary offsets, even if the backend only supports aligned reads and writes.
+
+In addition to this chunking system, there is also a `ChunkedReadWriterAt`, which ensures that the limits concerning a backend's maximum chunk size and aligned reads/writes are being respected. Some backends, i.e. a backend where each chunk is represented by a file, might only support writing to aligned offsets, but don't support checking for this behavior; in this example, if a chunk with a larger chunk size is written to the backend, depending on the implementation, this could result in this chunk file's size being extended, which could lead to a DoS attack vector. It can also be of relevance if a client instead of a server is expected to implement chunking, and the server should simply enforce that the aligned reads and writes are being provided.
+
+In order to check if a read or write is aligned, this `ReadWriterAt` checks whether an operation is done to an offset that is multiples of the chunk size, and whether the length of the slice of data is a valid chunk size:
+
+```go
+// Check if provided data is valid
+if off%c.chunkSize != 0 || int64(len(p)) != c.chunkSize {
+	return 0, ErrInvalidOffset
+}
+
+// Check if offset is valid
+if off < 0 || off >= int64(c.chunkSize*c.chunks) {
+	return 0, ErrInvalidReadSize
+}
+
+// Continues with the operation
+```
