@@ -774,16 +774,18 @@ csl: static/ieee.csl
   - `ReadAt` is a simple proxy, while `WriteAt` also marks a chunk as pushable (since it mutates data) before writing to the local `ReadWriterAt`
   - For the direct mount, the NBD server was directly connected to the remote, while in this setup a pipeline of pullers, pushers, a syncer and an `ArbitraryReadWriter` is used (graphic of the four systems and how they are connected to each other vs. how the direct mounts work)
   - For a read-only scenario, the `Pusher` step is simply skipped (code snippet from https://github.com/pojntfx/r3map/blob/main/pkg/mount/path_managed.go#L142-L169)
+  - Using this simple interface also makes the entire system very testable
+  - In the tests, a memory reader or file can be used as the local or remote `ReaderWriterAt`s and a simple table-driven test can be created (code snippet from https://github.com/pojntfx/r3map/blob/main/pkg/chunks/puller_test.go)
+  - Thanks to making these individual components (background pull, push, chunking, chunk validation) unit-testable on their own, edge cases (like different pull heuristics) can be tested easily, too
+  - With all of these components in place, the managed mounts API serves as a fast and efficient option to access almost any remote resource in memory
 - Parallelizing NBD device initialization
-  - If no background pulls are enabled, the creation of the `Puller` is simply skipped (code snippet from https://github.com/pojntfx/r3map/blob/main/pkg/mount/path_managed.go#L187-L222)
-  - This setup allows pulling from the remote `ReadWriterAt` before the NBD device is open
-  - This means that we can start pulling in the background as the NBD client and server are still starting (code snippet from https://github.com/pojntfx/r3map/blob/main/pkg/mount/path_managed.go#L251-L272)
+  - The background push/pull system allows pulling from the remote `ReadWriterAt` before the NBD device is open
+  - This is possible because the device doesn't need to start accessing the data before it can start pulling
+  - As a result we can start pulling in the background as the NBD client and server are still starting (code snippet from https://github.com/pojntfx/r3map/blob/main/pkg/mount/path_managed.go#L251-L272)
   - These two components typically start fairly quickly, but can still take multiple ms
   - Often, it takes as long as one RTT, so parallelizing this startup process can significantly reduce the initial latency and pre-emptively pull quite a bit of data
+  - If no background pulls are enabled, the creation of the `Puller` is simply skipped (code snippet from https://github.com/pojntfx/r3map/blob/main/pkg/mount/path_managed.go#L187-L222)
 - Implementing device lifecycles
-  - Using this simple interface also makes the entire system very testable
-  - In the tests, a memory reader or file can be used as the local or remote `ReaderWriterAt`s and then a simple table-driven test can be used (code snippet from https://github.com/pojntfx/r3map/blob/main/pkg/chunks/puller_test.go)
-  - With all of these components in place, the managed mounts API serves as a fast and efficient option to access almost any remote resource in memory
   - Similarly to how the direct mounts API used the basic path mount to build the file and `mmap` interfaces, the managed mount builds on this interface in order to provide the same interfaces
   - It is however a bit more complicated for the lifecycle to work
   - For example, in order to allow for a `Sync()` API, e.g. the `msync` on the `mmap`ed file must happen before `Sync()` is called on the syncer
@@ -801,11 +803,14 @@ csl: static/ieee.csl
 
 ### Live Migration for Mounts
 
-- Optimization mounts for migration scenarios
-  - The flexible architecture of the `ReadWriterAt` components allow the reuse of lots of code for both use cases
+- Overview
+  - As mentioned in Pull-Based Synchronization with Migrations before, the mount API is not optimal for a migration scenario
+  - Splitting the migration into two separate phases can help a lot to fix the biggest problem, the maximum guaranteed downtime
+  - The flexible architecture of the `ReadWriterAt` components allow the reuse of lots of code for both the mount API and the migration API
 - Implementing the seeder
-  - To achieve this, the seeder defines a simple read-only API with the familiar `ReadAt` methods, but also new APIs such as returning dirty chunks from `Sync` and adding a `Track` method (code snippet from https://github.com/pojntfx/r3map/blob/main/pkg/services/seeder.go#L15-L21)
+  - The seeder defines a simple read-only RPC API with the familiar `ReadAt` methods, but also new APIs such as returning dirty chunks from `Sync` and adding a `Track` method (code snippet from https://github.com/pojntfx/r3map/blob/main/pkg/services/seeder.go#L15-L21)
   - Unlike the remote backend, a seeder also exposes a mount through a path, file or byte slice, so that as the migration is happening, the underlying data can still be accessed by the application
+  - This fixes the issue that the mount API had for migrations, where only one end of the API exposed it's mount, while the other part simply served data
   - The tracking aspect is implemented in the same modular and composable way as the syncer etc. - by using a `TrackingReadWriterAt` that is connected to the seeder's `ReadWriterAt` pipeline (graphic of the pipeline here)
   - Once activated by `Track`, the tracker intercepts all `WriteAt` calls and adds them to a local de-duplicated store (code snippet from https://github.com/pojntfx/r3map/blob/main/pkg/chunks/tracking_rwat.go#L28-L40)
   - When `Sync` is called, the changed chunks are returned and the de-duplicated store is cleared
@@ -860,17 +865,6 @@ csl: static/ieee.csl
 - Since this could easily exhaust the number of maximum allowed file descriptors for a process, a check is added (code snippet from https://github.com/pojntfx/r3map/blob/main/pkg/backend/directory.go#L55-L75)
 - If the maximum allowed number of open files is exceeded, the first file is closed and removed from the map, causing it to be reopened on a subsequent read
 - These optimizations add an initial overhead to operations, but can significantly improve the pull speed in scenarios where the backing disk is slow or the latency is high
-
-### Optimizing The Transport Protocol For Throughput
-
-- Despite these benefits, gRPC is not perfect however
-- Protobuf specifically, while being faster than JSON, is not the fastest serialization framework that could be used
-- This is especially true for large chunks of data, and becomes a real bottleneck if the connection between source and destination would allow for a high throughput
-- This is where fRPC, a RPC library that is easy to replace gRPC with, becomes useful
-- Because throughput and latency determine the maximum acceptable downtime of a migration/the initial latency for mounts, choosing the right RPC protocol is an important decision
-- fRPC also uses the same proto3 DSL, which makes it an easy drop-in replacement, and it also supports multiplexing and connection polling
-- Because of these similarities, the usage of fRPC in r3map is extremely similar to gRPC (code snippet from https://github.com/pojntfx/r3map/blob/main/pkg/services/seeder_frpc.go)
-- A good way to test how well the RPC framework scales for concurrent requests is scaling the amount of pull workers, where dudirekta only gains marginally from increasing their number, whereas both gRPC and fRPC can increase throughput and decrease the initial latency by pulling more chunks pre-emptively
 
 ### Using Remote Stores as Backends
 
@@ -934,11 +928,11 @@ csl: static/ieee.csl
 - This would mean that in order to implement a pre-copy protocol with pushes, the destination would have to be `dial`able from the source
 - In a LAN scenario, this is easy to implement, but in WAN it is complicated and requires authentication of both the client and the server
 - Dudirekta fixes this by making the protocol itself bi-directional (example and code snippet from https://github.com/pojntfx/dudirekta/tree/main#1-define-local-functions)
-- In addition to this, dudirekta works over any `io.ReadWriter`
+- In addition to this, dudirekta works over any `io.ReadWriter`, making the actual transport layer choosable (which means that i.e. QUIC can be used to drastically reduce initial latency)
 
 ### Connection Pooling For High RTT Scenarios
 
-- This does however come at the cost of not being able to do connection pooling, since each client `dial`ing the server would mean that the server could not reference the multiple client connections as one composite client without changes to the protocol
+- Dudirekta's bi-directional RPCs do however come at the cost of not being able to do connection pooling, since each client `dial`ing the server would mean that the server could not reference the multiple client connections as one composite client without changes to the protocol
 - While implementing such a pooling mechanism in the future could be interesting, it turned out to not be necessary thanks to the pull-based pre-copy solution described earlier
 - Instead, only calling RPCs exposed on the server from the client is the only requirement for an RPC framework, and other, more optimized RPC frameworks can already offer this
 - Dudirekta uses reflection to make the RPCs essentially almost transparent to use
@@ -959,6 +953,17 @@ csl: static/ieee.csl
 - Similarly to how having a backend that allows concurrent reads/writes can be useful to speed up the concurrent push/pull steps, having a protocol that allows for concurrent RPCs can do the same
 - Connection pooling is another aspect that can help with this
 - Instead of either using one single connection with a multiplexer (which is possible because it uses HTTP/2) to allow for multiple requests, or creating a new connection for every request, gRPC is able to intelligently re-use existing connections for RPCs or create new ones, speeding up parallel requests
+
+### Optimizing The Transport Protocol For Throughput
+
+- Despite these benefits, gRPC is not perfect however
+- Protobuf specifically, while being faster than JSON, is not the fastest serialization framework that could be used
+- This is especially true for large chunks of data, and becomes a real bottleneck if the connection between source and destination would allow for a high throughput
+- This is where fRPC, a RPC library that is easy to replace gRPC with, becomes useful
+- Because throughput and latency determine the maximum acceptable downtime of a migration/the initial latency for mounts, choosing the right RPC protocol is an important decision
+- fRPC also uses the same proto3 DSL, which makes it an easy drop-in replacement, and it also supports multiplexing and connection polling
+- Because of these similarities, the usage of fRPC in r3map is extremely similar to gRPC (code snippet from https://github.com/pojntfx/r3map/blob/main/pkg/services/seeder_frpc.go)
+- A good way to test how well the RPC framework scales for concurrent requests is scaling the amount of pull workers, where dudirekta only gains marginally from increasing their number, whereas both gRPC and fRPC can increase throughput and decrease the initial latency by pulling more chunks pre-emptively
 
 ## Results
 
@@ -1021,11 +1026,12 @@ csl: static/ieee.csl
 - The static topology of this approach can be used to only ever require hashing on one of the destinations and the source instead of all of them
 - This way, we only need to push the changes to one component (the hub), instead of having to push them to each destination on their own
 - The hub simply forwards the messages to all the other destinations
+- Thanks to this support for a star-based archicture, file-based synchronization might be a good choice for highly throughput-constrained networks
 
 ### FUSE
 
-- FUSE does however also have downsides
-- It operates in user space, which means that it needs to do context switching
+- FUSE also has downsides
+- It operates in user space, which means that it needs to do context switching, esp. compared to a file system in kernel space
 - Some advanced features aren't available for a FUSE
 - The overhead of FUSE (and implementing a completely custom file system) for synchronizing memory is still significant
 - If possible, the optimal solution would be to not expose a full file system to track changes, but rather a single file
