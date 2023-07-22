@@ -2332,19 +2332,6 @@ are both transparent, making it optimal for prototyping r3map</li>
 multiplexed</li>
 <li>RPC provider implementation
 <ul>
-<li>To use it, a simple wrapper struct with the needed RPC methods is
-created (code snippet from
-https://github.com/pojntfx/r3map/blob/main/pkg/services/backend.go#L41-L61)</li>
-<li>This wrapper struct simply calls the backend (or seeder etc.)
-functions</li>
-<li>The wrapper struct is then passed as the local function struct into
-a registry, which creates the RPC server (code snippet from
-https://github.com/pojntfx/r3map/blob/main/cmd/r3map-mount-benchmark-server/main.go#L146-L166)</li>
-<li>When the transport protocol, in this case TCP, <code>accept</code>s
-a client it is linked to the registry (code snippet from
-https://github.com/pojntfx/r3map/blob/main/cmd/r3map-mount-benchmark-server/main.go#L198-L200)</li>
-<li>The used protocol is very simple (code snippet from
-https://github.com/pojntfx/dudirekta#protocol)</li>
 <li>If an RPC, such as <code>ReadAt</code>, is called, it is looked up
 via reflection and validated (code snippet from
 https://github.com/pojntfx/dudirekta/blob/main/pkg/rpc/registry.go#L323-L357)</li>
@@ -2369,6 +2356,7 @@ https://github.com/pojntfx/dudirekta/blob/main/pkg/rpc/registry.go#L109-L130)</l
 call ID, it unmarshalls the arguments, and returns (code snippet from
 https://github.com/pojntfx/dudirekta/blob/main/pkg/rpc/registry.go#L145-L217)</li>
 </ul></li>
+<li>Closure implementation</li>
 <li>Using Dudirekta for r3map
 <ul>
 <li>Since dudirekta has a few limitations (such as the fact that slices
@@ -2381,11 +2369,6 @@ https://github.com/pojntfx/r3map/blob/main/pkg/backend/rpc.go)</li>
 <li>The same backend implementation is also done for the seeder protocol
 (code snippet from
 https://github.com/pojntfx/r3map/blob/main/pkg/services/seeder.go)</li>
-<li>While the dudirekta RPC serves as a good reference implementation of
-the basic RPC protocol, it does not scale particularly well</li>
-<li>This mostly stems from two aspects of how it is designed</li>
-<li>JSON(L) is used for the wire format, which while simple and easy to
-analyze, is slow to marshal and unmarshal</li>
 </ul></li>
 </ul>
 </section>
@@ -2393,6 +2376,11 @@ analyze, is slow to marshal and unmarshal</li>
 <h3 data-number="1.4.11"><span class="header-section-number">1.4.11</span> Connection Pooling with
 gRPC</h3>
 <ul>
+<li>While the dudirekta RPC serves as a good reference implementation of
+the basic RPC protocol, it does not scale particularly well</li>
+<li>This mostly stems from two aspects of how it is designed</li>
+<li>JSON(L) is used for the wire format, which while simple and easy to
+analyze, is slow to marshal and unmarshal</li>
 <li>Dudirekta’s bi-directional RPCs do however come at the cost of not
 being able to do connection pooling, since each client
 <code>dial</code>ing the server would mean that the server could not

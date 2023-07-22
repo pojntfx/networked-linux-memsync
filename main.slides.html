@@ -264,8 +264,21 @@ Redis</a></li>
 <li><a href="#document-databases-with-cassandra"><span class="toc-section-number">4.9.4</span> Document Databases with
 Cassandra</a></li>
 </ul></li>
-<li><a href="#bi-directional-and-concurrent-rpcs-with-dudirekta"><span class="toc-section-number">4.10</span> Bi-Directional and Concurrent
-RPCs with Dudirekta</a></li>
+<li><a href="#concurrent-bi-directional-rpcs-with-dudirekta"><span class="toc-section-number">4.10</span> Concurrent Bi-Directional RPCs
+with Dudirekta</a>
+<ul>
+<li><a href="#overview-5"><span class="toc-section-number">4.10.1</span>
+Overview</a></li>
+<li><a href="#usage"><span class="toc-section-number">4.10.2</span>
+Usage</a></li>
+<li><a href="#protocol"><span class="toc-section-number">4.10.3</span>
+Protocol</a></li>
+<li><a href="#rpc-providers"><span class="toc-section-number">4.10.4</span> RPC Providers</a></li>
+<li><a href="#rpc-calls"><span class="toc-section-number">4.10.5</span>
+RPC Calls</a></li>
+<li><a href="#adapter-for-mounts-and-migrations"><span class="toc-section-number">4.10.6</span> Adapter for Mounts and
+Migrations</a></li>
+</ul></li>
 </ul></li>
 </ul>
 </div>
@@ -3040,66 +3053,364 @@ treated as empty chunks:</p>
 <p>Support for multiple regions can be implement by using a different
 table or key prefix, and migrations are used to create the table itself
 similarly to how it would be done in SQL.</p>
-<h2 id="bi-directional-and-concurrent-rpcs-with-dudirekta"><span class="header-section-number">4.10</span> Bi-Directional and Concurrent
-RPCs with Dudirekta</h2>
+<h2 id="concurrent-bi-directional-rpcs-with-dudirekta"><span class="header-section-number">4.10</span> Concurrent Bi-Directional RPCs
+with Dudirekta</h2>
+<h3 id="overview-5"><span class="header-section-number">4.10.1</span>
+Overview</h3>
 <p>Another aspect that plays an important role in performance for
 real-life deployments is the choice of RPC framework and transport
 protocol. As mentioned before, both the mount and migration APIs are
 transport-independent, and as a result almost any RPC framework can be
-used.</p>
-<p>TODO: Rework the following part of this section based on the new
-notes structure</p>
-<p>One such simple RPC framework developed specifically for prototyping
-r3map is Dudirekta<span class="citation">[48]</span>, which is
-reflection-based. This makes it particularly easy to prototype with,
-since no DSL is required; to use it, a wrapper struct with the methods
-that should be exposed as RPCs can simply be provided directly, which is
-then connected to a registry component that exposes it as a RPC server,
-which can then be linked to a transport layer like TCP:</p>
-<div class="sourceCode" id="cb68"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb68-1"><a href="#cb68-1" aria-hidden="true" tabindex="-1"></a><span class="co">// Creating the backend, in this case a file backend</span></span>
-<span id="cb68-2"><a href="#cb68-2" aria-hidden="true" tabindex="-1"></a>b <span class="op">:=</span> backend<span class="op">.</span>NewFileBackend<span class="op">(</span>file<span class="op">)</span></span>
+used. A RPC framework developed as part of r3map is Dudireka<span class="citation">[48]</span>. As such, it was designed specifically with
+the hybrid pre-and post-copy scenario in mind. To optimize for this, it
+has support for concurrent RPCs, which allows for efficient background
+pulls as multiple chunks can be pulled at the same time.</p>
+<p>The framework also allows for defining functions on both the client
+and the server, which makes it possible to initiate pre-copy migratons
+and transfer chnks from the source host to the destination without
+having the latter be <code>dial</code>able; while making the destination
+host available by dialing it is possible in trusted LAN deployments,
+NATs and security concerns make it harder in WAN deployment. As part of
+this bi-directional support it is possible to also pass callbacks and
+closures as arguments to RPCs, which makes it possible to model remote
+generators with yields to easily report i.e. a migration’s progress as
+it is running, while still modelling the migration with a single,
+transactional RPC and a return value. In addition to this, because
+dudirekta is also itself transport-agnostic, it is possible to use
+transport protocols like QUIC in WAN deployments, which can reduce the
+initial latency by using the 0-RTT handshake and thus makes calling an
+RPC less expensive. By not requiring TCP-style client-server semantics,
+Dudirekta can also be used to allow for P2P migrations over a protocol
+such as WebRTC<span class="citation">[49]</span>.</p>
+<h3 id="usage"><span class="header-section-number">4.10.2</span>
+Usage</h3>
+<p>Dudirekta is reflection based; both RPC definition and calling an RPC
+are completely transparent, which makes it optimal for prototyping the
+mount and migration APIs. To define the RPCs to be exposed, a simple
+implementation struct can be created for both the client and server. In
+this example, the server provides a simple counter with an increment
+RPC, while the client provides a simple <code>Println</code> RPC that
+can be called from the server. Due to protocol limitations, RPCs must
+have a context as their first argument, not have variadic arguments, and
+must return either a single value or an error:</p>
+<div class="sourceCode" id="cb68"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb68-1"><a href="#cb68-1" aria-hidden="true" tabindex="-1"></a><span class="co">// Server</span></span>
+<span id="cb68-2"><a href="#cb68-2" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> local <span class="kw">struct</span> <span class="op">{</span> counter <span class="dt">int64</span> <span class="op">}</span></span>
 <span id="cb68-3"><a href="#cb68-3" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb68-4"><a href="#cb68-4" aria-hidden="true" tabindex="-1"></a><span class="co">// Creating the wrapper struct defining the RPCs</span></span>
-<span id="cb68-5"><a href="#cb68-5" aria-hidden="true" tabindex="-1"></a>svc <span class="op">:=</span> services<span class="op">.</span>NewBackend<span class="op">(</span>b<span class="op">,</span> <span class="op">*</span>verbose<span class="op">,</span> <span class="op">*</span>maxChunkSize<span class="op">)</span></span>
-<span id="cb68-6"><a href="#cb68-6" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb68-7"><a href="#cb68-7" aria-hidden="true" tabindex="-1"></a><span class="co">// Create a RPC server from the registry</span></span>
-<span id="cb68-8"><a href="#cb68-8" aria-hidden="true" tabindex="-1"></a>registry <span class="op">:=</span> rpc<span class="op">.</span>NewRegistry<span class="op">(</span></span>
-<span id="cb68-9"><a href="#cb68-9" aria-hidden="true" tabindex="-1"></a>    svc<span class="op">,</span> <span class="co">// Local RPCs</span></span>
-<span id="cb68-10"><a href="#cb68-10" aria-hidden="true" tabindex="-1"></a>    <span class="kw">struct</span><span class="op">{}{},</span> <span class="co">// Remote RPCs; for the mount API, the protocol is unidirectional, so no remote RPCs are expected</span></span>
-<span id="cb68-11"><a href="#cb68-11" aria-hidden="true" tabindex="-1"></a>    <span class="co">// ...</span></span>
-<span id="cb68-12"><a href="#cb68-12" aria-hidden="true" tabindex="-1"></a><span class="op">)</span></span>
-<span id="cb68-13"><a href="#cb68-13" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb68-14"><a href="#cb68-14" aria-hidden="true" tabindex="-1"></a><span class="co">// Create a TCP server and accept a client</span></span>
-<span id="cb68-15"><a href="#cb68-15" aria-hidden="true" tabindex="-1"></a>lis<span class="op">,</span> err <span class="op">:=</span> net<span class="op">.</span>Listen<span class="op">(</span><span class="st">&quot;tcp&quot;</span><span class="op">,</span> <span class="op">*</span>laddr<span class="op">)</span></span>
-<span id="cb68-16"><a href="#cb68-16" aria-hidden="true" tabindex="-1"></a>conn<span class="op">,</span> err <span class="op">:=</span> lis<span class="op">.</span>Accept<span class="op">()</span></span>
-<span id="cb68-17"><a href="#cb68-17" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb68-18"><a href="#cb68-18" aria-hidden="true" tabindex="-1"></a><span class="co">// Handling the connection with the dudirekta RPC server</span></span>
-<span id="cb68-19"><a href="#cb68-19" aria-hidden="true" tabindex="-1"></a>registry<span class="op">.</span>Link<span class="op">(</span>conn<span class="op">)</span></span></code></pre></div>
-<p>On the remote side, instead of passing the service implementation to
-the registry as the local RPCs, a placeholder struct is passed in as the
-remote RPCs, which is then implemented at runtime by the registry using
-reflection, which makes both defining and calling RPCs completely
-transparent.</p>
-<p>The protocol used for dudirekta is very simple and based on JSONL; a
+<span id="cb68-4"><a href="#cb68-4" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> <span class="op">(</span>s <span class="op">*</span>local<span class="op">)</span> Increment<span class="op">(</span>ctx context<span class="op">.</span>Context<span class="op">,</span> delta <span class="dt">int64</span><span class="op">)</span> <span class="op">(</span><span class="dt">int64</span><span class="op">,</span> <span class="dt">error</span><span class="op">)</span> <span class="op">{</span></span>
+<span id="cb68-5"><a href="#cb68-5" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> atomic<span class="op">.</span>AddInt64<span class="op">(&amp;</span>s<span class="op">.</span>counter<span class="op">,</span> delta<span class="op">),</span> <span class="ot">nil</span></span>
+<span id="cb68-6"><a href="#cb68-6" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb68-7"><a href="#cb68-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb68-8"><a href="#cb68-8" aria-hidden="true" tabindex="-1"></a><span class="co">// Client</span></span>
+<span id="cb68-9"><a href="#cb68-9" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> local <span class="kw">struct</span><span class="op">{}</span></span>
+<span id="cb68-10"><a href="#cb68-10" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb68-11"><a href="#cb68-11" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> <span class="op">(</span>s <span class="op">*</span>local<span class="op">)</span> Println<span class="op">(</span>ctx context<span class="op">.</span>Context<span class="op">,</span> msg <span class="dt">string</span><span class="op">)</span> <span class="dt">error</span> <span class="op">{</span></span>
+<span id="cb68-12"><a href="#cb68-12" aria-hidden="true" tabindex="-1"></a>    fmt<span class="op">.</span>Println<span class="op">(</span>msg<span class="op">)</span></span>
+<span id="cb68-13"><a href="#cb68-13" aria-hidden="true" tabindex="-1"></a>    <span class="co">// ...</span></span>
+<span id="cb68-14"><a href="#cb68-14" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<p>In order to call these RPCs from the client/server respectively, the
+remote functions defined earlier are also created as placeholder structs
+that will be implemented by Dudirekta at runtime using reflection and
+are added to registry, which provides a handler that links a connection
+to the RPC implementation:</p>
+<div class="sourceCode" id="cb69"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb69-1"><a href="#cb69-1" aria-hidden="true" tabindex="-1"></a><span class="co">// Server</span></span>
+<span id="cb69-2"><a href="#cb69-2" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> remote <span class="kw">struct</span> <span class="op">{</span></span>
+<span id="cb69-3"><a href="#cb69-3" aria-hidden="true" tabindex="-1"></a>    Println <span class="kw">func</span><span class="op">(</span>ctx context<span class="op">.</span>Context<span class="op">,</span> msg <span class="dt">string</span><span class="op">)</span> <span class="dt">error</span></span>
+<span id="cb69-4"><a href="#cb69-4" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb69-5"><a href="#cb69-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb69-6"><a href="#cb69-6" aria-hidden="true" tabindex="-1"></a>registry <span class="op">:=</span> rpc<span class="op">.</span>NewRegistry<span class="op">(</span></span>
+<span id="cb69-7"><a href="#cb69-7" aria-hidden="true" tabindex="-1"></a>    <span class="op">&amp;</span>local<span class="op">{},</span></span>
+<span id="cb69-8"><a href="#cb69-8" aria-hidden="true" tabindex="-1"></a>    remote<span class="op">{},</span></span>
+<span id="cb69-9"><a href="#cb69-9" aria-hidden="true" tabindex="-1"></a>    <span class="co">// ...</span></span>
+<span id="cb69-10"><a href="#cb69-10" aria-hidden="true" tabindex="-1"></a><span class="op">)</span></span>
+<span id="cb69-11"><a href="#cb69-11" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb69-12"><a href="#cb69-12" aria-hidden="true" tabindex="-1"></a><span class="co">// Client</span></span>
+<span id="cb69-13"><a href="#cb69-13" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> remote <span class="kw">struct</span> <span class="op">{</span></span>
+<span id="cb69-14"><a href="#cb69-14" aria-hidden="true" tabindex="-1"></a>    Increment <span class="kw">func</span><span class="op">(</span>ctx context<span class="op">.</span>Context<span class="op">,</span> delta <span class="dt">int64</span><span class="op">)</span> <span class="op">(</span><span class="dt">int64</span><span class="op">,</span> <span class="dt">error</span><span class="op">)</span></span>
+<span id="cb69-15"><a href="#cb69-15" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb69-16"><a href="#cb69-16" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb69-17"><a href="#cb69-17" aria-hidden="true" tabindex="-1"></a>registry <span class="op">:=</span> rpc<span class="op">.</span>NewRegistry<span class="op">(</span></span>
+<span id="cb69-18"><a href="#cb69-18" aria-hidden="true" tabindex="-1"></a>    <span class="op">&amp;</span>local<span class="op">{},</span></span>
+<span id="cb69-19"><a href="#cb69-19" aria-hidden="true" tabindex="-1"></a>    remote<span class="op">{},</span></span>
+<span id="cb69-20"><a href="#cb69-20" aria-hidden="true" tabindex="-1"></a>    <span class="co">// ...</span></span>
+<span id="cb69-21"><a href="#cb69-21" aria-hidden="true" tabindex="-1"></a><span class="op">)</span></span></code></pre></div>
+<p>This handler can then be linked to a connection provided by any
+transport layer, i.e. TCP:</p>
+<div class="sourceCode" id="cb70"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb70-1"><a href="#cb70-1" aria-hidden="true" tabindex="-1"></a><span class="co">// Server: Create a TCP listener, wait for a connection, and link it to the registry</span></span>
+<span id="cb70-2"><a href="#cb70-2" aria-hidden="true" tabindex="-1"></a>lis<span class="op">,</span> err <span class="op">:=</span> net<span class="op">.</span>Listen<span class="op">(</span><span class="st">&quot;tcp&quot;</span><span class="op">,</span> <span class="st">&quot;localhost:1337&quot;</span><span class="op">)</span></span>
+<span id="cb70-3"><a href="#cb70-3" aria-hidden="true" tabindex="-1"></a>conn<span class="op">,</span> err <span class="op">:=</span> lis<span class="op">.</span>Accept<span class="op">()</span></span>
+<span id="cb70-4"><a href="#cb70-4" aria-hidden="true" tabindex="-1"></a>registry<span class="op">.</span>Link<span class="op">(</span>conn<span class="op">)</span></span>
+<span id="cb70-5"><a href="#cb70-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb70-6"><a href="#cb70-6" aria-hidden="true" tabindex="-1"></a><span class="co">// Client: Connect to the TCP listener and link it to the registry</span></span>
+<span id="cb70-7"><a href="#cb70-7" aria-hidden="true" tabindex="-1"></a>conn<span class="op">,</span> err <span class="op">:=</span> net<span class="op">.</span>Dial<span class="op">(</span><span class="st">&quot;tcp&quot;</span><span class="op">,</span> <span class="op">*</span>addr<span class="op">)</span></span>
+<span id="cb70-8"><a href="#cb70-8" aria-hidden="true" tabindex="-1"></a>registry<span class="op">.</span>Link<span class="op">(</span>conn<span class="op">)</span></span></code></pre></div>
+<p>After both registries have been linked to the transport, it is
+possible to call the RPCs exposed by the remote peers from both the
+server and the client, which makes bi-directional communication
+possible:</p>
+<div class="sourceCode" id="cb71"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb71-1"><a href="#cb71-1" aria-hidden="true" tabindex="-1"></a><span class="co">// Server: Calls the `Println` RPC exposed by the client</span></span>
+<span id="cb71-2"><a href="#cb71-2" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> _<span class="op">,</span> peer <span class="op">:=</span> <span class="kw">range</span> registry<span class="op">.</span>Peers<span class="op">()</span> <span class="op">{</span></span>
+<span id="cb71-3"><a href="#cb71-3" aria-hidden="true" tabindex="-1"></a>    peer<span class="op">.</span>Println<span class="op">(</span>ctx<span class="op">,</span> <span class="st">&quot;Hello, world!&quot;</span><span class="op">)</span></span>
+<span id="cb71-4"><a href="#cb71-4" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb71-5"><a href="#cb71-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb71-6"><a href="#cb71-6" aria-hidden="true" tabindex="-1"></a><span class="co">// Client: Calls the `Increment` RPC exposed by the server</span></span>
+<span id="cb71-7"><a href="#cb71-7" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> _<span class="op">,</span> peer <span class="op">:=</span> <span class="kw">range</span> registry<span class="op">.</span>Peers<span class="op">()</span> <span class="op">{</span></span>
+<span id="cb71-8"><a href="#cb71-8" aria-hidden="true" tabindex="-1"></a>    <span class="bu">new</span><span class="op">,</span> err <span class="op">:=</span> peer<span class="op">.</span>Increment<span class="op">(</span>ctx<span class="op">,</span> <span class="dv">1</span><span class="op">)</span></span>
+<span id="cb71-9"><a href="#cb71-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb71-10"><a href="#cb71-10" aria-hidden="true" tabindex="-1"></a>    log<span class="op">.</span>Println<span class="op">(</span><span class="bu">new</span><span class="op">)</span> <span class="co">// Returns the value incremented by one</span></span>
+<span id="cb71-11"><a href="#cb71-11" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<p>As mentioned earlier, Dudirekta also allows for passing in closures
+as arguments to RPCs; since this is also handled transparently, all that
+is necessary is to define the signature of the closure on the client and
+server, and it can be passed in as though the RPC were a local call,
+which also works on both the client and the server side:</p>
+<div class="sourceCode" id="cb72"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb72-1"><a href="#cb72-1" aria-hidden="true" tabindex="-1"></a><span class="co">// Server</span></span>
+<span id="cb72-2"><a href="#cb72-2" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> <span class="op">(</span>s <span class="op">*</span>local<span class="op">)</span> Iterate<span class="op">(</span></span>
+<span id="cb72-3"><a href="#cb72-3" aria-hidden="true" tabindex="-1"></a>    ctx context<span class="op">.</span>Context<span class="op">,</span></span>
+<span id="cb72-4"><a href="#cb72-4" aria-hidden="true" tabindex="-1"></a>    length <span class="dt">int</span><span class="op">,</span></span>
+<span id="cb72-5"><a href="#cb72-5" aria-hidden="true" tabindex="-1"></a>    onIteration <span class="kw">func</span><span class="op">(</span>i <span class="dt">int</span><span class="op">,</span> b <span class="dt">string</span><span class="op">)</span> <span class="op">(</span><span class="dt">string</span><span class="op">,</span> <span class="dt">error</span><span class="op">),</span> <span class="co">// Closure that is being passed in</span></span>
+<span id="cb72-6"><a href="#cb72-6" aria-hidden="true" tabindex="-1"></a><span class="op">)</span> <span class="op">(</span><span class="dt">int</span><span class="op">,</span> <span class="dt">error</span><span class="op">)</span> <span class="op">{</span></span>
+<span id="cb72-7"><a href="#cb72-7" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> i <span class="op">:=</span> <span class="dv">0</span><span class="op">;</span> i <span class="op">&lt;</span> length<span class="op">;</span> i<span class="op">++</span> <span class="op">{</span></span>
+<span id="cb72-8"><a href="#cb72-8" aria-hidden="true" tabindex="-1"></a>        rv<span class="op">,</span> err <span class="op">:=</span> onIteration<span class="op">(</span>i<span class="op">,</span> <span class="st">&quot;This is from the callee&quot;</span><span class="op">)</span> <span class="co">// Remote closure is being called</span></span>
+<span id="cb72-9"><a href="#cb72-9" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb72-10"><a href="#cb72-10" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb72-11"><a href="#cb72-11" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> length<span class="op">,</span> <span class="ot">nil</span></span>
+<span id="cb72-12"><a href="#cb72-12" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb72-13"><a href="#cb72-13" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb72-14"><a href="#cb72-14" aria-hidden="true" tabindex="-1"></a><span class="co">// Client</span></span>
+<span id="cb72-15"><a href="#cb72-15" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> remote <span class="kw">struct</span> <span class="op">{</span></span>
+<span id="cb72-16"><a href="#cb72-16" aria-hidden="true" tabindex="-1"></a>    Iterate <span class="kw">func</span><span class="op">(</span></span>
+<span id="cb72-17"><a href="#cb72-17" aria-hidden="true" tabindex="-1"></a>        ctx context<span class="op">.</span>Context<span class="op">,</span></span>
+<span id="cb72-18"><a href="#cb72-18" aria-hidden="true" tabindex="-1"></a>        length <span class="dt">int</span><span class="op">,</span></span>
+<span id="cb72-19"><a href="#cb72-19" aria-hidden="true" tabindex="-1"></a>        onIteration <span class="kw">func</span><span class="op">(</span>i <span class="dt">int</span><span class="op">,</span> b <span class="dt">string</span><span class="op">)</span> <span class="op">(</span><span class="dt">string</span><span class="op">,</span> <span class="dt">error</span><span class="op">),</span> <span class="co">// The closure is defined in the placeholder struct</span></span>
+<span id="cb72-20"><a href="#cb72-20" aria-hidden="true" tabindex="-1"></a>    <span class="op">)</span> <span class="op">(</span><span class="dt">int</span><span class="op">,</span> <span class="dt">error</span><span class="op">)</span></span>
+<span id="cb72-21"><a href="#cb72-21" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb72-22"><a href="#cb72-22" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb72-23"><a href="#cb72-23" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> _<span class="op">,</span> peer <span class="op">:=</span> <span class="kw">range</span> registry<span class="op">.</span>Peers<span class="op">()</span> <span class="op">{</span></span>
+<span id="cb72-24"><a href="#cb72-24" aria-hidden="true" tabindex="-1"></a>    <span class="co">// `Iterate` RPC provided by the server is called</span></span>
+<span id="cb72-25"><a href="#cb72-25" aria-hidden="true" tabindex="-1"></a>    length<span class="op">,</span> err <span class="op">:=</span> Iterate<span class="op">(</span>peer<span class="op">,</span> ctx<span class="op">,</span> <span class="dv">5</span><span class="op">,</span> <span class="kw">func</span><span class="op">(</span>i <span class="dt">int</span><span class="op">,</span> b <span class="dt">string</span><span class="op">)</span> <span class="op">(</span><span class="dt">string</span><span class="op">,</span> <span class="dt">error</span><span class="op">)</span> <span class="op">{</span></span>
+<span id="cb72-26"><a href="#cb72-26" aria-hidden="true" tabindex="-1"></a>        <span class="co">// Closure is transparently provided as a regular argumnt</span></span>
+<span id="cb72-27"><a href="#cb72-27" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> <span class="st">&quot;This is from the caller&quot;</span><span class="op">,</span> <span class="ot">nil</span></span>
+<span id="cb72-28"><a href="#cb72-28" aria-hidden="true" tabindex="-1"></a>    <span class="op">})</span></span>
+<span id="cb72-29"><a href="#cb72-29" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb72-30"><a href="#cb72-30" aria-hidden="true" tabindex="-1"></a>    log<span class="op">.</span>Println<span class="op">(</span>length<span class="op">)</span> <span class="co">// Despite having a closure as an argument, the RPC can still return values</span></span>
+<span id="cb72-31"><a href="#cb72-31" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<h3 id="protocol"><span class="header-section-number">4.10.3</span>
+Protocol</h3>
+<p>The protocol used for dudirekta is simple and based on JSONL; a
 function call, i.e. to <code>Println</code> looks like this:</p>
-<div class="sourceCode" id="cb69"><pre class="sourceCode json"><code class="sourceCode json"><span id="cb69-1"><a href="#cb69-1" aria-hidden="true" tabindex="-1"></a><span class="ot">[</span><span class="kw">true</span><span class="ot">,</span> <span class="st">&quot;1&quot;</span><span class="ot">,</span> <span class="st">&quot;Println&quot;</span><span class="ot">,</span> <span class="ot">[</span><span class="st">&quot;Hello, world!&quot;</span><span class="ot">]]</span></span></code></pre></div>
+<div class="sourceCode" id="cb73"><pre class="sourceCode json"><code class="sourceCode json"><span id="cb73-1"><a href="#cb73-1" aria-hidden="true" tabindex="-1"></a><span class="ot">[</span><span class="kw">true</span><span class="ot">,</span> <span class="st">&quot;1&quot;</span><span class="ot">,</span> <span class="st">&quot;Println&quot;</span><span class="ot">,</span> <span class="ot">[</span><span class="st">&quot;Hello, world!&quot;</span><span class="ot">]]</span></span></code></pre></div>
 <p>The first element marks the message as a function call, while the
 second one is the call ID, the third represents the name of the RPC that
 is being called followed by an array of arguments. A function return
 messages looks similar:</p>
-<div class="sourceCode" id="cb70"><pre class="sourceCode json"><code class="sourceCode json"><span id="cb70-1"><a href="#cb70-1" aria-hidden="true" tabindex="-1"></a><span class="ot">[</span><span class="kw">false</span><span class="ot">,</span> <span class="st">&quot;1&quot;</span><span class="ot">,</span> <span class="st">&quot;&quot;</span><span class="ot">,</span> <span class="st">&quot;&quot;</span><span class="ot">]</span></span></code></pre></div>
+<div class="sourceCode" id="cb74"><pre class="sourceCode json"><code class="sourceCode json"><span id="cb74-1"><a href="#cb74-1" aria-hidden="true" tabindex="-1"></a><span class="ot">[</span><span class="kw">false</span><span class="ot">,</span> <span class="st">&quot;1&quot;</span><span class="ot">,</span> <span class="st">&quot;&quot;</span><span class="ot">,</span> <span class="st">&quot;&quot;</span><span class="ot">]</span></span></code></pre></div>
 <p>Here, the message is marked as a return value in the first element,
 the ID is passed with the second element and both the actual return
 value (third element) and error (fourth element) are nil and represented
-by an empty sring. If a RPC is called, it’s implementation is looked up
-by the registry through reflection and the call’s signature is validated
-against the implementation, after which the provided function call’s
-arguments are unmarshalled into their native types from JSON. This
-simple, ID-based protocol allows for concurrent RPCs through muxing and
-demuxing, which is an important feature for the pull system, as
-similarly to how a global lock on the remote backend causes the RTT to
-drastically influence throughput, a RPC framework with synchronous calls
-has the same effect.</p>
+by an empty sring. Because it includes IDs, this protocol allows for
+concurrent RPCs through muxing and demuxing the JSONL messages.</p>
+<h3 id="rpc-providers"><span class="header-section-number">4.10.4</span>
+RPC Providers</h3>
+<p>If an RPC (such as <code>ReadAt</code> in the case of the mount API)
+is called, a method with the provided RPC’s name is looked up on the
+provided implementation struct and if it is found, the provided
+argument’s types are validated against those of the implementation by
+unmarshalling them into their native natives:</p>
+<div class="sourceCode" id="cb75"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb75-1"><a href="#cb75-1" aria-hidden="true" tabindex="-1"></a><span class="co">// Unmarshalling the function name and args from the protocol</span></span>
+<span id="cb75-2"><a href="#cb75-2" aria-hidden="true" tabindex="-1"></a><span class="kw">var</span> functionName <span class="dt">string</span></span>
+<span id="cb75-3"><a href="#cb75-3" aria-hidden="true" tabindex="-1"></a>json<span class="op">.</span>Unmarshal<span class="op">(</span>res<span class="op">[</span><span class="dv">2</span><span class="op">],</span> <span class="op">&amp;</span>functionName<span class="op">)</span></span>
+<span id="cb75-4"><a href="#cb75-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb75-5"><a href="#cb75-5" aria-hidden="true" tabindex="-1"></a><span class="kw">var</span> functionArgs <span class="op">[]</span>json<span class="op">.</span>RawMessage</span>
+<span id="cb75-6"><a href="#cb75-6" aria-hidden="true" tabindex="-1"></a>json<span class="op">.</span>Unmarshal<span class="op">(</span>res<span class="op">[</span><span class="dv">3</span><span class="op">],</span> <span class="op">&amp;</span>functionArgs<span class="op">)</span></span>
+<span id="cb75-7"><a href="#cb75-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb75-8"><a href="#cb75-8" aria-hidden="true" tabindex="-1"></a><span class="co">// Looking up the field on the local struct</span></span>
+<span id="cb75-9"><a href="#cb75-9" aria-hidden="true" tabindex="-1"></a>function <span class="op">:=</span> reflect<span class="op">.</span></span>
+<span id="cb75-10"><a href="#cb75-10" aria-hidden="true" tabindex="-1"></a>    ValueOf<span class="op">(</span>r<span class="op">.</span>local<span class="op">.</span>wrappee<span class="op">).</span></span>
+<span id="cb75-11"><a href="#cb75-11" aria-hidden="true" tabindex="-1"></a>    MethodByName<span class="op">(</span>functionName<span class="op">)</span></span>
+<span id="cb75-12"><a href="#cb75-12" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb75-13"><a href="#cb75-13" aria-hidden="true" tabindex="-1"></a><span class="co">// Only continue if the field can be called</span></span>
+<span id="cb75-14"><a href="#cb75-14" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> function<span class="op">.</span>Kind<span class="op">()</span> <span class="op">!=</span> reflect<span class="op">.</span>Func <span class="op">{</span></span>
+<span id="cb75-15"><a href="#cb75-15" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> ErrCannotCallNonFunction</span>
+<span id="cb75-16"><a href="#cb75-16" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb75-17"><a href="#cb75-17" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb75-18"><a href="#cb75-18" aria-hidden="true" tabindex="-1"></a><span class="co">// Validation of the argument count</span></span>
+<span id="cb75-19"><a href="#cb75-19" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> function<span class="op">.</span>Type<span class="op">().</span>NumIn<span class="op">()</span> <span class="op">!=</span> <span class="bu">len</span><span class="op">(</span>functionArgs<span class="op">)+</span><span class="dv">1</span> <span class="op">{</span></span>
+<span id="cb75-20"><a href="#cb75-20" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> ErrInvalidArgs</span>
+<span id="cb75-21"><a href="#cb75-21" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb75-22"><a href="#cb75-22" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb75-23"><a href="#cb75-23" aria-hidden="true" tabindex="-1"></a><span class="co">// Validation of the arguments&#39; types; if an argument can not be unmarshalled, the call is cancelled</span></span>
+<span id="cb75-24"><a href="#cb75-24" aria-hidden="true" tabindex="-1"></a>args <span class="op">:=</span> <span class="op">[]</span>reflect<span class="op">.</span>Value<span class="op">{}</span></span>
+<span id="cb75-25"><a href="#cb75-25" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> i <span class="op">:=</span> <span class="dv">0</span><span class="op">;</span> i <span class="op">&lt;</span> function<span class="op">.</span>Type<span class="op">().</span>NumIn<span class="op">();</span> i<span class="op">++</span> <span class="op">{</span></span>
+<span id="cb75-26"><a href="#cb75-26" aria-hidden="true" tabindex="-1"></a>    functionType <span class="op">:=</span> function<span class="op">.</span>Type<span class="op">().</span>In<span class="op">(</span>i<span class="op">)</span></span>
+<span id="cb75-27"><a href="#cb75-27" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb75-28"><a href="#cb75-28" aria-hidden="true" tabindex="-1"></a>    arg <span class="op">:=</span> reflect<span class="op">.</span>New<span class="op">(</span>functionType<span class="op">)</span></span>
+<span id="cb75-29"><a href="#cb75-29" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> err <span class="op">:=</span> json<span class="op">.</span>Unmarshal<span class="op">(</span>functionArgs<span class="op">[</span>i<span class="dv">-1</span><span class="op">],</span> arg<span class="op">.</span>Interface<span class="op">());</span> err <span class="op">!=</span> <span class="ot">nil</span> <span class="op">{</span></span>
+<span id="cb75-30"><a href="#cb75-30" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> err</span>
+<span id="cb75-31"><a href="#cb75-31" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb75-32"><a href="#cb75-32" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb75-33"><a href="#cb75-33" aria-hidden="true" tabindex="-1"></a>    args <span class="op">=</span> <span class="bu">append</span><span class="op">(</span>args<span class="op">,</span> arg<span class="op">.</span>Elem<span class="op">())</span></span>
+<span id="cb75-34"><a href="#cb75-34" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<p>After the call has been validated by the RPC provider, the actual RPC
+implementation is executed in a new goroutine to allow for concurrent
+RPCs, the return and error value of which is then marshalled into JSON
+and sent back the caller.</p>
+<p>In addition to the RPCs provided by the implementation struct, in
+order to support closures, a virtual <code>CallClosure</code> RPC is
+also exposed. This RPC is provided by a separate closure management
+component, which handles storing references to remote closure
+implementations:</p>
+<div class="sourceCode" id="cb76"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb76-1"><a href="#cb76-1" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> <span class="op">(</span>m <span class="op">*</span>closureManager<span class="op">)</span> CallClosure<span class="op">(</span>ctx context<span class="op">.</span>Context<span class="op">,</span> closureID <span class="dt">string</span><span class="op">,</span> args <span class="op">[]</span><span class="kw">interface</span><span class="op">{})</span> <span class="op">(</span><span class="kw">interface</span><span class="op">{},</span> <span class="dt">error</span><span class="op">)</span> <span class="op">{</span></span>
+<span id="cb76-2"><a href="#cb76-2" aria-hidden="true" tabindex="-1"></a>    <span class="co">// Looking up a reference to the closure&#39;s implementation by it&#39;s call ID</span></span>
+<span id="cb76-3"><a href="#cb76-3" aria-hidden="true" tabindex="-1"></a>    closure<span class="op">,</span> ok <span class="op">:=</span> m<span class="op">.</span>closures<span class="op">[</span>closureID<span class="op">]</span></span>
+<span id="cb76-4"><a href="#cb76-4" aria-hidden="true" tabindex="-1"></a>    <span class="co">// ...</span></span>
+<span id="cb76-5"><a href="#cb76-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb76-6"><a href="#cb76-6" aria-hidden="true" tabindex="-1"></a>    <span class="co">// Calling the closure</span></span>
+<span id="cb76-7"><a href="#cb76-7" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> closure<span class="op">(</span>args<span class="op">...)</span></span>
+<span id="cb76-8"><a href="#cb76-8" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<p>It also garbage collects those references after a RPC that has
+provided a closure has returned:</p>
+<div class="sourceCode" id="cb77"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb77-1"><a href="#cb77-1" aria-hidden="true" tabindex="-1"></a><span class="co">// If a closure is provided as an argument, handle it differently</span></span>
+<span id="cb77-2"><a href="#cb77-2" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> arg<span class="op">.</span>Kind<span class="op">()</span> <span class="op">==</span> reflect<span class="op">.</span>Func <span class="op">{</span></span>
+<span id="cb77-3"><a href="#cb77-3" aria-hidden="true" tabindex="-1"></a>    closureID<span class="op">,</span> freeClosure<span class="op">,</span> err <span class="op">:=</span> registerClosure<span class="op">(</span>r<span class="op">.</span>local<span class="op">.</span>wrapper<span class="op">,</span> arg<span class="op">.</span>Interface<span class="op">())</span></span>
+<span id="cb77-4"><a href="#cb77-4" aria-hidden="true" tabindex="-1"></a>    <span class="co">// Freeing the closure after the RPC that has provided it is out of scope</span></span>
+<span id="cb77-5"><a href="#cb77-5" aria-hidden="true" tabindex="-1"></a>    <span class="cf">defer</span> freeClosure<span class="op">()</span></span>
+<span id="cb77-6"><a href="#cb77-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb77-7"><a href="#cb77-7" aria-hidden="true" tabindex="-1"></a>    cmdArgs <span class="op">=</span> <span class="bu">append</span><span class="op">(</span>cmdArgs<span class="op">,</span> closureID<span class="op">)</span></span>
+<span id="cb77-8"><a href="#cb77-8" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<h3 id="rpc-calls"><span class="header-section-number">4.10.5</span> RPC
+Calls</h3>
+<p>As mentioned earlier, on the caller’s side, a placeholder struct
+representing the callee’s available RPCs is provided to the registry.
+Once the registry is linked to a connection, the placeholder struct’s
+methods are iterated over and the signatures are validated for
+compatibility with Dudirekta’s limitations. They are then implemented
+using and set using reflection:</p>
+<div class="sourceCode" id="cb78"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb78-1"><a href="#cb78-1" aria-hidden="true" tabindex="-1"></a><span class="co">// Iterating over the fields of the struct</span></span>
+<span id="cb78-2"><a href="#cb78-2" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> i <span class="op">:=</span> <span class="dv">0</span><span class="op">;</span> i <span class="op">&lt;</span> remote<span class="op">.</span>NumField<span class="op">();</span> i<span class="op">++</span> <span class="op">{</span></span>
+<span id="cb78-3"><a href="#cb78-3" aria-hidden="true" tabindex="-1"></a>    functionField <span class="op">:=</span> remote<span class="op">.</span>Type<span class="op">().</span>Field<span class="op">(</span>i<span class="op">)</span></span>
+<span id="cb78-4"><a href="#cb78-4" aria-hidden="true" tabindex="-1"></a>    functionType <span class="op">:=</span> functionField<span class="op">.</span>Type</span>
+<span id="cb78-5"><a href="#cb78-5" aria-hidden="true" tabindex="-1"></a>    <span class="co">// ...</span></span>
+<span id="cb78-6"><a href="#cb78-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb78-7"><a href="#cb78-7" aria-hidden="true" tabindex="-1"></a>    <span class="co">// Validating that the requirements for the return values are met</span></span>
+<span id="cb78-8"><a href="#cb78-8" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> functionType<span class="op">.</span>NumOut<span class="op">()</span> <span class="op">&lt;=</span> <span class="dv">0</span> <span class="op">||</span> functionType<span class="op">.</span>NumOut<span class="op">()</span> <span class="op">&gt;</span> <span class="dv">2</span> <span class="op">{</span></span>
+<span id="cb78-9"><a href="#cb78-9" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> ErrInvalidReturn</span>
+<span id="cb78-10"><a href="#cb78-10" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb78-11"><a href="#cb78-11" aria-hidden="true" tabindex="-1"></a>    <span class="co">// ...</span></span>
+<span id="cb78-12"><a href="#cb78-12" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb78-13"><a href="#cb78-13" aria-hidden="true" tabindex="-1"></a>    <span class="co">// Validating that the requirements for the arguments are met</span></span>
+<span id="cb78-14"><a href="#cb78-14" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> functionType<span class="op">.</span>NumIn<span class="op">()</span> <span class="op">&lt;</span> <span class="dv">1</span> <span class="op">{</span></span>
+<span id="cb78-15"><a href="#cb78-15" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> ErrInvalidArgs</span>
+<span id="cb78-16"><a href="#cb78-16" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb78-17"><a href="#cb78-17" aria-hidden="true" tabindex="-1"></a>    <span class="co">// ...</span></span>
+<span id="cb78-18"><a href="#cb78-18" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb78-19"><a href="#cb78-19" aria-hidden="true" tabindex="-1"></a>    <span class="co">// Using reflection to set the method&#39;s implementations</span></span>
+<span id="cb78-20"><a href="#cb78-20" aria-hidden="true" tabindex="-1"></a>    remote<span class="op">.</span></span>
+<span id="cb78-21"><a href="#cb78-21" aria-hidden="true" tabindex="-1"></a>        FieldByName<span class="op">(</span>functionField<span class="op">.</span>Name<span class="op">).</span></span>
+<span id="cb78-22"><a href="#cb78-22" aria-hidden="true" tabindex="-1"></a>        Set<span class="op">(</span>r<span class="op">.</span>makeRPC<span class="op">(</span> <span class="co">// Creating the actual RPC implementation</span></span>
+<span id="cb78-23"><a href="#cb78-23" aria-hidden="true" tabindex="-1"></a>            functionField<span class="op">.</span>Name<span class="op">,</span></span>
+<span id="cb78-24"><a href="#cb78-24" aria-hidden="true" tabindex="-1"></a>            functionType<span class="op">,</span></span>
+<span id="cb78-25"><a href="#cb78-25" aria-hidden="true" tabindex="-1"></a>            errs<span class="op">,</span></span>
+<span id="cb78-26"><a href="#cb78-26" aria-hidden="true" tabindex="-1"></a>            conn<span class="op">,</span></span>
+<span id="cb78-27"><a href="#cb78-27" aria-hidden="true" tabindex="-1"></a>            responseResolver<span class="op">,</span></span>
+<span id="cb78-28"><a href="#cb78-28" aria-hidden="true" tabindex="-1"></a>        <span class="op">))</span></span>
+<span id="cb78-29"><a href="#cb78-29" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<p>These implementations simply marshal and unmarshal the function calls
+into Dudirekta’s JSONL protocol upon being called, effectively
+functioning as transparent proxies to the remote implementations; it is
+at this point that unique call IDs are generated in order to be able to
+support concurrent RPCs:</p>
+<div class="sourceCode" id="cb79"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb79-1"><a href="#cb79-1" aria-hidden="true" tabindex="-1"></a><span class="co">// Creating the implementation method</span></span>
+<span id="cb79-2"><a href="#cb79-2" aria-hidden="true" tabindex="-1"></a>reflect<span class="op">.</span>MakeFunc<span class="op">(</span>functionType<span class="op">,</span> <span class="kw">func</span><span class="op">(</span>args <span class="op">[]</span>reflect<span class="op">.</span>Value<span class="op">)</span> <span class="op">(</span>results <span class="op">[]</span>reflect<span class="op">.</span>Value<span class="op">)</span> <span class="op">{</span></span>
+<span id="cb79-3"><a href="#cb79-3" aria-hidden="true" tabindex="-1"></a>        <span class="co">// Generating a unique call ID</span></span>
+<span id="cb79-4"><a href="#cb79-4" aria-hidden="true" tabindex="-1"></a>        callID <span class="op">:=</span> uuid<span class="op">.</span>NewString<span class="op">()</span></span>
+<span id="cb79-5"><a href="#cb79-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb79-6"><a href="#cb79-6" aria-hidden="true" tabindex="-1"></a>        cmdArgs <span class="op">:=</span> <span class="op">[]</span>any<span class="op">{}</span></span>
+<span id="cb79-7"><a href="#cb79-7" aria-hidden="true" tabindex="-1"></a>        <span class="cf">for</span> i<span class="op">,</span> arg <span class="op">:=</span> <span class="kw">range</span> args <span class="op">{</span></span>
+<span id="cb79-8"><a href="#cb79-8" aria-hidden="true" tabindex="-1"></a>            <span class="co">// Collecting the function arguments</span></span>
+<span id="cb79-9"><a href="#cb79-9" aria-hidden="true" tabindex="-1"></a>        <span class="op">}</span></span>
+<span id="cb79-10"><a href="#cb79-10" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb79-11"><a href="#cb79-11" aria-hidden="true" tabindex="-1"></a>        <span class="co">// Marshalling the JSONL for the call</span></span>
+<span id="cb79-12"><a href="#cb79-12" aria-hidden="true" tabindex="-1"></a>        b<span class="op">,</span> err <span class="op">:=</span> json<span class="op">.</span>Marshal<span class="op">(</span>cmd<span class="op">)</span></span>
+<span id="cb79-13"><a href="#cb79-13" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb79-14"><a href="#cb79-14" aria-hidden="true" tabindex="-1"></a>        <span class="co">// Writing the JSONL to the remote</span></span>
+<span id="cb79-15"><a href="#cb79-15" aria-hidden="true" tabindex="-1"></a>        conn<span class="op">.</span>Write<span class="op">(</span>b<span class="op">)</span></span>
+<span id="cb79-16"><a href="#cb79-16" aria-hidden="true" tabindex="-1"></a>        <span class="co">// ...</span></span>
+<span id="cb79-17"><a href="#cb79-17" aria-hidden="true" tabindex="-1"></a><span class="op">})</span></span></code></pre></div>
+<p>Once the remote has responded with a message containing the unique
+call ID, it unmarshals the return values, and returns from the
+implemented method:</p>
+<div class="sourceCode" id="cb80"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb80-1"><a href="#cb80-1" aria-hidden="true" tabindex="-1"></a><span class="co">// Spawning a new goroutine to handle the RPC return values</span></span>
+<span id="cb80-2"><a href="#cb80-2" aria-hidden="true" tabindex="-1"></a>res <span class="op">:=</span> <span class="bu">make</span><span class="op">(</span><span class="kw">chan</span> response<span class="op">)</span></span>
+<span id="cb80-3"><a href="#cb80-3" aria-hidden="true" tabindex="-1"></a><span class="cf">go</span> <span class="kw">func</span><span class="op">()</span> <span class="op">{</span></span>
+<span id="cb80-4"><a href="#cb80-4" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> <span class="op">{</span></span>
+<span id="cb80-5"><a href="#cb80-5" aria-hidden="true" tabindex="-1"></a>        <span class="co">// Waiting for a message with the correct call ID to be received over a broadcaster channel</span></span>
+<span id="cb80-6"><a href="#cb80-6" aria-hidden="true" tabindex="-1"></a>        msg <span class="op">:=</span> <span class="op">&lt;-</span>l<span class="op">.</span>Ch<span class="op">()</span></span>
+<span id="cb80-7"><a href="#cb80-7" aria-hidden="true" tabindex="-1"></a>        <span class="cf">if</span> msg<span class="op">.</span>id <span class="op">==</span> callID <span class="op">{</span></span>
+<span id="cb80-8"><a href="#cb80-8" aria-hidden="true" tabindex="-1"></a>            res <span class="op">&lt;-</span> msg</span>
+<span id="cb80-9"><a href="#cb80-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb80-10"><a href="#cb80-10" aria-hidden="true" tabindex="-1"></a>            <span class="cf">return</span></span>
+<span id="cb80-11"><a href="#cb80-11" aria-hidden="true" tabindex="-1"></a>        <span class="op">}</span></span>
+<span id="cb80-12"><a href="#cb80-12" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb80-13"><a href="#cb80-13" aria-hidden="true" tabindex="-1"></a><span class="op">}()</span></span>
+<span id="cb80-14"><a href="#cb80-14" aria-hidden="true" tabindex="-1"></a><span class="co">// ...</span></span>
+<span id="cb80-15"><a href="#cb80-15" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb80-16"><a href="#cb80-16" aria-hidden="true" tabindex="-1"></a><span class="co">// Receiving the raw return values</span></span>
+<span id="cb80-17"><a href="#cb80-17" aria-hidden="true" tabindex="-1"></a>rawReturnValue <span class="op">:=</span> <span class="op">&lt;-</span>res<span class="op">:</span></span>
+<span id="cb80-18"><a href="#cb80-18" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb80-19"><a href="#cb80-19" aria-hidden="true" tabindex="-1"></a><span class="co">// Unmarshalling, validating and returning the return values</span></span></code></pre></div>
+<p>Closures are implemented similarly to this. If a closure is provided
+as a function argument, instead of marshing the argument and sending it
+as JSONL, the function is implemented by creating a “proxy” closure that
+calls the remote <code>CallClosure</code> RPC, while reusing the same
+marshalling/unmarshalling logic as regular RPCs. Calling this virtual
+<code>CallClosure</code> RPC is possible from both the client and the
+server because the protocol is bi-directional:</p>
+<div class="sourceCode" id="cb81"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb81-1"><a href="#cb81-1" aria-hidden="true" tabindex="-1"></a><span class="co">// If an argument is a function instead of a JSON-serializable value, handle it differently</span></span>
+<span id="cb81-2"><a href="#cb81-2" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> functionType<span class="op">.</span>Kind<span class="op">()</span> <span class="op">==</span> reflect<span class="op">.</span>Func <span class="op">{</span></span>
+<span id="cb81-3"><a href="#cb81-3" aria-hidden="true" tabindex="-1"></a>    <span class="co">// Create a closure proxy</span></span>
+<span id="cb81-4"><a href="#cb81-4" aria-hidden="true" tabindex="-1"></a>    arg <span class="op">:=</span> reflect<span class="op">.</span>MakeFunc<span class="op">(</span>functionType<span class="op">,</span> <span class="kw">func</span><span class="op">(</span>args <span class="op">[]</span>reflect<span class="op">.</span>Value<span class="op">)</span> <span class="op">(</span>results <span class="op">[]</span>reflect<span class="op">.</span>Value<span class="op">)</span> <span class="op">{</span></span>
+<span id="cb81-5"><a href="#cb81-5" aria-hidden="true" tabindex="-1"></a>        <span class="co">// ...</span></span>
+<span id="cb81-6"><a href="#cb81-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb81-7"><a href="#cb81-7" aria-hidden="true" tabindex="-1"></a>        <span class="co">// A reference to the virtual `CallClosure` RPC</span></span>
+<span id="cb81-8"><a href="#cb81-8" aria-hidden="true" tabindex="-1"></a>        rpc <span class="op">:=</span> r<span class="op">.</span>makeRPC<span class="op">(</span></span>
+<span id="cb81-9"><a href="#cb81-9" aria-hidden="true" tabindex="-1"></a>            <span class="st">&quot;CallClosure&quot;</span><span class="op">,</span></span>
+<span id="cb81-10"><a href="#cb81-10" aria-hidden="true" tabindex="-1"></a>            <span class="co">// ...</span></span>
+<span id="cb81-11"><a href="#cb81-11" aria-hidden="true" tabindex="-1"></a>        <span class="op">)</span></span>
+<span id="cb81-12"><a href="#cb81-12" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb81-13"><a href="#cb81-13" aria-hidden="true" tabindex="-1"></a>        <span class="co">// Continues with the same marshalling logic as regular function calls, then calls the virtual `CallClosure` RPC on the remote</span></span>
+<span id="cb81-14"><a href="#cb81-14" aria-hidden="true" tabindex="-1"></a>    <span class="op">})</span></span>
+<span id="cb81-15"><a href="#cb81-15" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<h3 id="adapter-for-mounts-and-migrations"><span class="header-section-number">4.10.6</span> Adapter for Mounts and
+Migrations</h3>
+<p>As mentioned earlier, Dudirekta has a few limitations when it comes
+to the RPC signatures that are supported. This means that mount or
+migration backends can’t be provided directly to the registry and need
+to be wrapped using an adapter. To not have to duplicate this
+translation for the different backends, a generic adapter between the
+Dudirekta API and the <code>go-nbd</code> backend (as well as the)
+interfaces exists:</p>
+<div class="sourceCode" id="cb82"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb82-1"><a href="#cb82-1" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> NewRPCBackend<span class="op">(</span></span>
+<span id="cb82-2"><a href="#cb82-2" aria-hidden="true" tabindex="-1"></a>    ctx context<span class="op">.</span>Context<span class="op">,</span> <span class="co">// Global context to be used for Dudirekta calls</span></span>
+<span id="cb82-3"><a href="#cb82-3" aria-hidden="true" tabindex="-1"></a>    remote <span class="op">*</span>services<span class="op">.</span>BackendRemote<span class="op">,</span> <span class="co">// Dudirekta placeholder struct that is implemented by the registry</span></span>
+<span id="cb82-4"><a href="#cb82-4" aria-hidden="true" tabindex="-1"></a><span class="op">)</span> <span class="op">*</span>RPCBackend <span class="op">{</span></span>
+<span id="cb82-5"><a href="#cb82-5" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> <span class="op">&amp;</span>RPCBackend<span class="op">{</span>ctx<span class="op">,</span> remote<span class="op">}</span></span>
+<span id="cb82-6"><a href="#cb82-6" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb82-7"><a href="#cb82-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb82-8"><a href="#cb82-8" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> <span class="op">(</span>b <span class="op">*</span>RPCBackend<span class="op">)</span> ReadAt<span class="op">(</span>p <span class="op">[]</span><span class="dt">byte</span><span class="op">,</span> off <span class="dt">int64</span><span class="op">)</span> <span class="op">(</span>n <span class="dt">int</span><span class="op">,</span> err <span class="dt">error</span><span class="op">)</span> <span class="op">{</span></span>
+<span id="cb82-9"><a href="#cb82-9" aria-hidden="true" tabindex="-1"></a>    <span class="co">// Calling the RPC</span></span>
+<span id="cb82-10"><a href="#cb82-10" aria-hidden="true" tabindex="-1"></a>    r<span class="op">,</span> err <span class="op">:=</span> b<span class="op">.</span>remote<span class="op">.</span>ReadAt<span class="op">(</span>b<span class="op">.</span>ctx<span class="op">,</span> <span class="bu">len</span><span class="op">(</span>p<span class="op">),</span> off<span class="op">)</span></span>
+<span id="cb82-11"><a href="#cb82-11" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> err <span class="op">!=</span> <span class="ot">nil</span> <span class="op">{</span></span>
+<span id="cb82-12"><a href="#cb82-12" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> <span class="op">-</span><span class="dv">1</span><span class="op">,</span> err</span>
+<span id="cb82-13"><a href="#cb82-13" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb82-14"><a href="#cb82-14" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb82-15"><a href="#cb82-15" aria-hidden="true" tabindex="-1"></a>    <span class="co">// Making the result compatible with the `go-nbd` backend interface</span></span>
+<span id="cb82-16"><a href="#cb82-16" aria-hidden="true" tabindex="-1"></a>    n <span class="op">=</span> r<span class="op">.</span>N</span>
+<span id="cb82-17"><a href="#cb82-17" aria-hidden="true" tabindex="-1"></a>    <span class="bu">copy</span><span class="op">(</span>p<span class="op">,</span> r<span class="op">.</span>P<span class="op">)</span></span>
+<span id="cb82-18"><a href="#cb82-18" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb82-19"><a href="#cb82-19" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span></span>
+<span id="cb82-20"><a href="#cb82-20" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb82-21"><a href="#cb82-21" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb82-22"><a href="#cb82-22" aria-hidden="true" tabindex="-1"></a><span class="co">// Same for all other mount/migration API methods</span></span></code></pre></div>
 <div id="refs" class="references csl-bib-body">
 <div id="ref-linux2023docs" class="csl-entry">
 <div class="csl-left-margin">[1] </div><div class="csl-right-inline">T.
@@ -3358,6 +3669,11 @@ conference on usenix annual technical conference</em>, 2018, pp.
 <div class="csl-left-margin">[48] </div><div class="csl-right-inline">F.
 Pojtinger, <span>“Dudirekta: Transport-agnostic framework that allows
 exposing and calling functions on both clients and servers.”</span> <a href="https://github.com/pojntfx/dudirekta" class="uri">https://github.com/pojntfx/dudirekta</a>, 2023.</div>
+</div>
+<div id="ref-pojtinger2023dudirektawebrtc" class="csl-entry">
+<div class="csl-left-margin">[49] </div><div class="csl-right-inline">F.
+Pojtinger, <span>“Dudirekta: WebRTC transport layer example.”</span> <a href="https://github.com/pojntfx/dudirekta/blob/main/cmd/dudirekta-example-webrtc-peer/main.go" class="uri">https://github.com/pojntfx/dudirekta/blob/main/cmd/dudirekta-example-webrtc-peer/main.go</a>,
+2023.</div>
 </div>
 </div>
 </div>

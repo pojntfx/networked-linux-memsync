@@ -1773,19 +1773,6 @@ Bi-Directional and Concurrent RPCs with Dudirekta
 -   Protocol definition (JSONL, structure etc.) and how it is
     multiplexed
 -   RPC provider implementation
-    -   To use it, a simple wrapper struct with the needed RPC methods
-        is created (code snippet from
-        https://github.com/pojntfx/r3map/blob/main/pkg/services/backend.go#L41-L61)
-    -   This wrapper struct simply calls the backend (or seeder etc.)
-        functions
-    -   The wrapper struct is then passed as the local function struct
-        into a registry, which creates the RPC server (code snippet from
-        https://github.com/pojntfx/r3map/blob/main/cmd/r3map-mount-benchmark-server/main.go#L146-L166)
-    -   When the transport protocol, in this case TCP, accepts a client
-        it is linked to the registry (code snippet from
-        https://github.com/pojntfx/r3map/blob/main/cmd/r3map-mount-benchmark-server/main.go#L198-L200)
-    -   The used protocol is very simple (code snippet from
-        https://github.com/pojntfx/dudirekta#protocol)
     -   If an RPC, such as ReadAt, is called, it is looked up via
         reflection and validated (code snippet from
         https://github.com/pojntfx/dudirekta/blob/main/pkg/rpc/registry.go#L323-L357)
@@ -1809,6 +1796,7 @@ Bi-Directional and Concurrent RPCs with Dudirekta
         unique call ID, it unmarshalls the arguments, and returns (code
         snippet from
         https://github.com/pojntfx/dudirekta/blob/main/pkg/rpc/registry.go#L145-L217)
+-   Closure implementation
 -   Using Dudirekta for r3map
     -   Since dudirekta has a few limitations (such as the fact that
         slices are passed as copies, not references, and that context
@@ -1822,15 +1810,14 @@ Bi-Directional and Concurrent RPCs with Dudirekta
     -   The same backend implementation is also done for the seeder
         protocol (code snippet from
         https://github.com/pojntfx/r3map/blob/main/pkg/services/seeder.go)
-    -   While the dudirekta RPC serves as a good reference
-        implementation of the basic RPC protocol, it does not scale
-        particularly well
-    -   This mostly stems from two aspects of how it is designed
-    -   JSON(L) is used for the wire format, which while simple and easy
-        to analyze, is slow to marshal and unmarshal
 
 Connection Pooling with gRPC
 
+-   While the dudirekta RPC serves as a good reference implementation of
+    the basic RPC protocol, it does not scale particularly well
+-   This mostly stems from two aspects of how it is designed
+-   JSON(L) is used for the wire format, which while simple and easy to
+    analyze, is slow to marshal and unmarshal
 -   Dudirekta’s bi-directional RPCs do however come at the cost of not
     being able to do connection pooling, since each client dialing the
     server would mean that the server could not reference the multiple
