@@ -72,6 +72,10 @@ Felicitas Pojtinger (Stuttgart Media University)
         -   4.5.6 Concurrent Device Initialization
         -   4.5.7 Device Lifecycles
         -   4.5.8 WAN Optimization
+    -   4.6 Live Migration
+        -   4.6.1 Overview
+        -   4.6.2 Seeder
+        -   4.6.3 Leecher
 
 Introduction
 
@@ -2762,6 +2766,150 @@ this also means that destination hosts don’t need to subscribe to a
 central multiplexing hub, and adding clients to the topology is easy
 since their pull progress state does not need to be stored anywhere
 except the destination node.
+
+Live Migration
+
+Overview
+
+As mentioned in Pull-Based Synchronization with Migrations earlier, the
+mount API is not optimal for a migration scenario. Splitting the
+migration into two discrete phases can help fix the biggest problem, the
+maximum guaranteed downtime; thanks to the flexible pipeline system of
+ReadWriterAts, a lot of the code from the mount API can be reused for
+the migration, even if the API and corresponding wire protocol are
+different.
+
+Seeder
+
+The seeder defines a new read-only RPC API, which, in addition the known
+ReadAt, also adds new RPCs such as Sync, which is extended to return
+dirty chunks, as well as Track(), which triggers a new tracking stage:
+
+    type SeederRemote struct {
+        ReadAt func(context context.Context, length int, off int64) (r ReadAtResponse, err error)
+        Size   func(context context.Context) (int64, error)
+        Track  func(context context.Context) error
+        Sync   func(context context.Context) ([]int64, error)
+        Close  func(context context.Context) error
+    }
+
+Unlike the remote backend, the seeder also exposes a mount through the
+familiar path, file or slice APIs, meaning that even as the migration is
+in progress, the underlying ressource can still be accessed by the
+application on the source host. This fixes the architectural constraint
+of the mount API when used for the migration, where only the destination
+is able to expose a mount, while the source simply serves data without
+accessing it.
+
+The tracking support is imlement in the same modular and composable way
+as the syncer, by providing a new pipeline stage, the
+TrackingReadWriter. Once activated by the Track RPC, the tracker
+intecepts all WriteAt calls and adds them to a local map before calling
+the next stage.:
+
+    // If tracking is enabled, mark the chunk as dirty
+    if c.tracking {
+        c.dirtyOffsetsIndex[off] = struct{}{}
+        // ...
+    }
+
+    // Call the next stage
+    return c.backend.WriteAt(p, off)
+
+Once the Sync RPC is called by the destination host, these dirty offsets
+are returned and the map is cleared:
+
+TODO: Add graphic of the pipeline’s design
+
+A benefit of the protocol being defined in such a way that only the
+client ever calls an RPC, thus making the protocol uni-directional, is
+that both the transport layer and RPC system are completely
+interchangeable. This works by returning a simple abstract service
+utility struct from Open, which can then be used as the implementation
+for any RPC framework, i.e. with the actual gRPC service simply
+functioning as an adapter:
+
+    type SeederGrpc struct {
+        v1.UnimplementedSeederServer
+
+        svc *Seeder
+    }
+
+    // ...
+
+    func (s *SeederGrpc) ReadAt(ctx context.Context, args *v1.ReadAtArgs) (*v1.ReadAtReply, error) {
+        res, err := s.svc.ReadAt(ctx, int(args.GetLength()), args.GetOff())
+        // ...
+
+        return &v1.ReadAtReply{
+            N: int32(res.N),
+            P: res.P,
+        }, nil
+    }
+
+Leecher
+
+The leecher then takes this abstract service struct provided by the
+seeder, which is implemented by a RPC framework. Using this, as soon as
+the leecher is opened, it calls Track() in the background and starts the
+NBD device in parallel to achieve a similar reduction in initial read
+latency as the mount API. The leecher introduces a new pipeline stage,
+the LockableReadWriterAt:
+
+TODO: Add graphic of pipeline design
+
+This component simply blocks all read and write operations to/from the
+NBD device until Finalize has been called by using a sync.Cond. This is
+required becaused otherwise, stale data (before Finalize marked the
+chunks as dirty) could have poisoned the kernel’s file cache if the
+application read data before finalization:
+
+    // For `ReadAt/WriteAt`: Waits for finalization, then calls the actual read/write operation
+    a.lock.L.Lock()
+    if a.locked {
+        a.lock.Wait()
+    }
+    a.lock.L.Unlock()
+
+    // Unlocks the `sync.Cond` and broadcasts the new unlocked state to all previously blocked `ReadAt`/`WriteAt` operations
+    func (a *LockableReadWriterAt) Unlock() {
+        a.lock.L.Lock()
+        a.locked = false
+        a.lock.Broadcast()
+        a.lock.L.Unlock()
+    }
+
+Once the leecher has started the device, it sets up a syncer in the same
+way as the mount API. A callback can again be used to monitor the pull
+progress, and once the reported availability is satisfactory, Finalize
+can be called. This then handles the critical migration phase, in which
+the remote application consuming the resource must be suspended; to do
+this, Finalize calls Sync on the seeder, causing it to return the dirty
+chunks and suspending the remote application, while the leecher marks
+the dirty chunks as remote and schedules them to be pulled immediately
+in the background to optimize for temporal locality:
+
+    // Suspends the remote application, flushes the mount and returns offsets that have been written too since `Track()`
+    dirtyOffsets, err := l.remote.Sync(l.ctx)
+
+    // Marks the chunks as remote, causing subsequent reads to pull them again
+    l.syncedReadWriter.MarkAsRemote(dirtyOffsets)
+
+    // Schedules the chunks to be pulled in the background immediately
+    l.puller.Finalize(dirtyOffsets)
+
+    // Unlocks the local ressource for reading
+    l.lockableReadWriterAt.Unlock()
+
+As an additional measure aside from the lockable ReadWriterAt is to make
+accessing the mount too earlier than after finalization harder, since
+only Finalize returns the mount, meaning that the API can’t easily lead
+to deadlocks between Finalize and accessing the mount.
+
+After the leecher has successfully reached 100% availability, it calls
+Close on the seeder and disconnects the leecher, causing both to shut
+down, after which the leecher can re-use the mount to provide a new
+seeder which can allow further migrations to happen in the same way.
 
 [1] T. kernel development community, “Quick start.”
 https://www.kernel.org/doc/html/next/rust/quick-start.html, 2023.

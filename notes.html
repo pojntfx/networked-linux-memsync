@@ -2072,13 +2072,14 @@ served data</li>
 <li>The tracking aspect is implemented in the same modular and
 composable way as the syncer etc. - by using a
 <code>TrackingReadWriterAt</code> that is connected to the seeder’s
-<code>ReadWriterAt</code> pipeline (graphic of the pipeline here)</li>
+<code>ReadWriterAt</code> pipeline</li>
 <li>Once activated by <code>Track</code>, the tracker intercepts all
 <code>WriteAt</code> calls and adds them to a local de-duplicated store
 (code snippet from
 https://github.com/pojntfx/r3map/blob/main/pkg/chunks/tracking_rwat.go#L28-L40)</li>
 <li>When <code>Sync</code> is called, the changed chunks are returned
 and the de-duplicated store is cleared</li>
+<li>Insert graphic of the pipeline here</li>
 <li>A benefit of the protocol being defined in such a way that only the
 client ever calls an RPC, not the other way around, is that the
 transport layer/RPC system is completely interchangeable</li>

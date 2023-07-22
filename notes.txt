@@ -1537,13 +1537,14 @@ Live Migration
     -   The tracking aspect is implemented in the same modular and
         composable way as the syncer etc. - by using a
         TrackingReadWriterAt that is connected to the seeder’s
-        ReadWriterAt pipeline (graphic of the pipeline here)
+        ReadWriterAt pipeline
     -   Once activated by Track, the tracker intercepts all WriteAt
         calls and adds them to a local de-duplicated store (code snippet
         from
         https://github.com/pojntfx/r3map/blob/main/pkg/chunks/tracking_rwat.go#L28-L40)
     -   When Sync is called, the changed chunks are returned and the
         de-duplicated store is cleared
+    -   Insert graphic of the pipeline here
     -   A benefit of the protocol being defined in such a way that only
         the client ever calls an RPC, not the other way around, is that
         the transport layer/RPC system is completely interchangeable
