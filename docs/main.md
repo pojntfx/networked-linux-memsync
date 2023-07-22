@@ -1385,8 +1385,6 @@ func (d *DirectSliceMount) Open() ([]byte, error)
 
 It is also possible to format the backend for a NBD server/mount with a filesystem and mount the underlying filesystem on the host that accesses a resource, where a file on this filesystem can then be `open`ed/`mmap`ed similarly to the FUSE approach. This is particularly useful if there are multiple memory regions which all belong to the same application to synchronize, as it removes the need to start multiple block devices and reduces the latency overhead associated with it. This solution can be implemented by i.e. calling `mkfs.ext4` on a block device directly or by formatting the NBD backend ahead of time, which does however come at the cost of storing and transferring the file system metadata as well as the potential latency overhead of mounting it.
 
-TODO: Reference voltools and how it works as a fast way of formatting the mount if it becomes OSS
-
 ### Managed Mounts with r3map
 
 #### Stages
@@ -1998,7 +1996,7 @@ for i := 0; i < function.Type().NumIn(); i++ {
 
 After the call has been validated by the RPC provider, the actual RPC implementation is executed in a new goroutine to allow for concurrent RPCs, the return and error value of which is then marshalled into JSON and sent back the caller.
 
-In addition to the RPCs provided by the implementation struct, in order to support closures, a virtual `CallClosure` RPC is also exposed. This RPC is provided by a separate closure management component, which handles storing references to remote closure implementations:
+In addition to the RPCs created by analyzing the implementation struct through reflection, to be able to support closures, a virtual `CallClosure` RPC is also exposed. This RPC is provided by a separate closure management component, which handles storing references to remote closure implementations:
 
 ```go
 func (m *closureManager) CallClosure(ctx context.Context, closureID string, args []interface{}) (interface{}, error) {
@@ -2154,3 +2152,93 @@ func (b *RPCBackend) ReadAt(p []byte, off int64) (n int, err error) {
 
 // Same for all other mount/migration API methods
 ```
+
+### Connection Pooling with gRPC
+
+While the dudirekta RPC implementation serves as a good reference implementation of how RPC backends work, it has issues with scalability, as is evident from the results section. This is mostly the case because of it's JSONL-based wire format, which, while simply and easy to analyize, is quite slow to marshal and unmarshal. The bi-directional RPCs do also come at a cost, since they prevent an effective use of connection pooling; since a client `dial`ing the server multiple times would mean that server could not reference multiple client connections as one composite client, it would not be able to differentiate two client connections from two separate clients. While implementing a future pooling mechanism based on a client ID is possible in the future, bi-directional RPCs can also be completely avoided entirely by implementing the pull- instead of push-based pre-copy solution described earlier where the destination host keeps track of the pull progress, effectively making unary RPC support the only requirement for a RPC framework.
+
+Thanks to this narrower scope of requirements, alternative RPC frameworks can be used that do not have this limitation to their scalability. One such popular framework is gRPC, a high-performance system based on protocol buffers which is based on code generation and protocol buffers instead of reflection and JSONL. Thanks to it's support for unary RPCs, this protocol also supports connection pooling (which removes Dudirekta's main bottleneck) and is available in more language ecosystems (whereas Dudirekta currently only supports Go and TypeScript), making it possible to port the mount and migration APIs to other languages with wire protocol compatibility in the future. In order to implement the backend and seeder APIs for gRPC, they are defined in the `proto3` DSL:
+
+```proto3
+// Fully-qualified package name
+package com.pojtinger.felicitas.r3map.migration.v1;
+// ...
+
+// RPCs that are being provided, in this case for the migration API
+service Seeder {
+  rpc ReadAt(ReadAtArgs) returns (ReadAtReply) {};
+  rpc Size(SizeArgs) returns (SizeReply) {};
+  rpc Track(TrackArgs) returns (TrackReply) {};
+  rpc Sync(SyncArgs) returns (SyncReply) {};
+  rpc Close(CloseArgs) returns (CloseReply) {};
+}
+
+// Message definition for the `ReadAt` RPC
+message ReadAtArgs {
+  int32 Length = 1;
+  int64 Off = 2;
+}
+// ... Rest of the message definitions
+```
+
+After generating the gRPC bindings from this DSL, the generated interface is implemented by using the Dudirekta RPC system's implementation struct as the abstract representation for the mount and migration gRPC adapters respectively, in order to reduce duplication:
+
+```go
+type SeederGrpc struct {
+	v1.UnimplementedSeederServer // Generated gRPC interface
+
+	svc *Seeder // Dudirekta RPC implementation
+}
+
+func (s *SeederGrpc) ReadAt(ctx context.Context, args *v1.ReadAtArgs) (*v1.ReadAtReply, error) {
+	// Forwarding the call to the service implementation from Dudirekta
+	res, err := s.svc.ReadAt(ctx, int(args.GetLength()), args.GetOff())
+	// ...
+
+	// Making the result compatible with gRPC's generated interface
+	return &v1.ReadAtReply{
+		N: int32(res.N),
+		P: res.P,
+	}, nil
+}
+// ... Same for the rest of the RPCs
+```
+
+### Optimizing Throughput with fRPC
+
+While gRPC tends to perform better than Dudirekta due to it's support for connection pooling and more efficient binary serialization, it can be improved upon. This is particularly true for protocol buffers, which, while being faster than JSON, have issues with encoding large chunks of data, and can become a real bottleneck with large chunk sizes:
+
+TODO: Add graphic from https://frpc.io/performance/grpc-benchmarks
+
+fRPC[@loopholelabs2023frpc], a drop-in replacement for gRPC, can improve upon this by switching out the serialization layer with the faster Polyglot[@loopholelabs2023polyglot] library and a custom transport layer. It also uses the proto3 DSL and the same code generation framework as gRPC, which makes it easy to switch to by simply re-generating the code from the DSL. The implementation of the fRPC adapter functions in a very similar way as the gRPC adapter:
+
+```go
+type SeederFrpc struct {
+	svc *Seeder // Dudirekta RPC implementation
+}
+
+func (s *SeederFrpc) ReadAt(ctx context.Context, args *v1.ComPojtingerFelicitasR3MapMigrationV1ReadAtArgs) (*v1.ComPojtingerFelicitasR3MapMigrationV1ReadAtReply, error) {
+	// Forwarding the call to the service implementation from Dudirekta
+	res, err := s.svc.ReadAt(ctx, int(args.Length), args.Off)
+	// ...
+
+	// Making the result compatible with fRPC's generated interface
+	return &v1.ComPojtingerFelicitasR3MapMigrationV1ReadAtReply{
+		N: int32(res.N),
+		P: res.P,
+	}, nil
+}
+// ... Same for the rest of the RPCs
+```
+
+## Results
+
+TODO: Add results
+
+## Discussion
+
+TODO: Add discussion once we have the results
+
+### Remote Swap with `ram-dl`
+
+TODO: Add section on `ram-dl`
