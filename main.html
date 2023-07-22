@@ -339,6 +339,18 @@ Authentication and Transport</a></li>
 Backends</a></li>
 <li><a href="#concurrent-bi-directional-rpcs-with-dudirekta"><span class="toc-section-number">1.4.10</span> Concurrent Bi-Directional RPCs
 with Dudirekta</a></li>
+<li><a href="#connection-pooling-with-grpc"><span class="toc-section-number">1.4.11</span> Connection Pooling with
+gRPC</a></li>
+<li><a href="#optimizing-throughput-with-frpc"><span class="toc-section-number">1.4.12</span> Optimizing Throughput with
+fRPC</a></li>
+</ul></li>
+<li><a href="#results"><span class="toc-section-number">1.5</span>
+Results</a></li>
+<li><a href="#discussion"><span class="toc-section-number">1.6</span>
+Discussion</a>
+<ul>
+<li><a href="#remote-swap-with-ram-dl"><span class="toc-section-number">1.6.1</span> Remote Swap with
+<code>ram-dl</code></a></li>
 </ul></li>
 </ul>
 </nav>
@@ -2615,8 +2627,6 @@ associated with it. This solution can be implemented by i.e. calling
 NBD backend ahead of time, which does however come at the cost of
 storing and transferring the file system metadata as well as the
 potential latency overhead of mounting it.</p>
-<p>TODO: Reference voltools and how it works as a fast way of formatting
-the mount if it becomes OSS</p>
 </section>
 </section>
 <section id="managed-mounts-with-r3map" data-number="0.4.5">
@@ -3465,11 +3475,11 @@ unmarshalling them into their native natives:</p>
 implementation is executed in a new goroutine to allow for concurrent
 RPCs, the return and error value of which is then marshalled into JSON
 and sent back the caller.</p>
-<p>In addition to the RPCs provided by the implementation struct, in
-order to support closures, a virtual <code>CallClosure</code> RPC is
-also exposed. This RPC is provided by a separate closure management
-component, which handles storing references to remote closure
-implementations:</p>
+<p>In addition to the RPCs created by analyzing the implementation
+struct through reflection, to be able to support closures, a virtual
+<code>CallClosure</code> RPC is also exposed. This RPC is provided by a
+separate closure management component, which handles storing references
+to remote closure implementations:</p>
 <div class="sourceCode" id="cb76"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb76-1"><a href="#cb76-1" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> <span class="op">(</span>m <span class="op">*</span>closureManager<span class="op">)</span> CallClosure<span class="op">(</span>ctx context<span class="op">.</span>Context<span class="op">,</span> closureID <span class="dt">string</span><span class="op">,</span> args <span class="op">[]</span><span class="kw">interface</span><span class="op">{})</span> <span class="op">(</span><span class="kw">interface</span><span class="op">{},</span> <span class="dt">error</span><span class="op">)</span> <span class="op">{</span></span>
 <span id="cb76-2"><a href="#cb76-2" aria-hidden="true" tabindex="-1"></a>    <span class="co">// Looking up a reference to the closure&#39;s implementation by it&#39;s call ID</span></span>
 <span id="cb76-3"><a href="#cb76-3" aria-hidden="true" tabindex="-1"></a>    closure<span class="op">,</span> ok <span class="op">:=</span> m<span class="op">.</span>closures<span class="op">[</span>closureID<span class="op">]</span></span>
@@ -3625,6 +3635,130 @@ interfaces exists:</p>
 <span id="cb82-20"><a href="#cb82-20" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
 <span id="cb82-21"><a href="#cb82-21" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb82-22"><a href="#cb82-22" aria-hidden="true" tabindex="-1"></a><span class="co">// Same for all other mount/migration API methods</span></span></code></pre></div>
+</section>
+</section>
+<section id="connection-pooling-with-grpc" data-number="0.4.11">
+<h3 data-number="1.4.11"><span class="header-section-number">1.4.11</span> Connection Pooling with
+gRPC</h3>
+<p>While the dudirekta RPC implementation serves as a good reference
+implementation of how RPC backends work, it has issues with scalability,
+as is evident from the results section. This is mostly the case because
+of it’s JSONL-based wire format, which, while simply and easy to
+analyize, is quite slow to marshal and unmarshal. The bi-directional
+RPCs do also come at a cost, since they prevent an effective use of
+connection pooling; since a client <code>dial</code>ing the server
+multiple times would mean that server could not reference multiple
+client connections as one composite client, it would not be able to
+differentiate two client connections from two separate clients. While
+implementing a future pooling mechanism based on a client ID is possible
+in the future, bi-directional RPCs can also be completely avoided
+entirely by implementing the pull- instead of push-based pre-copy
+solution described earlier where the destination host keeps track of the
+pull progress, effectively making unary RPC support the only requirement
+for a RPC framework.</p>
+<p>Thanks to this narrower scope of requirements, alternative RPC
+frameworks can be used that do not have this limitation to their
+scalability. One such popular framework is gRPC, a high-performance
+system based on protocol buffers which is based on code generation and
+protocol buffers instead of reflection and JSONL. Thanks to it’s support
+for unary RPCs, this protocol also supports connection pooling (which
+removes Dudirekta’s main bottleneck) and is available in more language
+ecosystems (whereas Dudirekta currently only supports Go and
+TypeScript), making it possible to port the mount and migration APIs to
+other languages with wire protocol compatibility in the future. In order
+to implement the backend and seeder APIs for gRPC, they are defined in
+the <code>proto3</code> DSL:</p>
+<pre class="proto3"><code>// Fully-qualified package name
+package com.pojtinger.felicitas.r3map.migration.v1;
+// ...
+
+// RPCs that are being provided, in this case for the migration API
+service Seeder {
+  rpc ReadAt(ReadAtArgs) returns (ReadAtReply) {};
+  rpc Size(SizeArgs) returns (SizeReply) {};
+  rpc Track(TrackArgs) returns (TrackReply) {};
+  rpc Sync(SyncArgs) returns (SyncReply) {};
+  rpc Close(CloseArgs) returns (CloseReply) {};
+}
+
+// Message definition for the `ReadAt` RPC
+message ReadAtArgs {
+  int32 Length = 1;
+  int64 Off = 2;
+}
+// ... Rest of the message definitions</code></pre>
+<p>After generating the gRPC bindings from this DSL, the generated
+interface is implemented by using the Dudirekta RPC system’s
+implementation struct as the abstract representation for the mount and
+migration gRPC adapters respectively, in order to reduce
+duplication:</p>
+<div class="sourceCode" id="cb84"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb84-1"><a href="#cb84-1" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> SeederGrpc <span class="kw">struct</span> <span class="op">{</span></span>
+<span id="cb84-2"><a href="#cb84-2" aria-hidden="true" tabindex="-1"></a>    v1<span class="op">.</span>UnimplementedSeederServer <span class="co">// Generated gRPC interface</span></span>
+<span id="cb84-3"><a href="#cb84-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb84-4"><a href="#cb84-4" aria-hidden="true" tabindex="-1"></a>    svc <span class="op">*</span>Seeder <span class="co">// Dudirekta RPC implementation</span></span>
+<span id="cb84-5"><a href="#cb84-5" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb84-6"><a href="#cb84-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb84-7"><a href="#cb84-7" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> <span class="op">(</span>s <span class="op">*</span>SeederGrpc<span class="op">)</span> ReadAt<span class="op">(</span>ctx context<span class="op">.</span>Context<span class="op">,</span> args <span class="op">*</span>v1<span class="op">.</span>ReadAtArgs<span class="op">)</span> <span class="op">(*</span>v1<span class="op">.</span>ReadAtReply<span class="op">,</span> <span class="dt">error</span><span class="op">)</span> <span class="op">{</span></span>
+<span id="cb84-8"><a href="#cb84-8" aria-hidden="true" tabindex="-1"></a>    <span class="co">// Forwarding the call to the service implementation from Dudirekta</span></span>
+<span id="cb84-9"><a href="#cb84-9" aria-hidden="true" tabindex="-1"></a>    res<span class="op">,</span> err <span class="op">:=</span> s<span class="op">.</span>svc<span class="op">.</span>ReadAt<span class="op">(</span>ctx<span class="op">,</span> <span class="dt">int</span><span class="op">(</span>args<span class="op">.</span>GetLength<span class="op">()),</span> args<span class="op">.</span>GetOff<span class="op">())</span></span>
+<span id="cb84-10"><a href="#cb84-10" aria-hidden="true" tabindex="-1"></a>    <span class="co">// ...</span></span>
+<span id="cb84-11"><a href="#cb84-11" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb84-12"><a href="#cb84-12" aria-hidden="true" tabindex="-1"></a>    <span class="co">// Making the result compatible with gRPC&#39;s generated interface</span></span>
+<span id="cb84-13"><a href="#cb84-13" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> <span class="op">&amp;</span>v1<span class="op">.</span>ReadAtReply<span class="op">{</span></span>
+<span id="cb84-14"><a href="#cb84-14" aria-hidden="true" tabindex="-1"></a>        N<span class="op">:</span> <span class="dt">int32</span><span class="op">(</span>res<span class="op">.</span>N<span class="op">),</span></span>
+<span id="cb84-15"><a href="#cb84-15" aria-hidden="true" tabindex="-1"></a>        P<span class="op">:</span> res<span class="op">.</span>P<span class="op">,</span></span>
+<span id="cb84-16"><a href="#cb84-16" aria-hidden="true" tabindex="-1"></a>    <span class="op">},</span> <span class="ot">nil</span></span>
+<span id="cb84-17"><a href="#cb84-17" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb84-18"><a href="#cb84-18" aria-hidden="true" tabindex="-1"></a><span class="co">// ... Same for the rest of the RPCs</span></span></code></pre></div>
+</section>
+<section id="optimizing-throughput-with-frpc" data-number="0.4.12">
+<h3 data-number="1.4.12"><span class="header-section-number">1.4.12</span> Optimizing Throughput with
+fRPC</h3>
+<p>While gRPC tends to perform better than Dudirekta due to it’s support
+for connection pooling and more efficient binary serialization, it can
+be improved upon. This is particularly true for protocol buffers, which,
+while being faster than JSON, have issues with encoding large chunks of
+data, and can become a real bottleneck with large chunk sizes:</p>
+<p>TODO: Add graphic from
+https://frpc.io/performance/grpc-benchmarks</p>
+<p>fRPC<span class="citation" data-cites="loopholelabs2023frpc">[50]</span>, a drop-in replacement for
+gRPC, can improve upon this by switching out the serialization layer
+with the faster Polyglot<span class="citation" data-cites="loopholelabs2023polyglot">[51]</span> library and a custom
+transport layer. It also uses the proto3 DSL and the same code
+generation framework as gRPC, which makes it easy to switch to by simply
+re-generating the code from the DSL. The implementation of the fRPC
+adapter functions in a very similar way as the gRPC adapter:</p>
+<div class="sourceCode" id="cb85"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb85-1"><a href="#cb85-1" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> SeederFrpc <span class="kw">struct</span> <span class="op">{</span></span>
+<span id="cb85-2"><a href="#cb85-2" aria-hidden="true" tabindex="-1"></a>    svc <span class="op">*</span>Seeder <span class="co">// Dudirekta RPC implementation</span></span>
+<span id="cb85-3"><a href="#cb85-3" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb85-4"><a href="#cb85-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb85-5"><a href="#cb85-5" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> <span class="op">(</span>s <span class="op">*</span>SeederFrpc<span class="op">)</span> ReadAt<span class="op">(</span>ctx context<span class="op">.</span>Context<span class="op">,</span> args <span class="op">*</span>v1<span class="op">.</span>ComPojtingerFelicitasR3MapMigrationV1ReadAtArgs<span class="op">)</span> <span class="op">(*</span>v1<span class="op">.</span>ComPojtingerFelicitasR3MapMigrationV1ReadAtReply<span class="op">,</span> <span class="dt">error</span><span class="op">)</span> <span class="op">{</span></span>
+<span id="cb85-6"><a href="#cb85-6" aria-hidden="true" tabindex="-1"></a>    <span class="co">// Forwarding the call to the service implementation from Dudirekta</span></span>
+<span id="cb85-7"><a href="#cb85-7" aria-hidden="true" tabindex="-1"></a>    res<span class="op">,</span> err <span class="op">:=</span> s<span class="op">.</span>svc<span class="op">.</span>ReadAt<span class="op">(</span>ctx<span class="op">,</span> <span class="dt">int</span><span class="op">(</span>args<span class="op">.</span>Length<span class="op">),</span> args<span class="op">.</span>Off<span class="op">)</span></span>
+<span id="cb85-8"><a href="#cb85-8" aria-hidden="true" tabindex="-1"></a>    <span class="co">// ...</span></span>
+<span id="cb85-9"><a href="#cb85-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb85-10"><a href="#cb85-10" aria-hidden="true" tabindex="-1"></a>    <span class="co">// Making the result compatible with fRPC&#39;s generated interface</span></span>
+<span id="cb85-11"><a href="#cb85-11" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> <span class="op">&amp;</span>v1<span class="op">.</span>ComPojtingerFelicitasR3MapMigrationV1ReadAtReply<span class="op">{</span></span>
+<span id="cb85-12"><a href="#cb85-12" aria-hidden="true" tabindex="-1"></a>        N<span class="op">:</span> <span class="dt">int32</span><span class="op">(</span>res<span class="op">.</span>N<span class="op">),</span></span>
+<span id="cb85-13"><a href="#cb85-13" aria-hidden="true" tabindex="-1"></a>        P<span class="op">:</span> res<span class="op">.</span>P<span class="op">,</span></span>
+<span id="cb85-14"><a href="#cb85-14" aria-hidden="true" tabindex="-1"></a>    <span class="op">},</span> <span class="ot">nil</span></span>
+<span id="cb85-15"><a href="#cb85-15" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb85-16"><a href="#cb85-16" aria-hidden="true" tabindex="-1"></a><span class="co">// ... Same for the rest of the RPCs</span></span></code></pre></div>
+</section>
+</section>
+<section id="results" data-number="0.5">
+<h2 data-number="1.5"><span class="header-section-number">1.5</span>
+Results</h2>
+<p>TODO: Add results</p>
+</section>
+<section id="discussion" data-number="0.6">
+<h2 data-number="1.6"><span class="header-section-number">1.6</span>
+Discussion</h2>
+<p>TODO: Add discussion once we have the results</p>
+<section id="remote-swap-with-ram-dl" data-number="0.6.1">
+<h3 data-number="1.6.1"><span class="header-section-number">1.6.1</span>
+Remote Swap with <code>ram-dl</code></h3>
+<p>TODO: Add section on <code>ram-dl</code></p>
 <div id="refs" class="references csl-bib-body" role="doc-bibliography">
 <div id="ref-linux2023docs" class="csl-entry" role="doc-biblioentry">
 <div class="csl-left-margin">[1] </div><div class="csl-right-inline">T.
@@ -3889,8 +4023,18 @@ exposing and calling functions on both clients and servers.”</span> <a href="h
 Pojtinger, <span>“Dudirekta: WebRTC transport layer example.”</span> <a href="https://github.com/pojntfx/dudirekta/blob/main/cmd/dudirekta-example-webrtc-peer/main.go" class="uri">https://github.com/pojntfx/dudirekta/blob/main/cmd/dudirekta-example-webrtc-peer/main.go</a>,
 2023.</div>
 </div>
+<div id="ref-loopholelabs2023frpc" class="csl-entry" role="doc-biblioentry">
+<div class="csl-left-margin">[50] </div><div class="csl-right-inline">L.
+Labs, <span>“fRPC: A modern RPC framework designed for high performance
+and stability.”</span> <a href="https://frpc.io/introduction" class="uri">https://frpc.io/introduction</a>, 2023.</div>
 </div>
-</section>
+<div id="ref-loopholelabs2023polyglot" class="csl-entry" role="doc-biblioentry">
+<div class="csl-left-margin">[51] </div><div class="csl-right-inline">S.
+Shivansh Vij, <span>“Polyglot: A high-performance serialization
+framework used for encoding and decoding arbitrary data structures
+across languages.”</span> <a href="https://github.com/loopholelabs/polyglot" class="uri">https://github.com/loopholelabs/polyglot</a>, 2023.</div>
+</div>
+</div>
 </section>
 </section>
 </body>

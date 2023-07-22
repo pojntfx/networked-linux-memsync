@@ -1,3 +1,9 @@
+commit 3e85e632ab756a5c5f0ca816c133368cd472347c
+Author: Felicitas Pojtinger <felicitas@pojtinger.com>
+Date:   Sun Jul 23 01:31:27 2023 +0200
+
+    feat: Turn rest of implementation section into paragraphs
+
 commit 65a0e97016265fbc1b9578b6474fdff05aad3b60
 Author: Felicitas Pojtinger <felicitas@pojtinger.com>
 Date:   Sat Jul 22 23:55:22 2023 +0200

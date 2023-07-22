@@ -2147,6 +2147,8 @@ https://github.com/pojntfx/r3map/blob/main/pkg/services/seeder.go)</li>
 <h2 id="connection-pooling-with-grpc"><span class="header-section-number">4.11</span> Connection Pooling with
 gRPC</h2>
 <ul>
+<li>Drawbacks of Dudirekta
+<ul>
 <li>While the dudirekta RPC serves as a good reference implementation of
 the basic RPC protocol, it does not scale particularly well</li>
 <li>This mostly stems from two aspects of how it is designed</li>
@@ -2163,6 +2165,9 @@ pre-copy solution described earlier</li>
 <li>Instead, only calling RPCs exposed on the server from the client is
 the only requirement for an RPC framework, and other, more optimized RPC
 frameworks can already offer this</li>
+</ul></li>
+<li>Switching to code generation
+<ul>
 <li>Dudirekta uses reflection to make the RPCs essentially almost
 transparent to use</li>
 <li>By switching to a well-defined protocol with a DSL instead, we can
@@ -2179,6 +2184,9 @@ time without having to break backwards compatibility</li>
 <li>This is very important given that r3map could be ported to a
 language with less overhead in the future, e.g. Rust, and being able to
 re-use the existing wire protocol would make this much easier</li>
+</ul></li>
+<li>Benefits of gRPC over Dudirekta
+<ul>
 <li>While dudirekta is a simple protocol that is easy to adapt for other
 languages, currently it only supports Go and JS, while gRPC supports
 many more</li>
@@ -2197,6 +2205,9 @@ by dudirekta, <code>base64</code> encodes these chunks)</li>
 <li>gRPC is also based on HTTP/2, which means that it can benefit from
 existing load balancing tooling etc. that is popular in WAN for web uses
 even today</li>
+</ul></li>
+<li>Implementation of the gRPC backend
+<ul>
 <li>This backend is implemented by first defining the protocol in the
 DSL (code snippet from
 https://github.com/pojntfx/r3map/blob/main/api/proto/migration/v1/seeder.proto)</li>
@@ -2215,6 +2226,7 @@ having a protocol that allows for concurrent RPCs can do the same</li>
 requests, or creating a new connection for every request, gRPC is able
 to intelligently re-use existing connections for RPCs or create new
 ones, speeding up parallel requests</li>
+</ul></li>
 </ul>
 <h2 id="optimizing-rpc-throughput-and-latency-with-frpc"><span class="header-section-number">4.12</span> Optimizing RPC Throughput and
 Latency with fRPC</h2>
@@ -2236,11 +2248,6 @@ polling</li>
 <li>Because of these similarities, the usage of fRPC in r3map is
 extremely similar to gRPC (code snippet from
 https://github.com/pojntfx/r3map/blob/main/pkg/services/seeder_frpc.go)</li>
-<li>A good way to test how well the RPC framework scales for concurrent
-requests is scaling the amount of pull workers, where dudirekta only
-gains marginally from increasing their number, whereas both gRPC and
-fRPC can increase throughput and decrease the initial latency by pulling
-more chunks pre-emptively</li>
 </ul>
 </div>
 <div id="results" class="slide section level1" number="5">
