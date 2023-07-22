@@ -1819,39 +1819,129 @@ func (b *CassandraBackend) WriteAt(p []byte, off int64) (n int, err error) {
 
 Support for multiple regions can be implement by using a different table or key prefix, and migrations are used to create the table itself similarly to how it would be done in SQL.
 
-### Bi-Directional and Concurrent RPCs with Dudirekta
+### Concurrent Bi-Directional RPCs with Dudirekta
 
-Another aspect that plays an important role in performance for real-life deployments is the choice of RPC framework and transport protocol. As mentioned before, both the mount and migration APIs are transport-independent, and as a result almost any RPC framework can be used.
+#### Overview
 
-TODO: Rework the following part of this section based on the new notes structure
+Another aspect that plays an important role in performance for real-life deployments is the choice of RPC framework and transport protocol. As mentioned before, both the mount and migration APIs are transport-independent, and as a result almost any RPC framework can be used. A RPC framework developed as part of r3map is Dudireka[@pojtinger2023dudirekta]. As such, it was designed specifically with the hybrid pre-and post-copy scenario in mind. To optimize for this, it has support for concurrent RPCs, which allows for efficient background pulls as multiple chunks can be pulled at the same time.
 
-One such simple RPC framework developed specifically for prototyping r3map is Dudirekta[@pojtinger2023dudirekta], which is reflection-based. This makes it particularly easy to prototype with, since no DSL is required; to use it, a wrapper struct with the methods that should be exposed as RPCs can simply be provided directly, which is then connected to a registry component that exposes it as a RPC server, which can then be linked to a transport layer like TCP:
+The framework also allows for defining functions on both the client and the server, which makes it possible to initiate pre-copy migratons and transfer chnks from the source host to the destination without having the latter be `dial`able; while making the destination host available by dialing it is possible in trusted LAN deployments, NATs and security concerns make it harder in WAN deployment. As part of this bi-directional support it is possible to also pass callbacks and closures as arguments to RPCs, which makes it possible to model remote generators with yields to easily report i.e. a migration's progress as it is running, while still modelling the migration with a single, transactional RPC and a return value. In addition to this, because dudirekta is also itself transport-agnostic, it is possible to use transport protocols like QUIC in WAN deployments, which can reduce the initial latency by using the 0-RTT handshake and thus makes calling an RPC less expensive. By not requiring TCP-style client-server semantics, Dudirekta can also be used to allow for P2P migrations over a protocol such as WebRTC[@pojtinger2023dudirektawebrtc].
+
+#### Usage
+
+Dudirekta is reflection based; both RPC definition and calling an RPC are completely transparent, which makes it optimal for prototyping the mount and migration APIs. To define the RPCs to be exposed, a simple implementation struct can be created for both the client and server. In this example, the server provides a simple counter with an increment RPC, while the client provides a simple `Println` RPC that can be called from the server. Due to protocol limitations, RPCs must have a context as their first argument, not have variadic arguments, and must return either a single value or an error:
 
 ```go
-// Creating the backend, in this case a file backend
-b := backend.NewFileBackend(file)
+// Server
+type local struct { counter int64 }
 
-// Creating the wrapper struct defining the RPCs
-svc := services.NewBackend(b, *verbose, *maxChunkSize)
+func (s *local) Increment(ctx context.Context, delta int64) (int64, error) {
+	return atomic.AddInt64(&s.counter, delta), nil
+}
 
-// Create a RPC server from the registry
+// Client
+type local struct{}
+
+func (s *local) Println(ctx context.Context, msg string) error {
+	fmt.Println(msg)
+	// ...
+}
+```
+
+In order to call these RPCs from the client/server respectively, the remote functions defined earlier are also created as placeholder structs that will be implemented by Dudirekta at runtime using reflection and are added to registry, which provides a handler that links a connection to the RPC implementation:
+
+```go
+// Server
+type remote struct {
+	Println func(ctx context.Context, msg string) error
+}
+
 registry := rpc.NewRegistry(
-	svc, // Local RPCs
-	struct{}{}, // Remote RPCs; for the mount API, the protocol is unidirectional, so no remote RPCs are expected
+	&local{},
+	remote{},
 	// ...
 )
 
-// Create a TCP server and accept a client
-lis, err := net.Listen("tcp", *laddr)
-conn, err := lis.Accept()
+// Client
+type remote struct {
+	Increment func(ctx context.Context, delta int64) (int64, error)
+}
 
-// Handling the connection with the dudirekta RPC server
+registry := rpc.NewRegistry(
+	&local{},
+	remote{},
+	// ...
+)
+```
+
+This handler can then be linked to a connection provided by any transport layer, i.e. TCP:
+
+```go
+// Server: Create a TCP listener, wait for a connection, and link it to the registry
+lis, err := net.Listen("tcp", "localhost:1337")
+conn, err := lis.Accept()
+registry.Link(conn)
+
+// Client: Connect to the TCP listener and link it to the registry
+conn, err := net.Dial("tcp", *addr)
 registry.Link(conn)
 ```
 
-On the remote side, instead of passing the service implementation to the registry as the local RPCs, a placeholder struct is passed in as the remote RPCs, which is then implemented at runtime by the registry using reflection, which makes both defining and calling RPCs completely transparent.
+After both registries have been linked to the transport, it is possible to call the RPCs exposed by the remote peers from both the server and the client, which makes bi-directional communication possible:
 
-The protocol used for dudirekta is very simple and based on JSONL; a function call, i.e. to `Println` looks like this:
+```go
+// Server: Calls the `Println` RPC exposed by the client
+for _, peer := range registry.Peers() {
+	peer.Println(ctx, "Hello, world!")
+}
+
+// Client: Calls the `Increment` RPC exposed by the server
+for _, peer := range registry.Peers() {
+	new, err := peer.Increment(ctx, 1)
+
+	log.Println(new) // Returns the value incremented by one
+}
+```
+
+As mentioned earlier, Dudirekta also allows for passing in closures as arguments to RPCs; since this is also handled transparently, all that is necessary is to define the signature of the closure on the client and server, and it can be passed in as though the RPC were a local call, which also works on both the client and the server side:
+
+```go
+// Server
+func (s *local) Iterate(
+	ctx context.Context,
+	length int,
+	onIteration func(i int, b string) (string, error), // Closure that is being passed in
+) (int, error) {
+	for i := 0; i < length; i++ {
+		rv, err := onIteration(i, "This is from the callee") // Remote closure is being called
+	}
+
+	return length, nil
+}
+
+// Client
+type remote struct {
+	Iterate func(
+		ctx context.Context,
+		length int,
+		onIteration func(i int, b string) (string, error), // The closure is defined in the placeholder struct
+	) (int, error)
+}
+
+for _, peer := range registry.Peers() {
+	// `Iterate` RPC provided by the server is called
+	length, err := Iterate(peer, ctx, 5, func(i int, b string) (string, error) {
+		// Closure is transparently provided as a regular argumnt
+		return "This is from the caller", nil
+	})
+
+	log.Println(length) // Despite having a closure as an argument, the RPC can still return values
+}
+```
+
+#### Protocol
+
+The protocol used for dudirekta is simple and based on JSONL; a function call, i.e. to `Println` looks like this:
 
 ```json
 [true, "1", "Println", ["Hello, world!"]]
@@ -1863,4 +1953,204 @@ The first element marks the message as a function call, while the second one is 
 [false, "1", "", ""]
 ```
 
-Here, the message is marked as a return value in the first element, the ID is passed with the second element and both the actual return value (third element) and error (fourth element) are nil and represented by an empty sring. If a RPC is called, it's implementation is looked up by the registry through reflection and the call's signature is validated against the implementation, after which the provided function call's arguments are unmarshalled into their native types from JSON. This simple, ID-based protocol allows for concurrent RPCs through muxing and demuxing, which is an important feature for the pull system, as similarly to how a global lock on the remote backend causes the RTT to drastically influence throughput, a RPC framework with synchronous calls has the same effect.
+Here, the message is marked as a return value in the first element, the ID is passed with the second element and both the actual return value (third element) and error (fourth element) are nil and represented by an empty sring. Because it includes IDs, this protocol allows for concurrent RPCs through muxing and demuxing the JSONL messages.
+
+#### RPC Providers
+
+If an RPC (such as `ReadAt` in the case of the mount API) is called, a method with the provided RPC's name is looked up on the provided implementation struct and if it is found, the provided argument's types are validated against those of the implementation by unmarshalling them into their native natives:
+
+```go
+// Unmarshalling the function name and args from the protocol
+var functionName string
+json.Unmarshal(res[2], &functionName)
+
+var functionArgs []json.RawMessage
+json.Unmarshal(res[3], &functionArgs)
+
+// Looking up the field on the local struct
+function := reflect.
+	ValueOf(r.local.wrappee).
+	MethodByName(functionName)
+
+// Only continue if the field can be called
+if function.Kind() != reflect.Func {
+	return ErrCannotCallNonFunction
+}
+
+// Validation of the argument count
+if function.Type().NumIn() != len(functionArgs)+1 {
+	return ErrInvalidArgs
+}
+
+// Validation of the arguments' types; if an argument can not be unmarshalled, the call is cancelled
+args := []reflect.Value{}
+for i := 0; i < function.Type().NumIn(); i++ {
+	functionType := function.Type().In(i)
+
+	arg := reflect.New(functionType)
+	if err := json.Unmarshal(functionArgs[i-1], arg.Interface()); err != nil {
+		return err
+	}
+
+	args = append(args, arg.Elem())
+}
+```
+
+After the call has been validated by the RPC provider, the actual RPC implementation is executed in a new goroutine to allow for concurrent RPCs, the return and error value of which is then marshalled into JSON and sent back the caller.
+
+In addition to the RPCs provided by the implementation struct, in order to support closures, a virtual `CallClosure` RPC is also exposed. This RPC is provided by a separate closure management component, which handles storing references to remote closure implementations:
+
+```go
+func (m *closureManager) CallClosure(ctx context.Context, closureID string, args []interface{}) (interface{}, error) {
+	// Looking up a reference to the closure's implementation by it's call ID
+	closure, ok := m.closures[closureID]
+	// ...
+
+	// Calling the closure
+	return closure(args...)
+}
+```
+
+It also garbage collects those references after a RPC that has provided a closure has returned:
+
+```go
+// If a closure is provided as an argument, handle it differently
+if arg.Kind() == reflect.Func {
+	closureID, freeClosure, err := registerClosure(r.local.wrapper, arg.Interface())
+	// Freeing the closure after the RPC that has provided it is out of scope
+	defer freeClosure()
+
+	cmdArgs = append(cmdArgs, closureID)
+}
+```
+
+#### RPC Calls
+
+As mentioned earlier, on the caller's side, a placeholder struct representing the callee's available RPCs is provided to the registry. Once the registry is linked to a connection, the placeholder struct's methods are iterated over and the signatures are validated for compatibility with Dudirekta's limitations. They are then implemented using and set using reflection:
+
+```go
+// Iterating over the fields of the struct
+for i := 0; i < remote.NumField(); i++ {
+	functionField := remote.Type().Field(i)
+	functionType := functionField.Type
+	// ...
+
+	// Validating that the requirements for the return values are met
+	if functionType.NumOut() <= 0 || functionType.NumOut() > 2 {
+		return ErrInvalidReturn
+	}
+	// ...
+
+	// Validating that the requirements for the arguments are met
+	if functionType.NumIn() < 1 {
+		return ErrInvalidArgs
+	}
+	// ...
+
+	// Using reflection to set the method's implementations
+	remote.
+		FieldByName(functionField.Name).
+		Set(r.makeRPC( // Creating the actual RPC implementation
+			functionField.Name,
+			functionType,
+			errs,
+			conn,
+			responseResolver,
+		))
+}
+```
+
+These implementations simply marshal and unmarshal the function calls into Dudirekta's JSONL protocol upon being called, effectively functioning as transparent proxies to the remote implementations; it is at this point that unique call IDs are generated in order to be able to support concurrent RPCs:
+
+```go
+// Creating the implementation method
+reflect.MakeFunc(functionType, func(args []reflect.Value) (results []reflect.Value) {
+		// Generating a unique call ID
+		callID := uuid.NewString()
+
+		cmdArgs := []any{}
+		for i, arg := range args {
+			// Collecting the function arguments
+		}
+
+		// Marshalling the JSONL for the call
+		b, err := json.Marshal(cmd)
+
+		// Writing the JSONL to the remote
+		conn.Write(b)
+		// ...
+})
+```
+
+Once the remote has responded with a message containing the unique call ID, it unmarshals the return values, and returns from the implemented method:
+
+```go
+// Spawning a new goroutine to handle the RPC return values
+res := make(chan response)
+go func() {
+	for {
+		// Waiting for a message with the correct call ID to be received over a broadcaster channel
+		msg := <-l.Ch()
+		if msg.id == callID {
+			res <- msg
+
+			return
+		}
+	}
+}()
+// ...
+
+// Receiving the raw return values
+rawReturnValue := <-res:
+
+// Unmarshalling, validating and returning the return values
+```
+
+Closures are implemented similarly to this. If a closure is provided as a function argument, instead of marshing the argument and sending it as JSONL, the function is implemented by creating a "proxy" closure that calls the remote `CallClosure` RPC, while reusing the same marshalling/unmarshalling logic as regular RPCs. Calling this virtual `CallClosure` RPC is possible from both the client and the server because the protocol is bi-directional:
+
+```go
+// If an argument is a function instead of a JSON-serializable value, handle it differently
+if functionType.Kind() == reflect.Func {
+	// Create a closure proxy
+	arg := reflect.MakeFunc(functionType, func(args []reflect.Value) (results []reflect.Value) {
+		// ...
+
+		// A reference to the virtual `CallClosure` RPC
+		rpc := r.makeRPC(
+			"CallClosure",
+			// ...
+		)
+
+		// Continues with the same marshalling logic as regular function calls, then calls the virtual `CallClosure` RPC on the remote
+	})
+}
+```
+
+#### Adapter for Mounts and Migrations
+
+As mentioned earlier, Dudirekta has a few limitations when it comes to the RPC signatures that are supported. This means that mount or migration backends can't be provided directly to the registry and need to be wrapped using an adapter. To not have to duplicate this translation for the different backends, a generic adapter between the Dudirekta API and the `go-nbd` backend (as well as the) interfaces exists:
+
+```go
+func NewRPCBackend(
+	ctx context.Context, // Global context to be used for Dudirekta calls
+	remote *services.BackendRemote, // Dudirekta placeholder struct that is implemented by the registry
+) *RPCBackend {
+	return &RPCBackend{ctx, remote}
+}
+
+func (b *RPCBackend) ReadAt(p []byte, off int64) (n int, err error) {
+	// Calling the RPC
+	r, err := b.remote.ReadAt(b.ctx, len(p), off)
+	if err != nil {
+		return -1, err
+	}
+
+	// Making the result compatible with the `go-nbd` backend interface
+	n = r.N
+	copy(p, r.P)
+
+	return
+}
+
+// Same for all other mount/migration API methods
+```

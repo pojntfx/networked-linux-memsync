@@ -913,11 +913,6 @@ csl: static/ieee.csl
 - Usage (as described in Dudirekta README)
 - Protocol definition (JSONL, structure etc.) and how it is multiplexed
 - RPC provider implementation
-  - To use it, a simple wrapper struct with the needed RPC methods is created (code snippet from https://github.com/pojntfx/r3map/blob/main/pkg/services/backend.go#L41-L61)
-  - This wrapper struct simply calls the backend (or seeder etc.) functions
-  - The wrapper struct is then passed as the local function struct into a registry, which creates the RPC server (code snippet from https://github.com/pojntfx/r3map/blob/main/cmd/r3map-mount-benchmark-server/main.go#L146-L166)
-  - When the transport protocol, in this case TCP, `accept`s a client it is linked to the registry (code snippet from https://github.com/pojntfx/r3map/blob/main/cmd/r3map-mount-benchmark-server/main.go#L198-L200)
-  - The used protocol is very simple (code snippet from https://github.com/pojntfx/dudirekta#protocol)
   - If an RPC, such as `ReadAt`, is called, it is looked up via reflection and validated (code snippet from https://github.com/pojntfx/dudirekta/blob/main/pkg/rpc/registry.go#L323-L357)
   - The arguments, which have been supplied as JSON, are then unmarshalled into their native types, and the local wrapper struct's method is called in a new goroutine (code snippet from https://github.com/pojntfx/dudirekta/blob/main/pkg/rpc/registry.go#L417-L521)
 - RPC call implementation
@@ -925,16 +920,17 @@ csl: static/ieee.csl
   - For the destination site, the remote representation's fields are iterated over, and replaced by functions which marshal and unmarshal the function calls into the dudirekta JSON protocol (code snippet from https://github.com/pojntfx/dudirekta/blob/main/pkg/rpc/registry.go#L228-L269)
   - To do this, the arguments are marshalled into JSON, and a unique call ID is generated (code snippet from https://github.com/pojntfx/dudirekta/blob/main/pkg/rpc/registry.go#L109-L130)
   - Once the remote has responded with a message containing the unique call ID, it unmarshalls the arguments, and returns (code snippet from https://github.com/pojntfx/dudirekta/blob/main/pkg/rpc/registry.go#L145-L217)
+- Closure implementation
 - Using Dudirekta for r3map
   - Since dudirekta has a few limitations (such as the fact that slices are passed as copies, not references, and that context needs to be provided), the resulting remote struct can't be used directly
   - To work around this, the standard `go-nbd` backend interface is implemented for the remote representation, creating a universally reusable, generic RPC backend wrapper (code snippet from https://github.com/pojntfx/r3map/blob/main/pkg/backend/rpc.go)
   - The same backend implementation is also done for the seeder protocol (code snippet from https://github.com/pojntfx/r3map/blob/main/pkg/services/seeder.go)
-  - While the dudirekta RPC serves as a good reference implementation of the basic RPC protocol, it does not scale particularly well
-  - This mostly stems from two aspects of how it is designed
-  - JSON(L) is used for the wire format, which while simple and easy to analyze, is slow to marshal and unmarshal
 
 ### Connection Pooling with gRPC
 
+- While the dudirekta RPC serves as a good reference implementation of the basic RPC protocol, it does not scale particularly well
+- This mostly stems from two aspects of how it is designed
+- JSON(L) is used for the wire format, which while simple and easy to analyze, is slow to marshal and unmarshal
 - Dudirekta's bi-directional RPCs do however come at the cost of not being able to do connection pooling, since each client `dial`ing the server would mean that the server could not reference the multiple client connections as one composite client without changes to the protocol
 - While implementing such a pooling mechanism in the future could be interesting, it turned out to not be necessary thanks to the pull-based pre-copy solution described earlier
 - Instead, only calling RPCs exposed on the server from the client is the only requirement for an RPC framework, and other, more optimized RPC frameworks can already offer this
