@@ -45,9 +45,9 @@ Felicitas Pojtinger (Stuttgart Media University)
     -   4.7 Pluggable Encryption and Authentication
     -   4.8 Optimizing Backends For High RTT
     -   4.9 Using Remote Stores as Backends
-    -   4.10 Bi-Directional Protocols With Dudirekta
-    -   4.11 Connection Pooling For High RTT Scenarios
-    -   4.12 Optimizing The Transport Protocol For Throughput
+    -   4.10 Bi-Directional and Concurrent RPCs with Dudirekta
+    -   4.11 Connection Pooling with gRPC
+    -   4.12 Optimizing RPC Throughput and Latency with fRPC
 -   5 Results
     -   5.1 Latency
     -   5.2 Throughput
@@ -1674,9 +1674,6 @@ Optimizing Backends For High RTT
 -   If the maximum allowed number of open files is exceeded, the first
     file is closed and removed from the map, causing it to be reopened
     on a subsequent read
--   These optimizations add an initial overhead to operations, but can
-    significantly improve the pull speed in scenarios where the backing
-    disk is slow or the latency is high
 
 Using Remote Stores as Backends
 
@@ -1700,10 +1697,10 @@ Using Remote Stores as Backends
     -   Using Redis is particularly useful because it is able to handle
         the locking server-side in a very efficient way, and is
         well-tested for high-throughput etc. scenarious
-    -   Authentication can also be handled using the Redis protocol, so
-        can multi-tenancy by using multiple databases or a prefix
     -   Redis also has very fast read/write speeds due to its bespoke
         protocol and fast serialization
+    -   Authentication can also be handled using the Redis protocol, so
+        can multi-tenancy by using multiple databases or a prefix
 -   Mapping large resources into memory with S3
     -   While the Redis backend is very useful for read-/write usage,
         when deployment to the public internet is required, it might not
@@ -1740,94 +1737,99 @@ Using Remote Stores as Backends
         creating the table etc. (code snippet from
         https://github.com/pojntfx/r3map/blob/main/cmd/r3map-direct-mount-benchmark/main.go#L369-L396)
 
-Bi-Directional Protocols With Dudirekta
+Bi-Directional and Concurrent RPCs with Dudirekta
 
--   Another aspect that plays an important role in performance for
-    real-life deployments is the choice of RPC framework and transport
-    protocol
--   As mentioned before, both the mount and the migration APIs are
-    transport-independent
--   A simple RPC framework to use is dudirekta
--   Dudirekta is reflection-based, which makes it very simple to use to
-    iterate on the protocol quickly
--   To use it, a simple wrapper struct with the needed RPC methods is
-    created (code snippet from
-    https://github.com/pojntfx/r3map/blob/main/pkg/services/backend.go#L41-L61)
--   This wrapper struct simply calls the backend (or seeder etc.)
-    functions
--   The wrapper struct is then passed as the local function struct into
-    a registry, which creates the RPC server (code snippet from
-    https://github.com/pojntfx/r3map/blob/main/cmd/r3map-mount-benchmark-server/main.go#L146-L166)
--   When the transport protocol, in this case TCP, accepts a client it
-    is linked to the registry (code snippet from
-    https://github.com/pojntfx/r3map/blob/main/cmd/r3map-mount-benchmark-server/main.go#L198-L200)
--   The used protocol is very simple (code snippet from
-    https://github.com/pojntfx/dudirekta#protocol)
--   If an RPC, such as ReadAt, is called, it is looked up via reflection
-    and validated (code snippet from
-    https://github.com/pojntfx/dudirekta/blob/main/pkg/rpc/registry.go#L323-L357)
--   The arguments, which have been supplied as JSON, are then
-    unmarshalled into their native types, and the local wrapper struct’s
-    method is called in a new goroutine (code snippet from
-    https://github.com/pojntfx/dudirekta/blob/main/pkg/rpc/registry.go#L417-L521)
--   This allows for one important feature: Concurrent RPC calls
--   Many simple RPC frameworks only support one RPC call at a time,
-    because no demuxing is implemented
--   For example, when dRPC (https://github.com/storj/drpc) was used,
-    drastic performance issues were noted compared to gRPC etc., because
-    no support for concurrent RPCs was implemented
--   To use a RPC backend on the destination side, the wrapper struct’s
-    remote representation is used (code snippet from
-    https://github.com/pojntfx/r3map/blob/main/pkg/services/backend.go#L14-L19)
--   For the destination site, the remote representation’s fields are
-    iterated over, and replaced by functions which marshal and unmarshal
-    the function calls into the dudirekta JSON protocol (code snippet
-    from
-    https://github.com/pojntfx/dudirekta/blob/main/pkg/rpc/registry.go#L228-L269)
--   To do this, the arguments are marshalled into JSON, and a unique
-    call ID is generated (code snippet from
-    https://github.com/pojntfx/dudirekta/blob/main/pkg/rpc/registry.go#L109-L130)
--   Once the remote has responded with a message containing the unique
-    call ID, it unmarshalls the arguments, and returns (code snippet
-    from
-    https://github.com/pojntfx/dudirekta/blob/main/pkg/rpc/registry.go#L145-L217)
--   This makes both calling RPCs and defining them completely
-    transparent to the user
--   Since dudirekta has a few limitations (such as the fact that slices
-    are passed as copies, not references, and that context needs to be
-    provided), the resulting remote struct can’t be used directly
--   To work around this, the standard go-nbd backend interface is
-    implemented for the remote representation, creating a universally
-    reusable, generic RPC backend wrapper (code snippet from
-    https://github.com/pojntfx/r3map/blob/main/pkg/backend/rpc.go)
--   The same backend implementation is also done for the seeder protocol
-    (code snippet from
-    https://github.com/pojntfx/r3map/blob/main/pkg/services/seeder.go)
--   While the dudirekta RPC serves as a good reference implementation of
-    the basic RPC protocol, it does not scale particularly well
--   This mostly stems from two aspects of how it is designed
--   JSON(L) is used for the wire format, which while simple and easy to
-    analyze, is slow to marshal and unmarshal
--   Dudirekta supports defining functions on both the client and the
-    server
--   This is very useful for implementing e.g. a pre-copy protocol where
-    the source pushes chunks to the destination by simply calling a RPC
-    on the destination
--   Usually, RPCs don’t support exposing or calling RPCs on the client,
-    too, only on the server
--   This would mean that in order to implement a pre-copy protocol with
-    pushes, the destination would have to be dialable from the source
--   In a LAN scenario, this is easy to implement, but in WAN it is
-    complicated and requires authentication of both the client and the
-    server
--   Dudirekta fixes this by making the protocol itself bi-directional
-    (example and code snippet from
-    https://github.com/pojntfx/dudirekta/tree/main#1-define-local-functions)
--   In addition to this, dudirekta works over any io.ReadWriter, making
-    the actual transport layer choosable (which means that i.e. QUIC can
-    be used to drastically reduce initial latency)
+-   Overview of the framework and why a custom one was implemented
+    -   Designed specifically with the hybrid pre- and post-copy
+        scenario in mind
+    -   Support for concurrent RPCs allows for efficient background
+        pulls since multiple chunks can be pulled at the same time
+    -   Bi-directional API makes it possible to initiate pre-copy
+        migrations and transfer chunks from the source host without
+        having to make the destination host dialable
+        -   Dudirekta supports defining functions on both the client and
+            the server
+        -   This is very useful for implementing e.g. a pre-copy
+            protocol where the source pushes chunks to the destination
+            by simply calling a RPC on the destination, instead of the
+            destination calling a RPC on the source
+        -   Usually, RPCs don’t support exposing or calling RPCs on the
+            client, too, only on the server
+        -   This would mean that in order to implement a pre-copy
+            protocol with pushes, the destination would have to be
+            dialable from the source
+        -   In a LAN scenario, this is easy to implement, but in WAN it
+            is complicated and requires authentication of both the
+            client and the server
+    -   Transport independence allows for i.e. QUIC to be used for the
+        0-RTT handshake in WAN
+    -   Support for passing callbacks and closures to RPCs makes it
+        possible to model remote generators and yields to easily report
+        i.e. remote migration progress
+    -   Because it reflection-based, both RPC definition and calling an
+        RPC are both transparent, making it optimal for prototyping
+        r3map
+-   Usage (as described in Dudirekta README)
+-   Protocol definition (JSONL, structure etc.) and how it is
+    multiplexed
+-   RPC provider implementation
+    -   To use it, a simple wrapper struct with the needed RPC methods
+        is created (code snippet from
+        https://github.com/pojntfx/r3map/blob/main/pkg/services/backend.go#L41-L61)
+    -   This wrapper struct simply calls the backend (or seeder etc.)
+        functions
+    -   The wrapper struct is then passed as the local function struct
+        into a registry, which creates the RPC server (code snippet from
+        https://github.com/pojntfx/r3map/blob/main/cmd/r3map-mount-benchmark-server/main.go#L146-L166)
+    -   When the transport protocol, in this case TCP, accepts a client
+        it is linked to the registry (code snippet from
+        https://github.com/pojntfx/r3map/blob/main/cmd/r3map-mount-benchmark-server/main.go#L198-L200)
+    -   The used protocol is very simple (code snippet from
+        https://github.com/pojntfx/dudirekta#protocol)
+    -   If an RPC, such as ReadAt, is called, it is looked up via
+        reflection and validated (code snippet from
+        https://github.com/pojntfx/dudirekta/blob/main/pkg/rpc/registry.go#L323-L357)
+    -   The arguments, which have been supplied as JSON, are then
+        unmarshalled into their native types, and the local wrapper
+        struct’s method is called in a new goroutine (code snippet from
+        https://github.com/pojntfx/dudirekta/blob/main/pkg/rpc/registry.go#L417-L521)
+-   RPC call implementation
+    -   To use a RPC backend on the destination side, the wrapper
+        struct’s remote representation is used (code snippet from
+        https://github.com/pojntfx/r3map/blob/main/pkg/services/backend.go#L14-L19)
+    -   For the destination site, the remote representation’s fields are
+        iterated over, and replaced by functions which marshal and
+        unmarshal the function calls into the dudirekta JSON protocol
+        (code snippet from
+        https://github.com/pojntfx/dudirekta/blob/main/pkg/rpc/registry.go#L228-L269)
+    -   To do this, the arguments are marshalled into JSON, and a unique
+        call ID is generated (code snippet from
+        https://github.com/pojntfx/dudirekta/blob/main/pkg/rpc/registry.go#L109-L130)
+    -   Once the remote has responded with a message containing the
+        unique call ID, it unmarshalls the arguments, and returns (code
+        snippet from
+        https://github.com/pojntfx/dudirekta/blob/main/pkg/rpc/registry.go#L145-L217)
+-   Using Dudirekta for r3map
+    -   Since dudirekta has a few limitations (such as the fact that
+        slices are passed as copies, not references, and that context
+        needs to be provided), the resulting remote struct can’t be used
+        directly
+    -   To work around this, the standard go-nbd backend interface is
+        implemented for the remote representation, creating a
+        universally reusable, generic RPC backend wrapper (code snippet
+        from
+        https://github.com/pojntfx/r3map/blob/main/pkg/backend/rpc.go)
+    -   The same backend implementation is also done for the seeder
+        protocol (code snippet from
+        https://github.com/pojntfx/r3map/blob/main/pkg/services/seeder.go)
+    -   While the dudirekta RPC serves as a good reference
+        implementation of the basic RPC protocol, it does not scale
+        particularly well
+    -   This mostly stems from two aspects of how it is designed
+    -   JSON(L) is used for the wire format, which while simple and easy
+        to analyze, is slow to marshal and unmarshal
 
-Connection Pooling For High RTT Scenarios
+Connection Pooling with gRPC
 
 -   Dudirekta’s bi-directional RPCs do however come at the cost of not
     being able to do connection pooling, since each client dialing the
@@ -1893,7 +1895,7 @@ Connection Pooling For High RTT Scenarios
     able to intelligently re-use existing connections for RPCs or create
     new ones, speeding up parallel requests
 
-Optimizing The Transport Protocol For Throughput
+Optimizing RPC Throughput and Latency with fRPC
 
 -   Despite these benefits, gRPC is not perfect however
 -   Protobuf specifically, while being faster than JSON, is not the
@@ -1922,57 +1924,79 @@ Results
 
 Latency
 
--   First chunk latency of baseline vs. userfault vs. direct vs. managed
+-   TODO: Benchmark for first chunk latency of baseline vs. userfault
+    vs. direct vs. managed
 
--   Development of first chunk latency as RTT increases
-
--   Development of first chunk latency as number of workers increases
-
--   MB of pre-emptive pulls in managed API as RTT increases
-
--   Development of MB of pre-emptive pulls as RTT increases
-
--   Development of MB of pre-emptive pulls as number of workers
+-   TODO: Benchmark for development of first chunk latency as RTT
     increases
 
--   Development of MB of pre-emptive pulls as chunk size increases
+-   TODO: Benchmark for development of first chunk latency as number of
+    workers increases
 
--   udev vs. polling time for waiting until NBD device becomes available
+-   TODO: Benchmark for MB of pre-emptive pulls in managed API as RTT
+    increases
+
+-   TODO: Benchmark for development of MB of pre-emptive pulls as RTT
+    increases
+
+-   TODO: Benchmark for development of MB of pre-emptive pulls as number
+    of workers increases
+
+-   TODO: Benchmark for development of MB of pre-emptive pulls as chunk
+    size increases
+
+-   TODO: Benchmark for udev vs. polling time for waiting until NBD
+    device becomes available
+
+-   TODO: Benchmark for first chunk latency for memory vs. file
+    vs. directory backends as RTT increases
+
+-   TODO: Benchmark for first chunk latency for Redis, S3 and cassandra
+    backends as RTT increases
 
 Throughput
 
--   Throughput of different Go hashing algorithms
+-   TODO: Benchmark for throughput of different Go hashing algorithms
 
--   Throughput of dudirekta, gRPC and fRPC as RTT increases
-
--   Throughput of dudirekta, gRPC and fRPC as number of workers
+-   TODO: Benchmark for throughput of dudirekta, gRPC and fRPC as RTT
     increases
 
--   Throughput of dudirekta, gRPC and fRPC as chunk size increases
+-   TODO: Benchmark for throughput of dudirekta, gRPC and fRPC as number
+    of workers increases
 
--   Throughput of baseline vs. userfault vs. direct vs. migration (we
-    can use the onChunkLocal value)
+-   TODO: Benchmark for throughput of dudirekta, gRPC and fRPC as chunk
+    size increases
 
--   Development of throughput as RTT increases
+-   TODO: Benchmark for throughput of baseline vs. userfault vs. direct
+    vs. migration (we can use the onChunkLocal value)
 
--   Development of throughput as number of workers increases (migration
-    only)
+-   TODO: Benchmark for development of throughput as RTT increases
 
--   Development of throughput as chunk size increases
+-   TODO: Benchmark for development of throughput as number of workers
+    increases (migration only)
+
+-   TODO: Benchmark for development of throughput as chunk size
+    increases
+
+-   TODO: Benchmark for throughput for memory vs. file vs. directory
+    backends as RTT increases
+
+-   TODO: Benchmark for throughput for Redis, S3 and cassandra backends
+    as RTT increases
 
 Pull Heuristics
 
--   Effect of correct (return n) vs wrong (return -n) pull heuristic on
-    first chunk latency for managed API
--   Effect of correct (return n) vs wrong (return -n) pull heuristic on
-    throughput for managed API
+-   TODO: Benchmark for effect of correct (return n) vs wrong (return
+    -n) pull heuristic on first chunk latency for managed API
+-   TODO: Benchmark for effect of correct (return n) vs wrong (return
+    -n) pull heuristic on throughput for managed API
 
 Downtime
 
--   Open time for userfault vs. r3map (doesn’t matter if
-    direct/mount/migration)
--   Minimum downtime of direct/mount (one step - Open = downtime)
-    vs. migration (two steps - Finalize = downtime)
+-   TODO: Benchmark for Open time for userfault vs. r3map (doesn’t
+    matter if direct/mount/migration)
+-   TODO: Benchmark for minimum downtime of direct/mount (one step -
+    Open = downtime) vs. migration (two steps - Finalize = downtime)
 
 Discussion
 

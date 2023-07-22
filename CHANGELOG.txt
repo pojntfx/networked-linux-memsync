@@ -1,3 +1,15 @@
+commit 6a154ef106a6f9a637ddf59f5572a2878ed7e993
+Author: Felicitas Pojtinger <felicitas@pojtinger.com>
+Date:   Sat Jul 22 18:49:11 2023 +0200
+
+    refactor: Rework dudirekta section to also introduce the framework
+
+commit ae74719d57f56b50ddcaeed31f64474ba10a6dfb
+Author: Felicitas Pojtinger <felicitas@pojtinger.com>
+Date:   Sat Jul 22 18:48:32 2023 +0200
+
+    feat: Implement prose for pluggable encryption, authn, concurrent backends and remote stores, start implementing Dudirekta section
+
 commit ae206feedcf028a29010db37ea8f13661c0ef6df
 Author: Felicitas Pojtinger <felicitas@pojtinger.com>
 Date:   Sat Jul 22 03:02:51 2023 +0200

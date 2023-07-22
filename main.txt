@@ -63,7 +63,7 @@ Felicitas Pojtinger (Stuttgart Media University)
         -   4.4.4 Client Lifecycle
         -   4.4.5 Optimizing Access to the Block Device
         -   4.4.6 Combining the NBD Client and Server to a Mount
-    -   4.5 Managed Mounts
+    -   4.5 Managed Mounts with r3map
         -   4.5.1 Stages
         -   4.5.2 Chunking
         -   4.5.3 Background Pull
@@ -76,6 +76,14 @@ Felicitas Pojtinger (Stuttgart Media University)
         -   4.6.1 Overview
         -   4.6.2 Seeder
         -   4.6.3 Leecher
+    -   4.7 Pluggable Encryption, Authentication and Transport
+    -   4.8 Concurrent Backends
+    -   4.9 Remote Stores as Backends
+        -   4.9.1 Overview
+        -   4.9.2 Key-Value Stores with Redis
+        -   4.9.3 Object Stores with S3
+        -   4.9.4 Document Databases with Cassandra
+    -   4.10 Bi-Directional and Concurrent RPCs with Dudirekta
 
 Introduction
 
@@ -2456,7 +2464,7 @@ potential latency overhead of mounting it.
 TODO: Reference voltools and how it works as a fast way of formatting
 the mount if it becomes OSS
 
-Managed Mounts
+Managed Mounts with r3map
 
 Stages
 
@@ -2911,6 +2919,283 @@ Close on the seeder and disconnects the leecher, causing both to shut
 down, after which the leecher can re-use the mount to provide a new
 seeder which can allow further migrations to happen in the same way.
 
+Pluggable Encryption, Authentication and Transport
+
+Compared to existing remote memory and migration solutions, r3map is
+designed for a new field of application: WAN. Most existing systems that
+provide these solutions are intended to work in high-throughput,
+low-latency LAN, where assumptions concerning authentication and
+authorization as well as scalability can be made that are not valid in a
+WAN deployment. For example encryption: While in trusted LAN networks,
+it can be a viable option to assume that there are no bad actors in the
+local subnet, the same can not be assumed for WAN. While depending on
+i.e. TLS for the APIs would have been a viable option for r3map if it
+were to only support WAN deployments, it should still be functional and
+be able to take advantage of the guarantees if it is deployed in a LAN,
+which is why it is transport agnostic.
+
+This makes adding guarantees such as encryption as simple as choosing
+the best solution depending on the network conditions. For low-latency,
+trusted networks, a protocol like the SCSI RDMA protocol (SRP) can be
+chosen, while for WAN, a standard internet protocol like TLS over TCP or
+QUIC can be used instead. Similarly to how the transport layer is
+interchangable, it is RPC-framework independent as well. This means that
+RPC frameworks such as dudirekta (which will be elaborated on later),
+which can work over P2P protocols like WebRTC data channels, are an
+option for environments with highly dynamic network topologies, where IP
+addresses rotate or there might be temporary loss of connectivity to
+recover from, as is the case with i.e. mobile networks, allowing live
+migration to work in completely new environments.
+
+Since r3map makes no assumptions about them, authentication and
+authorization can be implemented in a similar way. For LAN deployments,
+the typical approach of simply trusting the local subnet can be used,
+for public deployments mTLS certificates or dedicated authentication
+protocols like OIDC can be an option. In networks with high RTT, QUIC
+allows the use of a 0-RTT handshake, which combines the connectivity and
+security handshake into one; this paired with mTLS can be an interesting
+option to decrease the initial read latency while still providing proper
+authentication.
+
+Concurrent Backends
+
+In high-RTT scenarios, the ability to fetch chunks concurrently is
+important. Without concurrent backgrounds pulls, latency can add up
+quickly, since every read to an offset of the memory region would have
+at least one RTT as it’s latency, while concurrent pulls allow for
+multiple offsets’ chunks to be pulled at the same time.
+
+The first requirement for supporting this is that the remote backend has
+to be able to read from multiple regions without globally locking it.
+For the file backend for example, this is not the case, as a lock needs
+to be acquired for the entire file before an offset can be accessed:
+
+    func (b *FileBackend) ReadAt(p []byte, off int64) (n int, err error) {
+        b.lock.RLock()
+        defer b.lock.RUnlock()
+
+        n, err = b.file.ReadAt(p, off)
+        // ...
+    }
+
+This can quickly become a bottleneck in the pipeline. One option that
+tries to solve this is the directory backend; instead of using just one
+backing file, the directory backend is a chunked backend that uses a
+directory of files, with each file representing a chunk. By using
+multiple files, this backend can lock each file (and thus chunk)
+individually, speeding up concurrent access. The same also applies to
+writees, where even concurrent writes to different chunks can safely be
+done at the same time as they are all backend by a separate file. This
+backend keeps track of these chunks by using an internal map of locks,
+and a queue to keep track of the order in which chunks’ corresponding
+files were opened; when a chunk is first accessed, a new file is created
+for the chunk, and if the first operation is ReadAt, it is also
+truncated to exactly one chunk length. In order not to exceed the
+maximum number of open files for the backend process, a simple LRU
+algorithm is used to to close an open file if the limit would be
+exceeded:
+
+    // Open files limit exceedd
+    if int64(len(b.filesQueue)) == b.maxOpenFiles {
+        // Find the least recently used offset and corresponding file
+        lruOff := b.filesQueue[0]
+        lruFl := b.files[lruOff]
+
+        // Close and nil it
+        if lruFl.file != nil {
+            if err := lruFl.file.Close(); err != nil {
+                return nil, err
+            }
+
+            lruFl.file = nil
+        }
+
+        // Remove it from the list and map of open files
+        delete(b.files, lruOff)
+        b.filesQueue = b.filesQueue[1:]
+    }
+
+Remote Stores as Backends
+
+Overview
+
+RPC backends provide a dynamic way to access a remote backend. This is
+useful for lots of usecases, esp. if the backend exposes a custom
+ressource or requires custom authorization or caching. For the mount API
+specifically however, having access to a remote backend that doesn’t
+require a custom RPC system can be useful, since the backend for a
+remote mount maps fairly well to the concept of a remote random-access
+storage device, for which many protocols and systems exist already.
+
+Key-Value Stores with Redis
+
+On such option is Redis, an in-memory key-value store with network
+access. To implement a mount backend, chunk offses can be mapped to
+keys, and since bytes are a valid key type, the chunk itself can be
+stored directly in the KV store; if keys don’t exist, they are simply
+treated as empty chunks:
+
+    func (b *RedisBackend) ReadAt(p []byte, off int64) (n int, err error) {
+        // Retrieve a key corresponding to the chunk from Redis
+        val, err := b.client.Get(b.ctx, strconv.FormatInt(off, 10)).Bytes()
+        // If  a key does not exist, treat it as an empty chunk
+        if err == redis.Nil {
+            return len(p), nil
+        }
+        // ...
+    }
+
+    func (b *RedisBackend) WriteAt(p []byte, off int64) (n int, err error) {
+        // Store an offset as a key-value pair in Redis
+        b.client.Set(b.ctx, strconv.FormatInt(off, 10), p, 0)
+        // ...
+    }
+
+Using Redis is particularly interesting because it is able to handle
+locking the indiviudal chunks server-side in an efficient way, and
+thanks to it’s custom protocol and fast serialization it is well-suited
+for high-throughput deployment scenarios. Authentication and
+authorization for this backend can be handled using the Redis protocol,
+and hosting multiple memory regions can be implemented by using multiple
+databases or key prefixes.
+
+Object Stores with S3
+
+While Redis is interesting for high-throughput scenarios, when it comes
+to making a memory region available on the public internet, it might not
+be the best choice due to it’s low-level, custom protocol and (mostly)
+in-memory nature. This is where S3 can be used; a S3 backend can be a
+good choice for mounting public information, i.e. media assets,
+binaries, large filesystems and more into memory. While S3 has
+traditionally been mostly a AWS SaaS offering, projects such as Minio
+have helped it become the de facto standard for accessing files over
+HTTP. Similarly to the directory backend, the S3 backend is chunked,
+with one S3 object representing one chunk; if accessing a chunk returns
+a 404 error, it is treated as an empty chunk in the same way as the
+Redis backend, and multi-tenancy can once again be implemented either by
+using multiple S3 buckets or a prefix:
+
+    func (b *S3Backend) ReadAt(p []byte, off int64) (n int, err error) {
+        // Receiving a chunk using Minio's S3 client
+        obj, err := b.client.GetObject(b.bucket, b.prefix+"-"+strconv.FormatInt(off, 10), minio.GetObjectOptions{})
+        if err != nil {
+            // If an object is not found, it is treated as an empty chunk
+            if err.Error() == errNoSuchKey.Error() {
+                return len(p), nil
+            }
+
+            //  ...
+        }
+        // ...
+    }
+
+Document Databases with Cassandra
+
+Another option to access persistent remote ressource is a NoSQL database
+such as Cassandra, specifically ScyllaDB, which improves on Cassandra’s
+latency, a key metric for mounting remote resources. While this backend
+is more of a proof of concept rather than a real usecase, it does show
+that even a database can be mapped to a memory region, which does allow
+for the interesting usecase of making the databases’ contents available
+directly in memory without having to use a database-specific client.
+Here, ReadAt and WriteAt are implemented by issues queries through
+Cassandra’s DSL, where each row represents a chunk identified by it’s
+offset as the primary, and as with Redis and S3, non-existing rows are
+treated as empty chunks:
+
+    func (b *CassandraBackend) ReadAt(p []byte, off int64) (n int, err error) {
+        // Executing a select query for a specific chunk, then scanning it into a byte slice
+        var val []byte
+        if err := b.session.Query(`select data from `+b.table+` where key = ? limit 1`, b.prefix+"-"+strconv.FormatInt(off, 10)).Scan(&val); err != nil {
+            if err == gocql.ErrNotFound {
+                return len(p), nil
+            }
+
+            return 0, err
+        }
+        // ...
+    }
+
+    func (b *CassandraBackend) WriteAt(p []byte, off int64) (n int, err error) {
+        // Upserting a row with a chunk's new content
+        b.session.Query(`insert into `+b.table+` (key, data) values (?, ?)`, b.prefix+"-"+strconv.FormatInt(off, 10), p).Exec()
+        // ...
+    }
+
+Support for multiple regions can be implement by using a different table
+or key prefix, and migrations are used to create the table itself
+similarly to how it would be done in SQL.
+
+Bi-Directional and Concurrent RPCs with Dudirekta
+
+Another aspect that plays an important role in performance for real-life
+deployments is the choice of RPC framework and transport protocol. As
+mentioned before, both the mount and migration APIs are
+transport-independent, and as a result almost any RPC framework can be
+used.
+
+TODO: Rework the following part of this section based on the new notes
+structure
+
+One such simple RPC framework developed specifically for prototyping
+r3map is Dudirekta[48], which is reflection-based. This makes it
+particularly easy to prototype with, since no DSL is required; to use
+it, a wrapper struct with the methods that should be exposed as RPCs can
+simply be provided directly, which is then connected to a registry
+component that exposes it as a RPC server, which can then be linked to a
+transport layer like TCP:
+
+    // Creating the backend, in this case a file backend
+    b := backend.NewFileBackend(file)
+
+    // Creating the wrapper struct defining the RPCs
+    svc := services.NewBackend(b, *verbose, *maxChunkSize)
+
+    // Create a RPC server from the registry
+    registry := rpc.NewRegistry(
+        svc, // Local RPCs
+        struct{}{}, // Remote RPCs; for the mount API, the protocol is unidirectional, so no remote RPCs are expected
+        // ...
+    )
+
+    // Create a TCP server and accept a client
+    lis, err := net.Listen("tcp", *laddr)
+    conn, err := lis.Accept()
+
+    // Handling the connection with the dudirekta RPC server
+    registry.Link(conn)
+
+On the remote side, instead of passing the service implementation to the
+registry as the local RPCs, a placeholder struct is passed in as the
+remote RPCs, which is then implemented at runtime by the registry using
+reflection, which makes both defining and calling RPCs completely
+transparent.
+
+The protocol used for dudirekta is very simple and based on JSONL; a
+function call, i.e. to Println looks like this:
+
+    [true, "1", "Println", ["Hello, world!"]]
+
+The first element marks the message as a function call, while the second
+one is the call ID, the third represents the name of the RPC that is
+being called followed by an array of arguments. A function return
+messages looks similar:
+
+    [false, "1", "", ""]
+
+Here, the message is marked as a return value in the first element, the
+ID is passed with the second element and both the actual return value
+(third element) and error (fourth element) are nil and represented by an
+empty sring. If a RPC is called, it’s implementation is looked up by the
+registry through reflection and the call’s signature is validated
+against the implementation, after which the provided function call’s
+arguments are unmarshalled into their native types from JSON. This
+simple, ID-based protocol allows for concurrent RPCs through muxing and
+demuxing, which is an important feature for the pull system, as
+similarly to how a global lock on the remote backend causes the RTT to
+drastically influence throughput, a RPC framework with synchronous calls
+has the same effect.
+
 [1] T. kernel development community, “Quick start.”
 https://www.kernel.org/doc/html/next/rust/quick-start.html, 2023.
 
@@ -3088,3 +3373,7 @@ https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/drivers/
 [47] M. K. Aguilera et al., “Remote regions: A simple abstraction for
 remote memory,” in Proceedings of the 2018 USENIX conference on usenix
 annual technical conference, 2018, pp. 775–787.
+
+[48] F. Pojtinger, “Dudirekta: Transport-agnostic framework that allows
+exposing and calling functions on both clients and servers.”
+https://github.com/pojntfx/dudirekta, 2023.
