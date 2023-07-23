@@ -95,6 +95,17 @@ Felicitas Pojtinger (Stuttgart Media University)
 -   5 Results
 -   6 Discussion
     -   6.1 Remote Swap with ram-dl
+    -   6.2 Mapping Tape Into Memory With tapisk
+        -   6.2.1 Overview
+        -   6.2.2 Implementation
+        -   6.2.3 Evaluation
+    -   6.3 Improving Cloud Storage Clients
+        -   6.3.1 Existing Solutions
+        -   6.3.2 Hybrid Approach
+    -   6.4 Universal Database, Media and Asset Streaming
+        -   6.4.1 Streaming Access to Remote Databases
+        -   6.4.2 Making Arbitrary File Formats Streamable
+        -   6.4.3 Streaming App and Game Assets
 
 Introduction
 
@@ -3646,7 +3657,333 @@ TODO: Add discussion once we have the results
 
 Remote Swap with ram-dl
 
-TODO: Add section on ram-dl
+ram-dl[52] is an experimental tech demo built to demonstrate how r3map
+can be used. It uses the fRPC mount backend to expand local system
+memory, enabling a variety of usecases such as mounting a remote
+system’s RAM locally or easily inspecting a remote system’s memory
+contents.
+
+In is based on the direct mount API and uses mkswap, swapon and swapoff
+to enable the Kernel to page out to the mount’s block device:
+
+    // Create a swap partition on the block device
+    exec.Command("mkswap", devPath).CombinedOutput()
+
+    // Enable paging and swapping to the block device
+    exec.Command("swapon", devPath).CombinedOutput()
+
+    // When the mount is stopped, stop paging and swapping to the block device
+    defer exec.Command("swapoff", devPath).CombinedOutput()
+
+ram-dl exposes two commands that achieve this. The first, ram-ul exposes
+RAM by exposing a memory, file or directory-based backend using a fRPC
+endpoint. ram-dl itself then connects to this endpoint, starts a direct
+mount and sets the block device up for swapping. While this system is
+intended mostly as a tech demo and, due to latency and throughput
+limitations, is not intended for critical deployments, it does show how
+simple using the r3map API can be be, as the entire project consistents
+of under 300 source lines of code, most of which is argument handling
+and boilerplate around configuration.
+
+Mapping Tape Into Memory With tapisk
+
+Overview
+
+tapisk[53] is a tool that exposes a tape drive as a block device. While
+seemingly unrelated to memory synchronization, it does serve as an
+interesting usecase due to the similarities to STFS (mentioned earlier
+in the FUSE section), which exposed a tape drive as a file system, and
+serves as an interesting example for how even seemingly incompatible
+backends for can be used to store and synchronize memory.
+
+Using a tape drive as such a backend is challenging, since they are
+designed for linear access and don’t support random reads, while block
+devices need support for reading and writing to arbitrary location.
+Tapes also have very high read/write latencies due to slow seek speeds,
+taking up to more than a minute depending on the offset of the tape that
+is being accessed. Due to the modularity of r3map’s managed mount API
+however, it is possible to work around these issues, and make the tape
+appear as a random-access block device.
+
+Implementation
+
+To achieve this, the background writes and reads provided by the managed
+mount API can be used. Using these, a faster storage backend (i.e. the
+disk) can be used as a caching layer, although the concurrent push/pull
+system can’t be used due to tapes only supporting synchronous read/write
+operations. By using the managed mount, writes are de-duplicated and
+both read and write operations can become asynchronous, since both
+happen on the fast local backend first, and the background sync system
+them handles either periodic writebacks to the tape for write operations
+or reading a chunk from the tape if it is missing from the cache.
+
+Since chunking works differently for tapes than for block devices, and
+tapes are append-only devices where overwriting a section prior to the
+end would result in all following data being overwritten, too, an index
+must be used to simulate the offsets of the block device locations to
+their physical location on the tape, which the bbolt database is used
+for. In order to make non-aligned reads and writes to the tape possible,
+the existing ArbitraryReadWriter system can be used. When a chunk is
+then requested to be read, tapisk looks up the physical tape record for
+the requested offset, and uses the accelerated MTSEEK ioctl to seek to
+the matching record on the tape, after which the chunk is read from the
+tape into memory:
+
+    func (b *TapeBackend) ReadAt(p []byte, off int64) (n int, err error) {
+        // Calculating the block for the offset
+        block := uint64(off) / b.blocksize
+
+        // Getting the physical record on the tape from the index
+        location, err := b.index.GetLocation(block)
+        // ...
+
+        // Creating the seek operation
+        mtop := &ioctl.Mtop{}
+        mtop.SetOp(ioctl.MTSEEK)
+        mtop.SetCount(location)
+
+        // Seeking to the record
+        syscall.Syscall(
+            syscall.SYS_IOCTL,
+            drive.Fd(),
+            ioctl.MTIOCTOP,
+            uintptr(unsafe.Pointer(mtop)),
+        )
+        // ...
+
+        // Reading the chunk from the tape into memory
+        return b.drive.Read(p)
+    }
+
+Conversely, in order to write a chunk to the tape, tapisk seeks to the
+end of the tape (unless the last operation was a write already, in which
+case the tape must be at the end already). Once the seek has completed,
+the current physical record is requested from the tape drive, and stored
+as the record for the block that is to be written in the index, after
+which the chunk is written to the tape. This effectively makes it
+possible to overwrite existing chunks despite the tape being
+append-only, since subsequent writes to the same chunk result result in
+the changes being written to the end of the file with the index
+referencing the new physical location, but does come at the cost of
+requiring defragmentation to clean up prior iterations of chunks:
+
+    func (b *TapeBackend) WriteAt(p []byte, off int64) (n int, err error) {
+        // Calculating the block for the offset
+        block := uint64(off) / b.blocksize
+
+        // Seek to the end of the tape, unless the last operation was a write
+        if b.lastOpWasRead {
+            mtop := &ioctl.Mtop{}
+            mtop.SetOp(ioctl.MTEOM)
+            mtop.SetCount(1)
+
+            syscall.Syscall(
+                syscall.SYS_IOCTL,
+                drive.Fd(),
+                ioctl.MTIOCTOP,
+                uintptr(unsafe.Pointer(mtop)),
+            )
+            // ...
+        }
+
+        // Get the current physical record
+        curr, err := b.tell(b.drive)
+
+        // Mapping the physical record to the block that is being written
+        b.index.SetLocation(block, curr)
+
+        // Writing the chunk to the tape
+        b.drive.Write(p)
+        // ...
+    }
+
+Evaluation
+
+tapisk is a unique application of r3map’s technology, and shows how
+flexible it is.By using this index, the effectively becomes tape a
+standard ReadWriterAt stage (and go-nbd backend) with support for
+aligned-reads in the same way as the file or directory backends, and
+thanks to r3map’s pipeline design, the regular chunking system could be
+reused, unlike in STFS were it had to be built from scratch. By re-using
+the universal RPC backend introduced earlier, which can give remote
+access to any go-nbd backend over a RPC library like Dudirekta, gRPC or
+fRPC, it is also possible to access a remote tape this way, i.e. to map
+a remote tape library robot’s drive to a system over the network.
+
+Being able to map a tape into memory without having to read the entire
+contents first can have a variety of usecases. Tapes can store a large
+amount of data, in the case of LTO-9, up to 18TB on a single tape[54];
+being able to access such a large amount of data directly in memory,
+instead of having to work with tooling like tar, can significantly
+improve developer experience. In addition to making it much easier to
+access tape drives, tapisk can also serve as a replacement for LTFS.
+LTFS is a custom file system implemented as a kernel module, which
+allows for mounting a tape. If a tapisk-provided block device is
+formatted with a filesystem such as EXT4 or Btrfs, it can also be
+mounted locally, allowing the tape to be mounted as a file system as
+well, with the added benefit of also being able to support any
+filesystem that supports block devices as their backend. Compared to the
+LTFS approach, this results in a much more maintainable project; while
+LTFS is tens of thousands of kernel-level source lines of code, tapisk
+achieves effectively the same usecase with just under 350.
+
+Improving Cloud Storage Clients
+
+Existing Solutions
+
+r3map can also be used to create mountable remote filesystems with
+unique advantages over existing solutions. Currently, there are two main
+approaches to implementing cloud storage clients. Dropbox and Nextcloud
+are examples of a system that listens to file changes on a folder and
+synchronizes files as changes are detected, similarly to the file-based
+memory region synchronization approach discussed earlier. The big
+drawback of this approach is that everything that should be available
+needs to be stored locally; if a lot of data is stored in the cloud
+drive, it is common to only choose to synchronize a certain set of data
+to the local host, as there is no way to dynamically download files as
+they are being accessed. Read and write operations on such systems are
+however very efficient, since the system’s file system is used and any
+changes are written to/from this file system asynchronously by the
+synchronization client. This approach also makes offline availability
+easy, as files that have been synchronized to the local system stay
+available even if network connectivity has been lost.
+
+The other currently used option is to use a FUSE, i.e. s3fs[23], which
+allows for files to be fetched on demand, but comes with a heavy
+performance penalty. This is the case because most implementations, if a
+write or read request is sent from the kernel to the FUSE, remote writes
+or reads happen directly over the network, which makes this approach
+very sensitive to networks with a high RTT. Offline usage is also
+usually not possible with a FUSE-based approach, and features such as
+inotify, symlinks etc. are hard to implement, leaving two imperfect
+solutions to implementing a cloud storage client.
+
+Hybrid Approach
+
+Using r3map makes it possible to get the benefits of both approaches by
+not having to download any files in advance and also being able to write
+back changes asynchronously, as well as being able to use almost any
+existing file system with it’s complete feature set. Files can also be
+downloaded preemptively to allow for offline access, just like with the
+approach that listens to file changes in a directory.
+
+This is possible by once again using the managed mount API. The block
+device is formatted using a valid filesystem, i.e. EXT4, and then
+mounted on the host. By configuring the background pull system’s workers
+and pull priority function, it possible to also download files for
+offline access, and files have not yet been downloaded to the local
+system can be pulled from the remote backend as their chunks are being
+accessed. If a chunk is available locally, reads are also much faster
+than their would be with a FUSE implementation, and since writes are
+made to the local backend first, and then being synchronized back to the
+remote using the remote push system, the same applies to the writes too.
+Furthermore, by using the migration API, it is possible to migrate the
+file system between two hosts in a highly efficient way.
+
+By combining the advantages of both approaches into a hybrid one, it is
+possible to bridge the gap between them, showing that memory
+synchronization technology like r3map can be used to not only
+synchronize memory regions, but other state too, including disks.
+
+Universal Database, Media and Asset Streaming
+
+Streaming Access to Remote Databases
+
+Another usecase that r3map can be used for is accessing a remote
+database locally. While using a database backend (such as the Cassandra
+backend introduced earlier) is one option of storing the chunk, this use
+case is particularly interesting for file-based databases like SQLite
+that don’t define a wire protocol. Using r3map, instead of having to
+download an entire SQLite database before being able to use it, it can
+instead be mounted with the mount API, with then fetches the necessary
+offsets from a remote backend storing the database as their are being
+accessed. For most queries, not all data in a database is required,
+especially if indexes are used; this makes it possible to potentially
+reduce the amount of transfered data by streaming in only what is
+required.
+
+Since reads are cached using the local backend with the managed mount
+API, only the first read should potentially have a performance impact
+(if it has not been pulled first by the background pull system);
+similarly so, since writes are written to the local backend first, and
+then asynchronously written back, the same applies to them as well.
+Moreover, if the location of i.e. indexes within the SQLite database is
+known, a pull heuristic can be specified to fetch these first to speed
+up initial queries. Thanks to the managed mount API providing a standard
+block device, no changes to SQLite are be required in order for it to
+support such streaming access; the SQLite file could simply be stored on
+a mounted file system provided by the mount’s block device.
+
+Making Arbitrary File Formats Streamable
+
+In addition to making databases streamable, r3map can also be used to
+access files in formats that usually don’t support being accessed before
+they are fully available locally possible. One such format is MP4;
+usually, if a user downloads a MP4 file, they can’t start playback
+before the file is available locally completely. This is because MP4
+typically stores metadata at the end of the file:
+
+TODO: Add graphic with MP4 metadata
+
+The reason for this being stored at the end is usually that the
+parameters required for this metadata requires encoding the video first.
+This results in a scenario where, assuming that the file is downloaded
+from the first to the last offset, the client needs to wait for the file
+to be completely accessible locally before playing it. While MP4 and
+other formats supports ways to encode such metadata in the beginning or
+once every few chunks in order to make them streamable, this is not the
+case for already existing files and comes with other tradeoffs. By using
+r3map however, the pull heuristic function can be used to immediately
+pre-fetch the metadata; the rest of the chunks can then be fetched
+either by using the background pull system and/or ad-hoc as they are
+being accessed.
+
+Similarly to the approach used to stream in remote databases, this does
+not require any changes to the media player being used, since the block
+device providing the ressource can simply be mounted as a file system
+and thus be used transparently.
+
+Streaming App and Game Assets
+
+Another streaming usecase relates to the in-place streaming of assets.
+Usually, a game needs to be fully downloaded before it is playable; for
+many modern AAA titles, this can be hundreds of gigabytes of data,
+resulting in very long download times even on fast internet connections.
+Usually however, not all assets need to be downloaded before the game
+can be played; only some of them are, i.e. the launcher, UI libraries or
+the first level’s assets. While theoritically it would be possible to
+design a game engine in such a way that assets are only fetched from a
+remote as they are being required, this would require extensive changes
+to most engine’s architecture, and also be hard to port back to existing
+titles; furthermore, current transparent solutions that can fetch in
+assets (i.e. mounting a remote NBD drive or FUSE) are unlikely to be
+viable solutions considering their high sensitivity to network latency
+and the high network throughput required for streaming in these assets.
+
+By using the managed mount API to stream in the assets, the overhead of
+such a solution can be reduced, without requiring changes to the game or
+it’s engine. By using the background pull system, reads from chunks that
+have already been pulled are almost as fast as native disk reads, and by
+analyzing the access pattern of an existing game, a pull heuristic
+function can be generated which preemptively pulls the game assets that
+are loaded first, keeping latency spikes as low as possible. By using
+the callbacks for monitoring the pull progress provided by the managed
+mounts, the game can also be paused until a certain local chunk
+availability is reached in order to prevent latency spikes from missing
+assets that would need to be fetched directly from the remote, while
+still allowing for faster startup times.
+
+This concept is not limited to games however, and could also be applied
+to launching any application. For many systems, completely scanning a
+binary or script into memory isn’t required for it to start execution;
+similarly to the situation of game engines, adding streaming support
+would require changes to the interpreters or VMs, since they don’t
+provide a streaming API out of the box aside from being able to read
+files from the filesystem. With the managed mount API, this existing
+interface can be reused to add streaming support to these systems by
+simply pointing them to a filesystem provided by the mount’s block
+device, or, if the interpreter/VM supports it, mmaping the block device
+directly and executing the resulting memory region.
 
 [1] T. kernel development community, “Quick start.”
 https://www.kernel.org/doc/html/next/rust/quick-start.html, 2023.
@@ -3840,3 +4177,14 @@ performance and stability.” https://frpc.io/introduction, 2023.
 [51] S. Shivansh Vij, “Polyglot: A high-performance serialization
 framework used for encoding and decoding arbitrary data structures
 across languages.” https://github.com/loopholelabs/polyglot, 2023.
+
+[52] F. Pojtinger, “Ram-dl: A tool to download more RAM (yes,
+seriously!).” https://github.com/pojntfx/ram-dl, 2023.
+
+[53] F. Pojtinger, “Tapisk: Expose a tape drive as a block device.”
+https://github.com/pojntfx/tapisk, 2023.
+
+[54] LTO Program, “The LTO program releases specifications for upcoming
+generation 9.”
+https://www.lto.org/2020/09/the-lto-program-releases-specifications-for-upcoming-generation-9/,
+2020.

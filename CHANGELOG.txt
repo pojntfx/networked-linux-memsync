@@ -1,3 +1,9 @@
+commit cda15107126121426d217e9124187aeaf9970a52
+Author: Felicitas Pojtinger <felicitas@pojtinger.com>
+Date:   Sun Jul 23 23:23:59 2023 +0200
+
+    feat: Add use case sections for `ram-dl`, `tapisk`, cloud storage clients and universal asset streaming
+
 commit 3e85e632ab756a5c5f0ca816c133368cd472347c
 Author: Felicitas Pojtinger <felicitas@pojtinger.com>
 Date:   Sun Jul 23 01:31:27 2023 +0200

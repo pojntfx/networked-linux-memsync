@@ -2837,6 +2837,8 @@ other boilerplate</li>
 <h4 data-number="1.6.6.2"><span class="header-section-number">1.6.6.2</span> Mapping Tape Into Memory
 With <code>tapisk</code></h4>
 <ul>
+<li>Overview
+<ul>
 <li>tapisk is an interesting usecase because of how close it is to STFS,
 which provided the inspiration for the FUSE-based approach</li>
 <li>Very high read/write backend latency (multiple seconds, up to 90s,
@@ -2850,21 +2852,14 @@ mounts</li>
 can be asynchronous/concurrent</li>
 <li>Writes go to fast (“local”) backend first, syncer then handles in
 both directions</li>
-<li>Chunking works on tape drive records and blocks</li>
 <li>Only one concurrent reader/writer makes sense</li>
 <li>Syncing intervals to/from can maybe be minutes or more to make it
 more efficient (since long, connected write intervals prevent having to
 seek to a different position on disk)</li>
-<li>Tape backends can also be used to access large amounts of linear
-data (terrabytes) from a tape as though it were in memory</li>
-<li>Makes it possible to access even large datasets or backups in a way
-that is comfortable</li>
-<li>If a file system (e.g. EXT4) is written to the tape, the tape can be
-mounted as a random-access device</li>
-<li>Tape-specific backend is implemented as the
-<code>backend.Backend</code> interface from go-nbd</li>
-<li>Backend can be re-used outside of tapisk, too (e.g. as a
-<code>ram-dl</code> backend)</li>
+</ul></li>
+<li>Implementation
+<ul>
+<li>Chunking works on tape drive records and blocks</li>
 <li><code>bbolt</code> DB is used as an index</li>
 <li>Index maps simulated offsets to real tape records (code snippet from
 https://github.com/pojntfx/tapisk/blob/main/pkg/index/bbolt.go#L43-L68)</li>
@@ -2884,17 +2879,27 @@ https://github.com/pojntfx/tapisk/blob/main/pkg/mtio/tape.go#L57-L72)</li>
 stored in the index, and the offset is written to the tape (code snippet
 from
 https://github.com/pojntfx/tapisk/blob/main/pkg/backend/tape.go#L87-L119)</li>
-<li>This essentially makes the tape a chunked, reusable
-<code>ReadWriterAt</code>, in the same way as the directory backend</li>
-<li>By using a RPC backend, a remote tape can be accessed in the same
-way, making it possible to map e.g. a remote library’s tape robot to
-your local memory</li>
+</ul></li>
+<li>Evaluation
+<ul>
 <li><code>tapisk</code> is a unique usecase that shows the versitility
 of the approach chosen and how flexible it is</li>
 <li>E.g. the chunking system didn’t have to be reimplemented (like with
 STFS) - we could just use the managed mount API directly without
 changes</li>
+<li>This essentially makes the tape a chunked, reusable
+<code>ReadWriterAt</code>, in the same way as the directory backend</li>
+<li>By using a RPC backend, a remote tape can be accessed in the same
+way, making it possible to map e.g. a remote library’s tape robot to
+your local memory</li>
+<li>Tape backends can also be used to access large amounts of linear
+data (terrabytes) from a tape as though it were in memory</li>
+<li>Makes it possible to access even large datasets or backups in a way
+that is comfortable and known to developers, compared to other tooling
+like <code>tar</code></li>
 <li>Can actually be a real usecase to replace LTFS</li>
+<li>If a file system (e.g. EXT4) is written to the tape, the tape can be
+mounted as a filesystem, too</li>
 <li>LTFS is a kernel module filesystem for tape drives that makes them a
 file system the same way as STFS</li>
 <li>But is its own filesystem, while tapisk allows using any existing
@@ -2904,17 +2909,21 @@ mapping, too</li>
 <li>Tapisk again shows how minimal the overhead of r3map is: While LTFS
 is 10s of thousands of SLOC, tapisk achieves a similar feature set in
 just under 350 SLOC</li>
+</ul></li>
 </ul>
 </section>
-<section id="improving-file-storage-solutions" data-number="0.6.6.3">
-<h4 data-number="1.6.6.3"><span class="header-section-number">1.6.6.3</span> Improving File Storage
-Solutions</h4>
+<section id="improving-file-system-synchronization-solutions" data-number="0.6.6.3">
+<h4 data-number="1.6.6.3"><span class="header-section-number">1.6.6.3</span> Improving File System
+Synchronization Solutions</h4>
+<ul>
+<li>Existing Solutions
 <ul>
 <li>Another potential usecase is using r3map to create a mountable
 remote filesystem with unique properties</li>
 <li>Currently there are two choices on how these can be implemented</li>
 <li>Google Drive, Nextcloud etc. listen to file changes on a folder and
-synchronize files when they change</li>
+synchronize files when they change, similarly to the file
+synchronization approach to memory synchronization</li>
 <li>The big drawback is that everything needs to be stored locally</li>
 <li>If a lot of data is stored (e.g. terabytes), the locally available
 files would need to be manually selected</li>
@@ -2935,6 +2944,9 @@ slow</li>
 <code>inotify</code> support, missing permissions etc.)</li>
 <li>This leaves the choice between two imperfect systems, all with their
 own downsides</li>
+</ul></li>
+<li>Hybrid Approach
+<ul>
 <li>Using r3map can combine both approaches by both not having to
 download all files in advance and being able to write back changes
 asynchronously</li>
@@ -2961,11 +2973,14 @@ way and without a long downtime</li>
 and file synchronization, once again showing how the memory
 synchronization tooling can be used to solve essentially the
 synchronization of any state, including disks</li>
+</ul></li>
 </ul>
 </section>
 <section id="universal-database-media-and-asset-streaming" data-number="0.6.6.4">
 <h4 data-number="1.6.6.4"><span class="header-section-number">1.6.6.4</span> Universal Database, Media
 and Asset Streaming</h4>
+<ul>
+<li>Streaming access to remote databases
 <ul>
 <li>Another usecase is accessing a remote database locally</li>
 <li>While using a database backend is one option of storing chunks, an
@@ -2989,6 +3004,9 @@ can be specified to fetch these first to speed up initial queries</li>
 <li>SQLite itself doesn’t have to support a special interface or changes
 for this to work, since it can simply use the mount’s block device as
 it’s backend, which shows how universally the concept is usable</li>
+</ul></li>
+<li>Making arbitrary file formats streamable
+<ul>
 <li>This concept doesn’t just apply to SQLite however</li>
 <li>Other uses could for example be to make formats that are usually not
 streamable due to technical limitations</li>
@@ -3014,6 +3032,9 @@ accessed</li>
 been fully downloaded yet, or making almost any format streamable no
 matter the codec without any changes required to the video/audio player
 or the format</li>
+</ul></li>
+<li>Streaming app and game assets
+<ul>
 <li>Another use case of this in-place streaming approach could be in
 gaming</li>
 <li>Usually, all assets of a game are currently being downloaded before
@@ -3052,11 +3073,14 @@ streaming execution support to any intepreter or VM, simply by using the
 managed mount either as a filesystem to stream multiple
 binaries/scripts/libraries from, or by using the block device as a file
 or <code>mmap</code>ing it directly to fetch it</li>
+</ul></li>
 </ul>
 </section>
 <section id="universal-app-state-synchronization-and-migration" data-number="0.6.6.5">
 <h4 data-number="1.6.6.5"><span class="header-section-number">1.6.6.5</span> Universal App State
 Synchronization and Migration</h4>
+<ul>
+<li>Modelling state
 <ul>
 <li>Synchronization of app state is hard</li>
 <li>Even for hand-off scenarios a custom protocol is built most of the
@@ -3077,6 +3101,9 @@ database)</li>
 <li>If the data structures are allocated from on a <code>[]byte</code>
 from the block device, we can use the managed mount/direct
 mount/migration APIs to send/receive them or mount them</li>
+</ul></li>
+<li>Persisting state
+<ul>
 <li>This makes a few interesting usecases possible</li>
 <li>For example, one could imagine a TODO app</li>
 <li>By default, the app mounts the TODO list as a byte slice from a
@@ -3100,6 +3127,9 @@ architectures</li>
 is pointed to the NBD device, it is</li>
 <li>This would also allow storing in the entire app state in the Wasm
 remote, with no changes to the app itself</li>
+</ul></li>
+<li>Migrating app state between hosts
+<ul>
 <li>More interesting possibly than this smart mount, where the remote
 struct is completely transparent to the user, could be the migration
 usecase</li>
@@ -3121,6 +3151,9 @@ option</li>
 <li>Using a toolkit like Apache Arrow can provide a universal format for
 this memory, but many other things are possible if a layer of
 indirection is added</li>
+</ul></li>
+<li>Migrating virtual machines
+<ul>
 <li>As mentioned before, a Wasm VM’s memory could also be migrated this
 way, allowing for any Wasm app to be transfered between hosts</li>
 <li>Similarly so, the Wasm app’s binary, a mounted WASI filesystem etc.
@@ -3143,6 +3176,7 @@ of state</li>
 specific requirements for the data structures of the state other than
 them being ultimately a <code>[]byte</code>, which by definition every
 state is (def. a process level or VM level etc.)</li>
+</ul></li>
 </ul>
 </section>
 </section>

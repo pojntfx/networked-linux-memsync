@@ -291,6 +291,31 @@ Discussion</a>
 <ul>
 <li><a href="#remote-swap-with-ram-dl"><span class="toc-section-number">6.1</span> Remote Swap with
 <code>ram-dl</code></a></li>
+<li><a href="#mapping-tape-into-memory-with-tapisk"><span class="toc-section-number">6.2</span> Mapping Tape Into Memory With
+<code>tapisk</code></a>
+<ul>
+<li><a href="#overview-6"><span class="toc-section-number">6.2.1</span>
+Overview</a></li>
+<li><a href="#implementation-1"><span class="toc-section-number">6.2.2</span> Implementation</a></li>
+<li><a href="#evaluation"><span class="toc-section-number">6.2.3</span>
+Evaluation</a></li>
+</ul></li>
+<li><a href="#improving-cloud-storage-clients"><span class="toc-section-number">6.3</span> Improving Cloud Storage
+Clients</a>
+<ul>
+<li><a href="#existing-solutions"><span class="toc-section-number">6.3.1</span> Existing Solutions</a></li>
+<li><a href="#hybrid-approach"><span class="toc-section-number">6.3.2</span> Hybrid Approach</a></li>
+</ul></li>
+<li><a href="#universal-database-media-and-asset-streaming"><span class="toc-section-number">6.4</span> Universal Database, Media and
+Asset Streaming</a>
+<ul>
+<li><a href="#streaming-access-to-remote-databases"><span class="toc-section-number">6.4.1</span> Streaming Access to Remote
+Databases</a></li>
+<li><a href="#making-arbitrary-file-formats-streamable"><span class="toc-section-number">6.4.2</span> Making Arbitrary File Formats
+Streamable</a></li>
+<li><a href="#streaming-app-and-game-assets"><span class="toc-section-number">6.4.3</span> Streaming App and Game
+Assets</a></li>
+</ul></li>
 </ul></li>
 </ul>
 </div>
@@ -3535,7 +3560,316 @@ adapter functions in a very similar way as the gRPC adapter:</p>
 <p>TODO: Add discussion once we have the results</p>
 <h2 id="remote-swap-with-ram-dl"><span class="header-section-number">6.1</span> Remote Swap with
 <code>ram-dl</code></h2>
-<p>TODO: Add section on <code>ram-dl</code></p>
+<p><code>ram-dl</code><span class="citation">[52]</span> is an
+experimental tech demo built to demonstrate how r3map can be used. It
+uses the fRPC mount backend to expand local system memory, enabling a
+variety of usecases such as mounting a remote system’s RAM locally or
+easily inspecting a remote system’s memory contents.</p>
+<p>In is based on the direct mount API and uses <code>mkswap</code>,
+<code>swapon</code> and <code>swapoff</code> to enable the Kernel to
+page out to the mount’s block device:</p>
+<div class="sourceCode" id="cb86"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb86-1"><a href="#cb86-1" aria-hidden="true" tabindex="-1"></a><span class="co">// Create a swap partition on the block device</span></span>
+<span id="cb86-2"><a href="#cb86-2" aria-hidden="true" tabindex="-1"></a>exec<span class="op">.</span>Command<span class="op">(</span><span class="st">&quot;mkswap&quot;</span><span class="op">,</span> devPath<span class="op">).</span>CombinedOutput<span class="op">()</span></span>
+<span id="cb86-3"><a href="#cb86-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb86-4"><a href="#cb86-4" aria-hidden="true" tabindex="-1"></a><span class="co">// Enable paging and swapping to the block device</span></span>
+<span id="cb86-5"><a href="#cb86-5" aria-hidden="true" tabindex="-1"></a>exec<span class="op">.</span>Command<span class="op">(</span><span class="st">&quot;swapon&quot;</span><span class="op">,</span> devPath<span class="op">).</span>CombinedOutput<span class="op">()</span></span>
+<span id="cb86-6"><a href="#cb86-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb86-7"><a href="#cb86-7" aria-hidden="true" tabindex="-1"></a><span class="co">// When the mount is stopped, stop paging and swapping to the block device</span></span>
+<span id="cb86-8"><a href="#cb86-8" aria-hidden="true" tabindex="-1"></a><span class="cf">defer</span> exec<span class="op">.</span>Command<span class="op">(</span><span class="st">&quot;swapoff&quot;</span><span class="op">,</span> devPath<span class="op">).</span>CombinedOutput<span class="op">()</span></span></code></pre></div>
+<p><code>ram-dl</code> exposes two commands that achieve this. The
+first, <code>ram-ul</code> exposes RAM by exposing a memory, file or
+directory-based backend using a fRPC endpoint. <code>ram-dl</code>
+itself then connects to this endpoint, starts a direct mount and sets
+the block device up for swapping. While this system is intended mostly
+as a tech demo and, due to latency and throughput limitations, is not
+intended for critical deployments, it does show how simple using the
+r3map API can be be, as the entire project consistents of under 300
+source lines of code, most of which is argument handling and boilerplate
+around configuration.</p>
+<h2 id="mapping-tape-into-memory-with-tapisk"><span class="header-section-number">6.2</span> Mapping Tape Into Memory With
+<code>tapisk</code></h2>
+<h3 id="overview-6"><span class="header-section-number">6.2.1</span>
+Overview</h3>
+<p><code>tapisk</code><span class="citation">[53]</span> is a tool that
+exposes a tape drive as a block device. While seemingly unrelated to
+memory synchronization, it does serve as an interesting usecase due to
+the similarities to STFS (mentioned earlier in the FUSE section), which
+exposed a tape drive as a file system, and serves as an interesting
+example for how even seemingly incompatible backends for can be used to
+store and synchronize memory.</p>
+<p>Using a tape drive as such a backend is challenging, since they are
+designed for linear access and don’t support random reads, while block
+devices need support for reading and writing to arbitrary location.
+Tapes also have very high read/write latencies due to slow seek speeds,
+taking up to more than a minute depending on the offset of the tape that
+is being accessed. Due to the modularity of r3map’s managed mount API
+however, it is possible to work around these issues, and make the tape
+appear as a random-access block device.</p>
+<h3 id="implementation-1"><span class="header-section-number">6.2.2</span> Implementation</h3>
+<p>To achieve this, the background writes and reads provided by the
+managed mount API can be used. Using these, a faster storage backend
+(i.e. the disk) can be used as a caching layer, although the concurrent
+push/pull system can’t be used due to tapes only supporting synchronous
+read/write operations. By using the managed mount, writes are
+de-duplicated and both read and write operations can become
+asynchronous, since both happen on the fast local backend first, and the
+background sync system them handles either periodic writebacks to the
+tape for write operations or reading a chunk from the tape if it is
+missing from the cache.</p>
+<p>Since chunking works differently for tapes than for block devices,
+and tapes are append-only devices where overwriting a section prior to
+the end would result in all following data being overwritten, too, an
+index must be used to simulate the offsets of the block device locations
+to their physical location on the tape, which the <code>bbolt</code>
+database is used for. In order to make non-aligned reads and writes to
+the tape possible, the existing <code>ArbitraryReadWriter</code> system
+can be used. When a chunk is then requested to be read,
+<code>tapisk</code> looks up the physical tape record for the requested
+offset, and uses the accelerated <code>MTSEEK</code> ioctl to seek to
+the matching record on the tape, after which the chunk is read from the
+tape into memory:</p>
+<div class="sourceCode" id="cb87"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb87-1"><a href="#cb87-1" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> <span class="op">(</span>b <span class="op">*</span>TapeBackend<span class="op">)</span> ReadAt<span class="op">(</span>p <span class="op">[]</span><span class="dt">byte</span><span class="op">,</span> off <span class="dt">int64</span><span class="op">)</span> <span class="op">(</span>n <span class="dt">int</span><span class="op">,</span> err <span class="dt">error</span><span class="op">)</span> <span class="op">{</span></span>
+<span id="cb87-2"><a href="#cb87-2" aria-hidden="true" tabindex="-1"></a>    <span class="co">// Calculating the block for the offset</span></span>
+<span id="cb87-3"><a href="#cb87-3" aria-hidden="true" tabindex="-1"></a>    block <span class="op">:=</span> <span class="dt">uint64</span><span class="op">(</span>off<span class="op">)</span> <span class="op">/</span> b<span class="op">.</span>blocksize</span>
+<span id="cb87-4"><a href="#cb87-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb87-5"><a href="#cb87-5" aria-hidden="true" tabindex="-1"></a>    <span class="co">// Getting the physical record on the tape from the index</span></span>
+<span id="cb87-6"><a href="#cb87-6" aria-hidden="true" tabindex="-1"></a>    location<span class="op">,</span> err <span class="op">:=</span> b<span class="op">.</span>index<span class="op">.</span>GetLocation<span class="op">(</span>block<span class="op">)</span></span>
+<span id="cb87-7"><a href="#cb87-7" aria-hidden="true" tabindex="-1"></a>    <span class="co">// ...</span></span>
+<span id="cb87-8"><a href="#cb87-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb87-9"><a href="#cb87-9" aria-hidden="true" tabindex="-1"></a>    <span class="co">// Creating the seek operation</span></span>
+<span id="cb87-10"><a href="#cb87-10" aria-hidden="true" tabindex="-1"></a>    mtop <span class="op">:=</span> <span class="op">&amp;</span>ioctl<span class="op">.</span>Mtop<span class="op">{}</span></span>
+<span id="cb87-11"><a href="#cb87-11" aria-hidden="true" tabindex="-1"></a>    mtop<span class="op">.</span>SetOp<span class="op">(</span>ioctl<span class="op">.</span>MTSEEK<span class="op">)</span></span>
+<span id="cb87-12"><a href="#cb87-12" aria-hidden="true" tabindex="-1"></a>    mtop<span class="op">.</span>SetCount<span class="op">(</span>location<span class="op">)</span></span>
+<span id="cb87-13"><a href="#cb87-13" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb87-14"><a href="#cb87-14" aria-hidden="true" tabindex="-1"></a>    <span class="co">// Seeking to the record</span></span>
+<span id="cb87-15"><a href="#cb87-15" aria-hidden="true" tabindex="-1"></a>    syscall<span class="op">.</span>Syscall<span class="op">(</span></span>
+<span id="cb87-16"><a href="#cb87-16" aria-hidden="true" tabindex="-1"></a>        syscall<span class="op">.</span>SYS_IOCTL<span class="op">,</span></span>
+<span id="cb87-17"><a href="#cb87-17" aria-hidden="true" tabindex="-1"></a>        drive<span class="op">.</span>Fd<span class="op">(),</span></span>
+<span id="cb87-18"><a href="#cb87-18" aria-hidden="true" tabindex="-1"></a>        ioctl<span class="op">.</span>MTIOCTOP<span class="op">,</span></span>
+<span id="cb87-19"><a href="#cb87-19" aria-hidden="true" tabindex="-1"></a>        <span class="dt">uintptr</span><span class="op">(</span>unsafe<span class="op">.</span>Pointer<span class="op">(</span>mtop<span class="op">)),</span></span>
+<span id="cb87-20"><a href="#cb87-20" aria-hidden="true" tabindex="-1"></a>    <span class="op">)</span></span>
+<span id="cb87-21"><a href="#cb87-21" aria-hidden="true" tabindex="-1"></a>    <span class="co">// ...</span></span>
+<span id="cb87-22"><a href="#cb87-22" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb87-23"><a href="#cb87-23" aria-hidden="true" tabindex="-1"></a>    <span class="co">// Reading the chunk from the tape into memory</span></span>
+<span id="cb87-24"><a href="#cb87-24" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> b<span class="op">.</span>drive<span class="op">.</span>Read<span class="op">(</span>p<span class="op">)</span></span>
+<span id="cb87-25"><a href="#cb87-25" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<p>Conversely, in order to write a chunk to the tape,
+<code>tapisk</code> seeks to the end of the tape (unless the last
+operation was a write already, in which case the tape must be at the end
+already). Once the seek has completed, the current physical record is
+requested from the tape drive, and stored as the record for the block
+that is to be written in the index, after which the chunk is written to
+the tape. This effectively makes it possible to overwrite existing
+chunks despite the tape being append-only, since subsequent writes to
+the same chunk result result in the changes being written to the end of
+the file with the index referencing the new physical location, but does
+come at the cost of requiring defragmentation to clean up prior
+iterations of chunks:</p>
+<div class="sourceCode" id="cb88"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb88-1"><a href="#cb88-1" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> <span class="op">(</span>b <span class="op">*</span>TapeBackend<span class="op">)</span> WriteAt<span class="op">(</span>p <span class="op">[]</span><span class="dt">byte</span><span class="op">,</span> off <span class="dt">int64</span><span class="op">)</span> <span class="op">(</span>n <span class="dt">int</span><span class="op">,</span> err <span class="dt">error</span><span class="op">)</span> <span class="op">{</span></span>
+<span id="cb88-2"><a href="#cb88-2" aria-hidden="true" tabindex="-1"></a>    <span class="co">// Calculating the block for the offset</span></span>
+<span id="cb88-3"><a href="#cb88-3" aria-hidden="true" tabindex="-1"></a>    block <span class="op">:=</span> <span class="dt">uint64</span><span class="op">(</span>off<span class="op">)</span> <span class="op">/</span> b<span class="op">.</span>blocksize</span>
+<span id="cb88-4"><a href="#cb88-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb88-5"><a href="#cb88-5" aria-hidden="true" tabindex="-1"></a>    <span class="co">// Seek to the end of the tape, unless the last operation was a write</span></span>
+<span id="cb88-6"><a href="#cb88-6" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> b<span class="op">.</span>lastOpWasRead <span class="op">{</span></span>
+<span id="cb88-7"><a href="#cb88-7" aria-hidden="true" tabindex="-1"></a>        mtop <span class="op">:=</span> <span class="op">&amp;</span>ioctl<span class="op">.</span>Mtop<span class="op">{}</span></span>
+<span id="cb88-8"><a href="#cb88-8" aria-hidden="true" tabindex="-1"></a>        mtop<span class="op">.</span>SetOp<span class="op">(</span>ioctl<span class="op">.</span>MTEOM<span class="op">)</span></span>
+<span id="cb88-9"><a href="#cb88-9" aria-hidden="true" tabindex="-1"></a>        mtop<span class="op">.</span>SetCount<span class="op">(</span><span class="dv">1</span><span class="op">)</span></span>
+<span id="cb88-10"><a href="#cb88-10" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb88-11"><a href="#cb88-11" aria-hidden="true" tabindex="-1"></a>        syscall<span class="op">.</span>Syscall<span class="op">(</span></span>
+<span id="cb88-12"><a href="#cb88-12" aria-hidden="true" tabindex="-1"></a>            syscall<span class="op">.</span>SYS_IOCTL<span class="op">,</span></span>
+<span id="cb88-13"><a href="#cb88-13" aria-hidden="true" tabindex="-1"></a>            drive<span class="op">.</span>Fd<span class="op">(),</span></span>
+<span id="cb88-14"><a href="#cb88-14" aria-hidden="true" tabindex="-1"></a>            ioctl<span class="op">.</span>MTIOCTOP<span class="op">,</span></span>
+<span id="cb88-15"><a href="#cb88-15" aria-hidden="true" tabindex="-1"></a>            <span class="dt">uintptr</span><span class="op">(</span>unsafe<span class="op">.</span>Pointer<span class="op">(</span>mtop<span class="op">)),</span></span>
+<span id="cb88-16"><a href="#cb88-16" aria-hidden="true" tabindex="-1"></a>        <span class="op">)</span></span>
+<span id="cb88-17"><a href="#cb88-17" aria-hidden="true" tabindex="-1"></a>        <span class="co">// ...</span></span>
+<span id="cb88-18"><a href="#cb88-18" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb88-19"><a href="#cb88-19" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb88-20"><a href="#cb88-20" aria-hidden="true" tabindex="-1"></a>    <span class="co">// Get the current physical record</span></span>
+<span id="cb88-21"><a href="#cb88-21" aria-hidden="true" tabindex="-1"></a>    curr<span class="op">,</span> err <span class="op">:=</span> b<span class="op">.</span>tell<span class="op">(</span>b<span class="op">.</span>drive<span class="op">)</span></span>
+<span id="cb88-22"><a href="#cb88-22" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb88-23"><a href="#cb88-23" aria-hidden="true" tabindex="-1"></a>    <span class="co">// Mapping the physical record to the block that is being written</span></span>
+<span id="cb88-24"><a href="#cb88-24" aria-hidden="true" tabindex="-1"></a>    b<span class="op">.</span>index<span class="op">.</span>SetLocation<span class="op">(</span>block<span class="op">,</span> curr<span class="op">)</span></span>
+<span id="cb88-25"><a href="#cb88-25" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb88-26"><a href="#cb88-26" aria-hidden="true" tabindex="-1"></a>    <span class="co">// Writing the chunk to the tape</span></span>
+<span id="cb88-27"><a href="#cb88-27" aria-hidden="true" tabindex="-1"></a>    b<span class="op">.</span>drive<span class="op">.</span>Write<span class="op">(</span>p<span class="op">)</span></span>
+<span id="cb88-28"><a href="#cb88-28" aria-hidden="true" tabindex="-1"></a>    <span class="co">// ...</span></span>
+<span id="cb88-29"><a href="#cb88-29" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<h3 id="evaluation"><span class="header-section-number">6.2.3</span>
+Evaluation</h3>
+<p><code>tapisk</code> is a unique application of r3map’s technology,
+and shows how flexible it is.By using this index, the effectively
+becomes tape a standard <code>ReadWriterAt</code> stage (and
+<code>go-nbd</code> backend) with support for aligned-reads in the same
+way as the file or directory backends, and thanks to r3map’s pipeline
+design, the regular chunking system could be reused, unlike in STFS were
+it had to be built from scratch. By re-using the universal RPC backend
+introduced earlier, which can give remote access to any
+<code>go-nbd</code> backend over a RPC library like Dudirekta, gRPC or
+fRPC, it is also possible to access a remote tape this way, i.e. to map
+a remote tape library robot’s drive to a system over the network.</p>
+<p>Being able to map a tape into memory without having to read the
+entire contents first can have a variety of usecases. Tapes can store a
+large amount of data, in the case of LTO-9, up to 18TB on a single
+tape<span class="citation">[54]</span>; being able to access such a
+large amount of data directly in memory, instead of having to work with
+tooling like <code>tar</code>, can significantly improve developer
+experience. In addition to making it much easier to access tape drives,
+<code>tapisk</code> can also serve as a replacement for LTFS. LTFS is a
+custom file system implemented as a kernel module, which allows for
+mounting a tape. If a <code>tapisk</code>-provided block device is
+formatted with a filesystem such as EXT4 or Btrfs, it can also be
+mounted locally, allowing the tape to be mounted as a file system as
+well, with the added benefit of also being able to support any
+filesystem that supports block devices as their backend. Compared to the
+LTFS approach, this results in a much more maintainable project; while
+LTFS is tens of thousands of kernel-level source lines of code,
+<code>tapisk</code> achieves effectively the same usecase with just
+under 350.</p>
+<h2 id="improving-cloud-storage-clients"><span class="header-section-number">6.3</span> Improving Cloud Storage
+Clients</h2>
+<h3 id="existing-solutions"><span class="header-section-number">6.3.1</span> Existing Solutions</h3>
+<p>r3map can also be used to create mountable remote filesystems with
+unique advantages over existing solutions. Currently, there are two main
+approaches to implementing cloud storage clients. Dropbox and Nextcloud
+are examples of a system that listens to file changes on a folder and
+synchronizes files as changes are detected, similarly to the file-based
+memory region synchronization approach discussed earlier. The big
+drawback of this approach is that everything that should be available
+needs to be stored locally; if a lot of data is stored in the cloud
+drive, it is common to only choose to synchronize a certain set of data
+to the local host, as there is no way to dynamically download files as
+they are being accessed. Read and write operations on such systems are
+however very efficient, since the system’s file system is used and any
+changes are written to/from this file system asynchronously by the
+synchronization client. This approach also makes offline availability
+easy, as files that have been synchronized to the local system stay
+available even if network connectivity has been lost.</p>
+<p>The other currently used option is to use a FUSE,
+i.e. <code>s3fs</code><span class="citation">[23]</span>, which allows
+for files to be fetched on demand, but comes with a heavy performance
+penalty. This is the case because most implementations, if a write or
+read request is sent from the kernel to the FUSE, remote writes or reads
+happen directly over the network, which makes this approach very
+sensitive to networks with a high RTT. Offline usage is also usually not
+possible with a FUSE-based approach, and features such as
+<code>inotify</code>, symlinks etc. are hard to implement, leaving two
+imperfect solutions to implementing a cloud storage client.</p>
+<h3 id="hybrid-approach"><span class="header-section-number">6.3.2</span> Hybrid Approach</h3>
+<p>Using r3map makes it possible to get the benefits of both approaches
+by not having to download any files in advance and also being able to
+write back changes asynchronously, as well as being able to use almost
+any existing file system with it’s complete feature set. Files can also
+be downloaded preemptively to allow for offline access, just like with
+the approach that listens to file changes in a directory.</p>
+<p>This is possible by once again using the managed mount API. The block
+device is formatted using a valid filesystem, i.e. EXT4, and then
+mounted on the host. By configuring the background pull system’s workers
+and pull priority function, it possible to also download files for
+offline access, and files have not yet been downloaded to the local
+system can be pulled from the remote backend as their chunks are being
+accessed. If a chunk is available locally, reads are also much faster
+than their would be with a FUSE implementation, and since writes are
+made to the local backend first, and then being synchronized back to the
+remote using the remote push system, the same applies to the writes too.
+Furthermore, by using the migration API, it is possible to migrate the
+file system between two hosts in a highly efficient way.</p>
+<p>By combining the advantages of both approaches into a hybrid one, it
+is possible to bridge the gap between them, showing that memory
+synchronization technology like r3map can be used to not only
+synchronize memory regions, but other state too, including disks.</p>
+<h2 id="universal-database-media-and-asset-streaming"><span class="header-section-number">6.4</span> Universal Database, Media and
+Asset Streaming</h2>
+<h3 id="streaming-access-to-remote-databases"><span class="header-section-number">6.4.1</span> Streaming Access to Remote
+Databases</h3>
+<p>Another usecase that r3map can be used for is accessing a remote
+database locally. While using a database backend (such as the Cassandra
+backend introduced earlier) is one option of storing the chunk, this use
+case is particularly interesting for file-based databases like SQLite
+that don’t define a wire protocol. Using r3map, instead of having to
+download an entire SQLite database before being able to use it, it can
+instead be mounted with the mount API, with then fetches the necessary
+offsets from a remote backend storing the database as their are being
+accessed. For most queries, not all data in a database is required,
+especially if indexes are used; this makes it possible to potentially
+reduce the amount of transfered data by streaming in only what is
+required.</p>
+<p>Since reads are cached using the local backend with the managed mount
+API, only the first read should potentially have a performance impact
+(if it has not been pulled first by the background pull system);
+similarly so, since writes are written to the local backend first, and
+then asynchronously written back, the same applies to them as well.
+Moreover, if the location of i.e. indexes within the SQLite database is
+known, a pull heuristic can be specified to fetch these first to speed
+up initial queries. Thanks to the managed mount API providing a standard
+block device, no changes to SQLite are be required in order for it to
+support such streaming access; the SQLite file could simply be stored on
+a mounted file system provided by the mount’s block device.</p>
+<h3 id="making-arbitrary-file-formats-streamable"><span class="header-section-number">6.4.2</span> Making Arbitrary File Formats
+Streamable</h3>
+<p>In addition to making databases streamable, r3map can also be used to
+access files in formats that usually don’t support being accessed before
+they are fully available locally possible. One such format is MP4;
+usually, if a user downloads a MP4 file, they can’t start playback
+before the file is available locally completely. This is because MP4
+typically stores metadata at the end of the file:</p>
+<p>TODO: Add graphic with MP4 metadata</p>
+<p>The reason for this being stored at the end is usually that the
+parameters required for this metadata requires encoding the video first.
+This results in a scenario where, assuming that the file is downloaded
+from the first to the last offset, the client needs to wait for the file
+to be completely accessible locally before playing it. While MP4 and
+other formats supports ways to encode such metadata in the beginning or
+once every few chunks in order to make them streamable, this is not the
+case for already existing files and comes with other tradeoffs. By using
+r3map however, the pull heuristic function can be used to immediately
+pre-fetch the metadata; the rest of the chunks can then be fetched
+either by using the background pull system and/or ad-hoc as they are
+being accessed.</p>
+<p>Similarly to the approach used to stream in remote databases, this
+does not require any changes to the media player being used, since the
+block device providing the ressource can simply be mounted as a file
+system and thus be used transparently.</p>
+<h3 id="streaming-app-and-game-assets"><span class="header-section-number">6.4.3</span> Streaming App and Game
+Assets</h3>
+<p>Another streaming usecase relates to the in-place streaming of
+assets. Usually, a game needs to be fully downloaded before it is
+playable; for many modern AAA titles, this can be hundreds of gigabytes
+of data, resulting in very long download times even on fast internet
+connections. Usually however, not all assets need to be downloaded
+before the game can be played; only some of them are, i.e. the launcher,
+UI libraries or the first level’s assets. While theoritically it would
+be possible to design a game engine in such a way that assets are only
+fetched from a remote as they are being required, this would require
+extensive changes to most engine’s architecture, and also be hard to
+port back to existing titles; furthermore, current transparent solutions
+that can fetch in assets (i.e. mounting a remote NBD drive or FUSE) are
+unlikely to be viable solutions considering their high sensitivity to
+network latency and the high network throughput required for streaming
+in these assets.</p>
+<p>By using the managed mount API to stream in the assets, the overhead
+of such a solution can be reduced, without requiring changes to the game
+or it’s engine. By using the background pull system, reads from chunks
+that have already been pulled are almost as fast as native disk reads,
+and by analyzing the access pattern of an existing game, a pull
+heuristic function can be generated which preemptively pulls the game
+assets that are loaded first, keeping latency spikes as low as possible.
+By using the callbacks for monitoring the pull progress provided by the
+managed mounts, the game can also be paused until a certain local chunk
+availability is reached in order to prevent latency spikes from missing
+assets that would need to be fetched directly from the remote, while
+still allowing for faster startup times.</p>
+<p>This concept is not limited to games however, and could also be
+applied to launching any application. For many systems, completely
+scanning a binary or script into memory isn’t required for it to start
+execution; similarly to the situation of game engines, adding streaming
+support would require changes to the interpreters or VMs, since they
+don’t provide a streaming API out of the box aside from being able to
+read files from the filesystem. With the managed mount API, this
+existing interface can be reused to add streaming support to these
+systems by simply pointing them to a filesystem provided by the mount’s
+block device, or, if the interpreter/VM supports it,
+<code>mmap</code>ing the block device directly and executing the
+resulting memory region.</p>
 <div id="refs" class="references csl-bib-body">
 <div id="ref-linux2023docs" class="csl-entry">
 <div class="csl-left-margin">[1] </div><div class="csl-right-inline">T.
@@ -3810,6 +4144,21 @@ and stability.”</span> <a href="https://frpc.io/introduction" class="uri">http
 Shivansh Vij, <span>“Polyglot: A high-performance serialization
 framework used for encoding and decoding arbitrary data structures
 across languages.”</span> <a href="https://github.com/loopholelabs/polyglot" class="uri">https://github.com/loopholelabs/polyglot</a>, 2023.</div>
+</div>
+<div id="ref-pojtinger2023ramdl" class="csl-entry">
+<div class="csl-left-margin">[52] </div><div class="csl-right-inline">F.
+Pojtinger, <span>“Ram-dl: A tool to download more RAM (yes,
+seriously!).”</span> <a href="https://github.com/pojntfx/ram-dl" class="uri">https://github.com/pojntfx/ram-dl</a>, 2023.</div>
+</div>
+<div id="ref-pojtinger2023tapisk" class="csl-entry">
+<div class="csl-left-margin">[53] </div><div class="csl-right-inline">F.
+Pojtinger, <span>“Tapisk: Expose a tape drive as a block device.”</span>
+<a href="https://github.com/pojntfx/tapisk" class="uri">https://github.com/pojntfx/tapisk</a>, 2023.</div>
+</div>
+<div id="ref-lto2020gen9" class="csl-entry">
+<div class="csl-left-margin">[54] </div><div class="csl-right-inline">LTO Program, <span>“The LTO program releases
+specifications for upcoming generation 9.”</span> <a href="https://www.lto.org/2020/09/the-lto-program-releases-specifications-for-upcoming-generation-9/" class="uri">https://www.lto.org/2020/09/the-lto-program-releases-specifications-for-upcoming-generation-9/</a>,
+2020.</div>
 </div>
 </div>
 </div>
