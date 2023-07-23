@@ -1258,11 +1258,6 @@ csl: static/ieee.csl
   - If the TODO list is modified by changing it in memory, these changes are automatically being written to the local backend
   - The asynchronous push algorithm can then take these changes and sync them up to the remote backend when required
   - If the local backend is persistent, such a setup can even survive network outages
-  - Locking is not handled by this, only one user is supported
-  - The in-memory representation would also need to be universal
-  - This is not the case with Go and for different CPU architectures
-  - But if e.g. Go is compiled to Wasm, and the Wasm VM's linear memory is pointed to the NBD device, it is
-  - This would also allow storing in the entire app state in the Wasm remote, with no changes to the app itself
 - Migrating app state between hosts
   - More interesting possibly than this smart mount, where the remote struct is completely transparent to the user, could be the migration usecase
   - If a user has the TODO app running on a phone, but wants to continue writing on their desktop, they can migrate the app's state with r3map
@@ -1271,8 +1266,13 @@ csl: static/ieee.csl
   - Since this would be a LAN scenario, the migration would be very fast and allow for interesting hand-off usecases
   - The migration API also provides hooks and the protocol that would ensure that the app would be closed on the phone before it would be resumed on the desktop, making state corruption during the migration much harder than with a third-party that changes are synced (where the remote state may not be up-to-date yet as it is resumed)
   - Migrating an app's TODO list or any internal data structure is one option
-  - Using a toolkit like Apache Arrow can provide a universal format for this memory, but many other things are possible if a layer of indirection is added
 - Migrating virtual machines
+  - Locking is not handled by this, only one user is supported
+  - The in-memory representation would also need to be universal
+  - This is not the case with Go and for different CPU architectures
+  - Using a toolkit like Apache Arrow can provide a universal format for this memory, but many other things are possible if a layer of indirection is added
+  - But if e.g. Go is compiled to Wasm, and the Wasm VM's linear memory is pointed to the NBD device, it is
+  - This would also allow storing in the entire app state in the Wasm remote, with no changes to the app itself
   - As mentioned before, a Wasm VM's memory could also be migrated this way, allowing for any Wasm app to be transfered between hosts
   - Similarly so, the Wasm app's binary, a mounted WASI filesystem etc. could all be synchronized this way, too
   - Due to the flexible nature of remap, it is possible to bring the semantics of VM live migration - moving running VMs between hosts - to anything that has state
