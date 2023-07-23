@@ -1942,7 +1942,7 @@ interface is rather minimal[41]:
     }
 
 The STFS project[42] has shown that by using this abstraction layer,
-seemingly incompatible, non-linear backends can still be mapped to a
+seemingly incompatible, non-linear backends can still be maGpped to a
 file system. The project is backend by a tape drive, which is inherently
 append-only and optimized for linear access. Thanks to the inclusion of
 an on-disk index and various optimization methods, the resulting file
@@ -4056,7 +4056,32 @@ structures this way; locking is not handled by r3map and would need to
 be done using a higher-level protocol; moreover, this assumes that the
 in-memory representation of the data structure is consistent across all,
 something which is not necessarily the case with programming languages
-such as Go with multiple processor architectures being involved.
+such as Go with multiple processor architectures being involved. While
+projects such as Apache Arrow[55] allow for application state to
+represented in a language- and CPU architecture-independent way, this
+comes with some of the same restrictions on which state can be
+synchronized as with other solutions such as Firebase.
+
+In order to keep the possibility of migrating arbitrary state, but also
+allow for cross-architecture compatibility, VMs can be used. Keeping
+with the TODO app example, if the resulting app is compiled to Wasm,
+instead of having to allocate all memory that is to be synchronized from
+the r3map-provided mmaped byte slice, it is possible to instead simply
+synchronize the Wasm VM’s linear memory as a whole, which also allows
+storing the entire app’s state on a remote as well as migrating an
+entire app. Similarly so, the app’s binary, mounted WASI filesystems
+etc. could all be synchronized this way, too. Thanks to the preemptive
+pull implementation outlined earlier, the VM startup and device
+initialization can also be parallized to allow for shorter latencies
+while resuming the VM.
+
+This capability is not limited to Wasm VMs however; rather, it is
+possible to add these features to almost any hypervisor or virtual
+machine that supports mapping a application’s/virtual machine’s state to
+a block device or memory region, essentially adding the capability to
+suspend/resume and migrate any application in the same way that is
+possible today over WAN, without requiring any or only minimal changes
+to the applications themselves.
 
 [1] T. kernel development community, “Quick start.”
 https://www.kernel.org/doc/html/next/rust/quick-start.html, 2023.
@@ -4261,3 +4286,6 @@ https://github.com/pojntfx/tapisk, 2023.
 generation 9.”
 https://www.lto.org/2020/09/the-lto-program-releases-specifications-for-upcoming-generation-9/,
 2020.
+
+[55] T. A. S. Foundation, “Apache arrow website.” 2023.Available:
+https://arrow.apache.org/

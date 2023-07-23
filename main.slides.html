@@ -1982,9 +1982,9 @@ the required interface is rather minimal<span class="citation">[41]</span>:</p>
 <span id="cb26-15"><a href="#cb26-15" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
 <p>The STFS project<span class="citation">[42]</span> has shown that by
 using this abstraction layer, seemingly incompatible, non-linear
-backends can still be mapped to a file system. The project is backend by
-a tape drive, which is inherently append-only and optimized for linear
-access. Thanks to the inclusion of an on-disk index and various
+backends can still be maGpped to a file system. The project is backend
+by a tape drive, which is inherently append-only and optimized for
+linear access. Thanks to the inclusion of an on-disk index and various
 optimization methods, the resulting file system was still performant
 enough for standard use, while also supporting most of the features
 required by the average user such as symlinks, file updates and
@@ -3941,7 +3941,31 @@ structures this way; locking is not handled by r3map and would need to
 be done using a higher-level protocol; moreover, this assumes that the
 in-memory representation of the data structure is consistent across all,
 something which is not necessarily the case with programming languages
-such as Go with multiple processor architectures being involved.</p>
+such as Go with multiple processor architectures being involved. While
+projects such as Apache Arrow<span class="citation">[55]</span> allow
+for application state to represented in a language- and CPU
+architecture-independent way, this comes with some of the same
+restrictions on which state can be synchronized as with other solutions
+such as Firebase.</p>
+<p>In order to keep the possibility of migrating arbitrary state, but
+also allow for cross-architecture compatibility, VMs can be used.
+Keeping with the TODO app example, if the resulting app is compiled to
+Wasm, instead of having to allocate all memory that is to be
+synchronized from the r3map-provided <code>mmap</code>ed byte slice, it
+is possible to instead simply synchronize the Wasm VM’s linear memory as
+a whole, which also allows storing the entire app’s state on a remote as
+well as migrating an entire app. Similarly so, the app’s binary, mounted
+WASI filesystems etc. could all be synchronized this way, too. Thanks to
+the preemptive pull implementation outlined earlier, the VM startup and
+device initialization can also be parallized to allow for shorter
+latencies while resuming the VM.</p>
+<p>This capability is not limited to Wasm VMs however; rather, it is
+possible to add these features to almost any hypervisor or virtual
+machine that supports mapping a application’s/virtual machine’s state to
+a block device or memory region, essentially adding the capability to
+suspend/resume and migrate any application in the same way that is
+possible today over WAN, without requiring any or only minimal changes
+to the applications themselves.</p>
 <div id="refs" class="references csl-bib-body">
 <div id="ref-linux2023docs" class="csl-entry">
 <div class="csl-left-margin">[1] </div><div class="csl-right-inline">T.
@@ -4231,6 +4255,11 @@ Pojtinger, <span>“Tapisk: Expose a tape drive as a block device.”</span>
 <div class="csl-left-margin">[54] </div><div class="csl-right-inline">LTO Program, <span>“The LTO program releases
 specifications for upcoming generation 9.”</span> <a href="https://www.lto.org/2020/09/the-lto-program-releases-specifications-for-upcoming-generation-9/" class="uri">https://www.lto.org/2020/09/the-lto-program-releases-specifications-for-upcoming-generation-9/</a>,
 2020.</div>
+</div>
+<div id="ref-apache2023arrow" class="csl-entry">
+<div class="csl-left-margin">[55] </div><div class="csl-right-inline">T.
+A. S. Foundation, <span>“Apache arrow website.”</span> 2023.Available:
+<a href="https://arrow.apache.org/">https://arrow.apache.org/</a></div>
 </div>
 </div>
 </div>
