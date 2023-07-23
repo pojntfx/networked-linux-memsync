@@ -1275,16 +1275,16 @@ csl: static/ieee.csl
   - This would also allow storing in the entire app state in the Wasm remote, with no changes to the app itself
   - As mentioned before, a Wasm VM's memory could also be migrated this way, allowing for any Wasm app to be transfered between hosts
   - Similarly so, the Wasm app's binary, a mounted WASI filesystem etc. could all be synchronized this way, too
-  - Due to the flexible nature of remap, it is possible to bring the semantics of VM live migration - moving running VMs between hosts - to anything that has state
+  - Thanks to the preemptive pull mechanism, restoring e.g. a Wasm VM outside a migration would also be a very fast operation
   - r3map can also be used for actual VM migration, with any hypervisor that supports mapping a VM's memory to a block device
   - This could also be other VMs (like e.g. the JVM), a browser's JS VM, or - if the processor architectures etc. match - an entire process's memory space
   - Using the mount API, it would also be possible to bring the concept of VM snapshots to almost any app
-  - Thanks to the preemptive pull mechanism, restoring e.g. a Wasm VM outside a migration would also be a very fast operation
   - Essentially, its VM memory migration and snapshots, but for any kind of state
   - Its particularly interesting because it can do so without any specific requirements for the data structures of the state other than them being ultimately a `[]byte`, which by definition every state is (def. a process level or VM level etc.)
 
 ## Summary
 
+- Due to the flexible nature of r3map, it is possible to bring the semantics of VM live migration and snapshots to anything that has state
 - Looking back at all synchronization options and comparing ease of implementation, CPU load and network traffic between them
 - Summary of the different approaches, and how the new solutions presented might make it finally possible to use memory as the universal access format
 
