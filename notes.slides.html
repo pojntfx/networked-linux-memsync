@@ -2853,14 +2853,6 @@ are automatically being written to the local backend</li>
 them up to the remote backend when required</li>
 <li>If the local backend is persistent, such a setup can even survive
 network outages</li>
-<li>Locking is not handled by this, only one user is supported</li>
-<li>The in-memory representation would also need to be universal</li>
-<li>This is not the case with Go and for different CPU
-architectures</li>
-<li>But if e.g. Go is compiled to Wasm, and the Wasm VM’s linear memory
-is pointed to the NBD device, it is</li>
-<li>This would also allow storing in the entire app state in the Wasm
-remote, with no changes to the app itself</li>
 </ul></li>
 <li>Migrating app state between hosts
 <ul>
@@ -2882,12 +2874,20 @@ much harder than with a third-party that changes are synced (where the
 remote state may not be up-to-date yet as it is resumed)</li>
 <li>Migrating an app’s TODO list or any internal data structure is one
 option</li>
-<li>Using a toolkit like Apache Arrow can provide a universal format for
-this memory, but many other things are possible if a layer of
-indirection is added</li>
 </ul></li>
 <li>Migrating virtual machines
 <ul>
+<li>Locking is not handled by this, only one user is supported</li>
+<li>The in-memory representation would also need to be universal</li>
+<li>This is not the case with Go and for different CPU
+architectures</li>
+<li>Using a toolkit like Apache Arrow can provide a universal format for
+this memory, but many other things are possible if a layer of
+indirection is added</li>
+<li>But if e.g. Go is compiled to Wasm, and the Wasm VM’s linear memory
+is pointed to the NBD device, it is</li>
+<li>This would also allow storing in the entire app state in the Wasm
+remote, with no changes to the app itself</li>
 <li>As mentioned before, a Wasm VM’s memory could also be migrated this
 way, allowing for any Wasm app to be transfered between hosts</li>
 <li>Similarly so, the Wasm app’s binary, a mounted WASI filesystem etc.

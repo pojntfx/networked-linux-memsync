@@ -2489,13 +2489,6 @@ Universal App State Synchronization and Migration
         sync them up to the remote backend when required
     -   If the local backend is persistent, such a setup can even
         survive network outages
-    -   Locking is not handled by this, only one user is supported
-    -   The in-memory representation would also need to be universal
-    -   This is not the case with Go and for different CPU architectures
-    -   But if e.g. Go is compiled to Wasm, and the Wasm VM’s linear
-        memory is pointed to the NBD device, it is
-    -   This would also allow storing in the entire app state in the
-        Wasm remote, with no changes to the app itself
 -   Migrating app state between hosts
     -   More interesting possibly than this smart mount, where the
         remote struct is completely transparent to the user, could be
@@ -2516,10 +2509,17 @@ Universal App State Synchronization and Migration
         it is resumed)
     -   Migrating an app’s TODO list or any internal data structure is
         one option
+-   Migrating virtual machines
+    -   Locking is not handled by this, only one user is supported
+    -   The in-memory representation would also need to be universal
+    -   This is not the case with Go and for different CPU architectures
     -   Using a toolkit like Apache Arrow can provide a universal format
         for this memory, but many other things are possible if a layer
         of indirection is added
--   Migrating virtual machines
+    -   But if e.g. Go is compiled to Wasm, and the Wasm VM’s linear
+        memory is pointed to the NBD device, it is
+    -   This would also allow storing in the entire app state in the
+        Wasm remote, with no changes to the app itself
     -   As mentioned before, a Wasm VM’s memory could also be migrated
         this way, allowing for any Wasm app to be transfered between
         hosts

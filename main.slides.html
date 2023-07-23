@@ -316,6 +316,15 @@ Streamable</a></li>
 <li><a href="#streaming-app-and-game-assets"><span class="toc-section-number">6.4.3</span> Streaming App and Game
 Assets</a></li>
 </ul></li>
+<li><a href="#universal-app-state-mounts-and-migrations"><span class="toc-section-number">6.5</span> Universal App State Mounts and
+Migrations</a>
+<ul>
+<li><a href="#modelling-state"><span class="toc-section-number">6.5.1</span> Modelling State</a></li>
+<li><a href="#mounting-state"><span class="toc-section-number">6.5.2</span> Mounting State</a></li>
+<li><a href="#migrating-state"><span class="toc-section-number">6.5.3</span> Migrating State</a></li>
+<li><a href="#migrating-virtual-machines"><span class="toc-section-number">6.5.4</span> Migrating Virtual
+Machines</a></li>
+</ul></li>
 </ul></li>
 </ul>
 </div>
@@ -3870,6 +3879,69 @@ systems by simply pointing them to a filesystem provided by the mount’s
 block device, or, if the interpreter/VM supports it,
 <code>mmap</code>ing the block device directly and executing the
 resulting memory region.</p>
+<h2 id="universal-app-state-mounts-and-migrations"><span class="header-section-number">6.5</span> Universal App State Mounts and
+Migrations</h2>
+<h3 id="modelling-state"><span class="header-section-number">6.5.1</span> Modelling State</h3>
+<p>Synchronization of app state is a fairly complex problem, and even
+for simple scenarios, a custom protocol is built for simple apps. While
+it possible to real-time databases like Firebase to synchronize some
+application state, it and similar solutions to it are usually limited in
+which data structures they can store and require specific APIs to
+synchronize them. Usually, even for a simple migration of state between
+two hosts, synchronization requires state to be manually marshalled,
+sent over a network, received on a destination host, and unmarshalled.
+This requires a complex synchronization protocol, and decisions such as
+when to synchronize state and when to start pulling from the remote need
+to be made manually, resulting in a database on a third host being used
+even for simple migrations from one host to another. Almost all of these
+data structures can ultimately be represented by a byte array; by
+allocating them from a slice <code>mmap</code>ed by r3map, we can use
+the managed mount, direct mount or migration APIs to implement a
+universal way of both synchronization and migration of application
+state, without having to implement a custom protocol.</p>
+<h3 id="mounting-state"><span class="header-section-number">6.5.2</span>
+Mounting State</h3>
+<p>By allocating all structures on r3map’s provided <code>mmap</code>ed
+byte slice, many interesting usecases become possible. For example, a
+TODO app could use it as it’s backend. Once loaded, the app mounts the
+TODO list as a byte slice from a remote server using the managed mount
+API; since authentication is pluggable and i.e. a database backend like
+Cassandra with a prefix for this user provides a way to do both
+authentication and authorization, such an approach can scale fairly
+well. Using the preemptive background pull system, when the user
+connects, they can start streaming in the byte slice from the remote
+server as the app is accessing it, but also pull the majority of the
+required data first by using the pull heuristic function. If the TODO
+list is modified by changing it in the <code>mmap</code>ed memory
+region, the changes are asynchronously written back to the underlying
+block device, and thus to the local backend, where the asynchronous
+writebacks can sync them back to the remtote. If the local backend is
+persistent, i.e. file-based, such a system can even survive network
+outages.</p>
+<h3 id="migrating-state"><span class="header-section-number">6.5.3</span> Migrating State</h3>
+<p>In addition to using managed mounts to access remotely stored
+application state, migration of arbitrary app state also becomes a
+posibility. If a user has a TODO app running on a host like their
+smartphone, but wants to continue writing a task description on their
+desktop system, they can migrate the app’s state directly and without a
+third party/remote database by using r3map. For this usecase, the
+migration API can be used. In order to optimize the migration, the
+pre-copy phase can be started automatically, i.e. if the phone and
+desktop are physically close to each other or in the same network; in
+such a LAN migration case, the migration is be able to benefit from low
+latencies and high throughputs. It is also possible to integrate the
+migration API deeply with system events, i.e. by registering a service
+that migrates applications off a system before a shutdown procedure
+completes.</p>
+<h3 id="migrating-virtual-machines"><span class="header-section-number">6.5.4</span> Migrating Virtual
+Machines</h3>
+<p>It is important to note that there are a few limitations with
+synchronizing and migrating an application’s internal stateful data
+structures this way; locking is not handled by r3map and would need to
+be done using a higher-level protocol; moreover, this assumes that the
+in-memory representation of the data structure is consistent across all,
+something which is not necessarily the case with programming languages
+such as Go with multiple processor architectures being involved.</p>
 <div id="refs" class="references csl-bib-body">
 <div id="ref-linux2023docs" class="csl-entry">
 <div class="csl-left-margin">[1] </div><div class="csl-right-inline">T.
