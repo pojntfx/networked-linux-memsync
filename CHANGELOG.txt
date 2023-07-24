@@ -1,3 +1,9 @@
+commit 753ce2a04b48e4b42f127f6490544b4352e99bcb
+Author: Felicitas Pojtinger <felicitas@pojtinger.com>
+Date:   Mon Jul 24 23:25:46 2023 +0200
+
+    feat: Add simple out-of-process benchmark implementation for first chunk latency
+
 commit eb6e1035f4e666dbbc3ba26cafec62371ec6fa00
 Author: Felicitas Pojtinger <felicitas@pojtinger.com>
 Date:   Mon Jul 24 00:14:49 2023 +0200

@@ -2489,20 +2489,20 @@ Results</h2>
 <h3 data-number="1.5.1"><span class="header-section-number">1.5.1</span>
 Latency</h3>
 <ul>
-<li><p>TODO: Benchmark for first chunk latency of baseline vs. userfault
-vs. direct vs. managed</p></li>
-<li><p>TODO: Benchmark for development of first chunk latency as RTT
+<li><p>TODO: Benchmark for development of first chunk latency of
+baseline vs. userfault vs. direct vs. managed with RTT = 0 (we can’t add
+a RTT to baseline)</p></li>
+<li><p>TODO: Benchmark for development of first chunk latency of
+userfault vs. direct vs. managed as RTT increases</p></li>
+<li><p>TODO: Benchmark for development of first chunk latency of
+userfault vs. direct vs. managed as number of workers increases (always
+0 workers for direct)</p></li>
+<li><p>TODO: Benchmark for MB of pre-emptive pulls in managed as RTT
 increases</p></li>
-<li><p>TODO: Benchmark for development of first chunk latency as number
+<li><p>TODO: Benchmark for MB of pre-emptive pulls in managed as number
 of workers increases</p></li>
-<li><p>TODO: Benchmark for MB of pre-emptive pulls in managed API as RTT
-increases</p></li>
-<li><p>TODO: Benchmark for development of MB of pre-emptive pulls as RTT
-increases</p></li>
-<li><p>TODO: Benchmark for development of MB of pre-emptive pulls as
-number of workers increases</p></li>
-<li><p>TODO: Benchmark for development of MB of pre-emptive pulls as
-chunk size increases</p></li>
+<li><p>TODO: Benchmark for MB of pre-emptive pulls in managed as chunk
+size increases</p></li>
 <li><p>TODO: Benchmark for <code>udev</code> vs. polling time for
 waiting until NBD device becomes available</p></li>
 <li><p>TODO: Benchmark for first chunk latency for memory vs. file
@@ -2553,7 +2553,8 @@ Pull Heuristics</h3>
 Downtime</h3>
 <ul>
 <li>TODO: Benchmark for <code>Open</code> time for userfault vs. r3map
-(doesn’t matter if direct/mount/migration)</li>
+(doesn’t matter if direct/mount/migration - the NBD overhead counts
+here)</li>
 <li>TODO: Benchmark for minimum downtime of direct/mount (one step -
 <code>Open</code> = downtime) vs. migration (two steps -
 <code>Finalize</code> = downtime)</li>
