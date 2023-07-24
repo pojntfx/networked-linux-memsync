@@ -44,7 +44,7 @@ func main() {
 
 	beforeFirstChunk := time.Now()
 
-	if _, err := deviceFile.ReadAt(p, 0); err != nil {
+	if _, err := deviceFile.ReadAt(p, int64(*chunkSize)); err != nil {
 		panic(err)
 	}
 

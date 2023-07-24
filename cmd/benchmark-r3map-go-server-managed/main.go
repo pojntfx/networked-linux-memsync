@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -41,10 +42,6 @@ func (b *dummyBackend) WriteAt(p []byte, off int64) (int, error) {
 }
 
 func (b *dummyBackend) Size() (int64, error) {
-	if b.rtt > 0 {
-		time.Sleep(b.rtt)
-	}
-
 	return int64(b.size), nil
 }
 
@@ -57,12 +54,21 @@ func (b *dummyBackend) Sync() error {
 }
 
 func main() {
-	chunkSize := flag.Int("chunk-size", os.Getpagesize(), "Chunk size to use")
+	chunkSize := flag.Int64("chunk-size", int64(os.Getpagesize()), "Chunk size to use")
 	size := flag.Int("size", os.Getpagesize()*1024*1024, "Amount of bytes to read")
 	socket := flag.String("socket", filepath.Join(os.TempDir(), "r3map.sock"), "Socket to share the file descriptor over")
 	rtt := flag.Duration("rtt", 0, "RTT to simulate")
 
+	pullWorkers := flag.Int64("pull-workers", 512, "Pull workers to launch in the background; pass in 0 to disable preemptive pull")
+	pullFirst := flag.Bool("pull-first", false, "Whether to completely pull from the remote before opening")
+
+	pushWorkers := flag.Int64("push-workers", 512, "Push workers to launch in the background; pass in 0 to disable push")
+	pushInterval := flag.Duration("push-interval", 5*time.Minute, "Interval after which to push changed chunks to the remote")
+
 	flag.Parse()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
 	_ = os.Remove(*socket)
 
@@ -104,15 +110,34 @@ func main() {
 			}
 			defer devFile.Close()
 
-			p := make([]byte, *chunkSize)
+			remote := &dummyBackend{
+				size: *size,
+				rtt:  *rtt,
+				p:    make([]byte, *chunkSize),
+			}
 
-			mnt := mount.NewDirectPathMount(
-				&dummyBackend{
-					size: *size,
-					rtt:  *rtt,
-					p:    p,
+			local := &dummyBackend{
+				size: *size,
+				rtt:  0,
+				p:    make([]byte, *chunkSize),
+			}
+
+			mnt := mount.NewManagedPathMount(
+				ctx,
+
+				remote,
+				local,
+
+				&mount.ManagedMountOptions{
+					ChunkSize: *chunkSize,
+
+					PullWorkers: *pullWorkers,
+					PullFirst:   *pullFirst,
+
+					PushWorkers:  *pushWorkers,
+					PushInterval: *pushInterval,
 				},
-				devFile,
+				nil,
 
 				nil,
 				nil,
@@ -126,7 +151,7 @@ func main() {
 
 			beforeOpen := time.Now()
 
-			if err := mnt.Open(); err != nil {
+			if _, _, err := mnt.Open(); err != nil {
 				panic(err)
 			}
 			defer mnt.Close()
