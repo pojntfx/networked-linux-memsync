@@ -971,14 +971,13 @@ csl: static/ieee.csl
 
 ### Latency
 
-- TODO: Benchmark for first chunk latency of baseline vs. userfault vs. direct vs. managed
-- TODO: Benchmark for development of first chunk latency as RTT increases
-- TODO: Benchmark for development of first chunk latency as number of workers increases
+- TODO: Benchmark for development of first chunk latency of baseline vs. userfault vs. direct vs. managed with RTT = 0 (we can't add a RTT to baseline)
+- TODO: Benchmark for development of first chunk latency of userfault vs. direct vs. managed as RTT increases
+- TODO: Benchmark for development of first chunk latency of userfault vs. direct vs. managed as number of workers increases (always 0 workers for direct)
 
-- TODO: Benchmark for MB of pre-emptive pulls in managed API as RTT increases
-- TODO: Benchmark for development of MB of pre-emptive pulls as RTT increases
-- TODO: Benchmark for development of MB of pre-emptive pulls as number of workers increases
-- TODO: Benchmark for development of MB of pre-emptive pulls as chunk size increases
+- TODO: Benchmark for MB of pre-emptive pulls in managed as RTT increases
+- TODO: Benchmark for MB of pre-emptive pulls in managed as number of workers increases
+- TODO: Benchmark for MB of pre-emptive pulls in managed as chunk size increases
 
 - TODO: Benchmark for `udev` vs. polling time for waiting until NBD device becomes available
 
@@ -1008,7 +1007,7 @@ csl: static/ieee.csl
 
 ### Downtime
 
-- TODO: Benchmark for `Open` time for userfault vs. r3map (doesn't matter if direct/mount/migration)
+- TODO: Benchmark for `Open` time for userfault vs. r3map (doesn't matter if direct/mount/migration - the NBD overhead counts here)
 - TODO: Benchmark for minimum downtime of direct/mount (one step - `Open` = downtime) vs. migration (two steps - `Finalize` = downtime)
 
 ## Discussion
