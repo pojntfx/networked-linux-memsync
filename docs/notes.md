@@ -973,7 +973,7 @@ csl: static/ieee.csl
 
 - TODO: Benchmark for development of first chunk latency of baseline vs. userfault vs. direct vs. managed with RTT = 0 (we can't add a RTT to baseline)
 - TODO: Benchmark for development of first chunk latency of userfault vs. direct vs. managed as RTT increases
-- TODO: Benchmark for development of first chunk latency of userfault vs. direct vs. managed as number of workers increases (always 0 workers for direct)
+- TODO: Benchmark for development of first chunk latency of userfault vs. direct vs. managed with RTT=1ms,10ms,100ms and 1s as number of workers increases (always 0 workers for userfault and direct)
 
 - TODO: Benchmark for MB of pre-emptive pulls in managed as RTT increases
 - TODO: Benchmark for MB of pre-emptive pulls in managed as number of workers increases
