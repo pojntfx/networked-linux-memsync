@@ -1,3 +1,9 @@
+commit 3b2288aff4526685c13fa749c62c56c2b74cfd3b
+Author: Felicitas Pojtinger <felicitas@pojtinger.com>
+Date:   Tue Jul 25 01:29:27 2023 +0200
+
+    feat: Add code and visualization for the first chunk latency benchmark for 0 RTT
+
 commit 60d474d2e205054e7f5830acda0e0da70ecd7713
 Author: Felicitas Pojtinger <felicitas@pojtinger.com>
 Date:   Mon Jul 24 23:51:32 2023 +0200
