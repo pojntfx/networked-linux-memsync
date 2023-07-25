@@ -998,7 +998,7 @@ csl: static/ieee.csl
 
 ### Downtime
 
-- TODO: Benchmark for `Open` time for userfault vs. r3map (doesn't matter if direct/mount/migration - the NBD overhead counts here)
+- TODO: Benchmark for `Open` time for userfault vs. r3map (doesn't matter if direct/mount/migration - the NBD overhead counts here. But be very careful about how much of `userfaultfd` is just `mmap`ing - maybe fix that first (noreserve etc.))
 - TODO: Benchmark for minimum downtime of direct/mount (one step - `Open` = downtime) vs. migration (two steps - `Finalize` = downtime)
 
 ## Discussion
