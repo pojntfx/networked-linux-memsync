@@ -6,16 +6,14 @@ import (
 	"os"
 	"time"
 
-	"github.com/pojntfx/go-nbd/pkg/backend"
-	lbackend "github.com/pojntfx/r3map/pkg/backend"
-	"github.com/pojntfx/r3map/pkg/chunks"
 	"github.com/pojntfx/r3map/pkg/mount"
 	"github.com/pojntfx/r3map/pkg/utils"
 )
 
 type dummyBackend struct {
-	rtt     time.Duration
-	backend backend.Backend
+	size int
+	rtt  time.Duration
+	p    []byte
 }
 
 func (b *dummyBackend) ReadAt(p []byte, off int64) (int, error) {
@@ -23,7 +21,9 @@ func (b *dummyBackend) ReadAt(p []byte, off int64) (int, error) {
 		time.Sleep(b.rtt)
 	}
 
-	return b.backend.ReadAt(p, off)
+	copy(b.p, p)
+
+	return len(p), nil
 }
 
 func (b *dummyBackend) WriteAt(p []byte, off int64) (int, error) {
@@ -31,11 +31,13 @@ func (b *dummyBackend) WriteAt(p []byte, off int64) (int, error) {
 		time.Sleep(b.rtt)
 	}
 
-	return b.backend.WriteAt(p, off)
+	copy(p, b.p)
+
+	return len(p), nil
 }
 
 func (b *dummyBackend) Size() (int64, error) {
-	return b.backend.Size()
+	return int64(b.size), nil
 }
 
 func (b *dummyBackend) Sync() error {
@@ -43,12 +45,12 @@ func (b *dummyBackend) Sync() error {
 		time.Sleep(b.rtt)
 	}
 
-	return b.backend.Sync()
+	return nil
 }
 
 func main() {
 	chunkSize := flag.Int64("chunk-size", int64(os.Getpagesize()), "Chunk size to use")
-	size := flag.Int("size", os.Getpagesize()*1024*1024, "Amount of bytes to read")
+	size := flag.Int("size", os.Getpagesize()*1024*100, "Amount of bytes to read")
 	rtt := flag.Duration("rtt", 0, "RTT to simulate")
 
 	flag.Parse()
@@ -64,27 +66,12 @@ func main() {
 	}
 	defer devFile.Close()
 
-	dir, err := os.MkdirTemp("", "")
-	if err != nil {
-		panic(err)
-	}
-	defer os.RemoveAll(dir)
-
-	rawBackend := &dummyBackend{
-		rtt:     *rtt,
-		backend: lbackend.NewDirectoryBackend(dir, int64(*size), *chunkSize, 4096, false),
-	}
-
 	mnt := mount.NewDirectFileMount(
-		lbackend.NewReaderAtBackend(
-			chunks.NewArbitraryReadWriterAt(
-				rawBackend,
-				*chunkSize,
-			),
-			rawBackend.Size,
-			rawBackend.Sync,
-			false,
-		),
+		&dummyBackend{
+			size: *size,
+			rtt:  *rtt,
+			p:    make([]byte, *chunkSize),
+		},
 		devFile,
 
 		nil,
@@ -97,20 +84,23 @@ func main() {
 		}
 	}()
 
-	if _, err := mnt.Open(); err != nil {
+	deviceFile, err := mnt.Open()
+	if err != nil {
 		panic(err)
 	}
 	defer mnt.Close()
 
 	p := make([]byte, *chunkSize)
 
-	beforeFirstChunk := time.Now()
+	beforeRead := time.Now()
 
-	if _, err := devFile.ReadAt(p, 0); err != nil {
-		panic(err)
+	for i := int64(0); i < int64(*size) / *chunkSize; i++ {
+		if _, err := deviceFile.ReadAt(p, i**chunkSize); err != nil {
+			panic(err)
+		}
 	}
 
-	afterFirstChunk := time.Since(beforeFirstChunk)
+	afterRead := time.Since(beforeRead)
 
-	fmt.Println(afterFirstChunk.Nanoseconds())
+	fmt.Println(float64(*size) / (1024 * 1024) / afterRead.Seconds())
 }

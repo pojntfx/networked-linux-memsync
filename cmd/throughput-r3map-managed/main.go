@@ -51,7 +51,7 @@ func (b *dummyBackend) Sync() error {
 
 func main() {
 	chunkSize := flag.Int64("chunk-size", int64(os.Getpagesize()), "Chunk size to use")
-	size := flag.Int("size", os.Getpagesize()*1024*1024, "Amount of bytes to read")
+	size := flag.Int("size", os.Getpagesize()*1024*100, "Amount of bytes to read")
 	rtt := flag.Duration("rtt", 0, "RTT to simulate")
 
 	pullWorkers := flag.Int64("pull-workers", 4096, "Pull workers to launch in the background; pass in 0 to disable preemptive pull")
@@ -88,7 +88,6 @@ func main() {
 		p:    make([]byte, *chunkSize),
 	}
 
-	preemptivelyPulledChunks := int64(0)
 	mnt := mount.NewManagedFileMount(
 		ctx,
 
@@ -104,13 +103,7 @@ func main() {
 			PushWorkers:  *pushWorkers,
 			PushInterval: *pushInterval,
 		},
-		&mount.ManagedFileMountHooks{
-			OnChunkIsLocal: func(off int64) error {
-				preemptivelyPulledChunks++
-
-				return nil
-			},
-		},
+		nil,
 
 		nil,
 		nil,
@@ -122,10 +115,23 @@ func main() {
 		}
 	}()
 
-	if _, err := mnt.Open(); err != nil {
+	deviceFile, err := mnt.Open()
+	if err != nil {
 		panic(err)
 	}
 	defer mnt.Close()
 
-	fmt.Println(preemptivelyPulledChunks * *chunkSize)
+	p := make([]byte, *chunkSize)
+
+	beforeRead := time.Now()
+
+	for i := int64(0); i < int64(*size) / *chunkSize; i++ {
+		if _, err := deviceFile.ReadAt(p, i**chunkSize); err != nil {
+			panic(err)
+		}
+	}
+
+	afterRead := time.Since(beforeRead)
+
+	fmt.Println(float64(*size) / (1024 * 1024) / afterRead.Seconds())
 }

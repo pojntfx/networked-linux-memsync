@@ -18,6 +18,11 @@ benchmarks=(
     "latency-first-chunk-r3map-redis"
     "latency-first-chunk-r3map-s3"
     "latency-first-chunk-r3map-cassandra"
+    "throughput-memory"
+    "throughput-disk"
+    "throughput-userfaultfd"
+    "throughput-r3map-direct"
+    "throughput-r3map-managed"
 )
 
 # Loop over benchmarks
