@@ -2268,8 +2268,6 @@ direct)</p></li>
 increases</p></li>
 <li><p>TODO: Benchmark for MB of pre-emptive pulls in managed as number
 of workers increases</p></li>
-<li><p>TODO: Benchmark for MB of pre-emptive pulls in managed as chunk
-size increases</p></li>
 <li><p>TODO: Benchmark for <code>udev</code> vs. polling time for
 waiting until NBD device becomes available</p></li>
 <li><p>TODO: Benchmark for first chunk latency for memory vs. file
@@ -2279,27 +2277,24 @@ the throughput will make the pre-emptive pulls matter)</p></li>
 <h2 id="throughput"><span class="header-section-number">5.2</span>
 Throughput</h2>
 <ul>
-<li><p>TODO: Benchmark for throughput of different Go hashing
-algorithms</p></li>
-<li><p>TODO: Benchmark for throughput of dudirekta, gRPC and fRPC as RTT
-increases</p></li>
-<li><p>TODO: Benchmark for throughput of dudirekta, gRPC and fRPC as
-number of workers increases</p></li>
-<li><p>TODO: Benchmark for throughput of dudirekta, gRPC and fRPC as
-chunk size increases</p></li>
-<li><p>TODO: Benchmark for throughput of baseline vs. userfault
-vs. direct vs. migration (we can use the <code>onChunkLocal</code>
-value)</p></li>
-<li><p>TODO: Benchmark for development of throughput as RTT
-increases</p></li>
-<li><p>TODO: Benchmark for development of throughput as number of
-workers increases (migration only)</p></li>
-<li><p>TODO: Benchmark for development of throughput as chunk size
-increases</p></li>
+<li><p>TODO: Benchmark for development of throughput of baseline
+vs. userfault vs. direct vs. managed with RTT = 0 (we can’t add a RTT to
+baseline)</p></li>
+<li><p>TODO: Benchmark for development of throughput of userfault
+vs. direct vs. managed as RTT increases</p></li>
+<li><p>TODO: Benchmark for development of throughput of userfault
+vs. direct vs. managed with RTT=1ms,10ms,100ms and 1s as number of
+workers increases (always 0 workers for userfault and direct)</p></li>
 <li><p>TODO: Benchmark for throughput for memory vs. file vs. directory
-backends as RTT increases</p></li>
-<li><p>TODO: Benchmark for throughput for Redis, S3 and cassandra
-backends as RTT increases</p></li>
+vs. Redis vs. S3 vs. Cassandra with RTT = 0 (direct mount, managed
+mount)</p></li>
+<li><p>TODO: Benchmark for throughput for memory vs. file vs. directory
+vs. Redis vs. S3 vs. Cassandra with RTT=1ms,10ms,100ms and 1s as number
+of workers increases (direct mount, managed mount) (the point of this is
+to show expected read performance for the backends in real-life - even
+though RTT will be the majority of the delay here, the concurrent access
+speeds/overhead will still matter a bit, and it provids data for
+real-life deployments)</p></li>
 </ul>
 <h2 id="pull-heuristics"><span class="header-section-number">5.3</span>
 Pull Heuristics</h2>

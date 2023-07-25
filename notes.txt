@@ -1931,9 +1931,6 @@ Latency
 -   TODO: Benchmark for MB of pre-emptive pulls in managed as number of
     workers increases
 
--   TODO: Benchmark for MB of pre-emptive pulls in managed as chunk size
-    increases
-
 -   TODO: Benchmark for udev vs. polling time for waiting until NBD
     device becomes available
 
@@ -1943,33 +1940,28 @@ Latency
 
 Throughput
 
--   TODO: Benchmark for throughput of different Go hashing algorithms
+-   TODO: Benchmark for development of throughput of baseline
+    vs. userfault vs. direct vs. managed with RTT = 0 (we can’t add a
+    RTT to baseline)
 
--   TODO: Benchmark for throughput of dudirekta, gRPC and fRPC as RTT
-    increases
+-   TODO: Benchmark for development of throughput of userfault
+    vs. direct vs. managed as RTT increases
 
--   TODO: Benchmark for throughput of dudirekta, gRPC and fRPC as number
-    of workers increases
-
--   TODO: Benchmark for throughput of dudirekta, gRPC and fRPC as chunk
-    size increases
-
--   TODO: Benchmark for throughput of baseline vs. userfault vs. direct
-    vs. migration (we can use the onChunkLocal value)
-
--   TODO: Benchmark for development of throughput as RTT increases
-
--   TODO: Benchmark for development of throughput as number of workers
-    increases (migration only)
-
--   TODO: Benchmark for development of throughput as chunk size
-    increases
+-   TODO: Benchmark for development of throughput of userfault
+    vs. direct vs. managed with RTT=1ms,10ms,100ms and 1s as number of
+    workers increases (always 0 workers for userfault and direct)
 
 -   TODO: Benchmark for throughput for memory vs. file vs. directory
-    backends as RTT increases
+    vs. Redis vs. S3 vs. Cassandra with RTT = 0 (direct mount, managed
+    mount)
 
--   TODO: Benchmark for throughput for Redis, S3 and cassandra backends
-    as RTT increases
+-   TODO: Benchmark for throughput for memory vs. file vs. directory
+    vs. Redis vs. S3 vs. Cassandra with RTT=1ms,10ms,100ms and 1s as
+    number of workers increases (direct mount, managed mount) (the point
+    of this is to show expected read performance for the backends in
+    real-life - even though RTT will be the majority of the delay here,
+    the concurrent access speeds/overhead will still matter a bit, and
+    it provids data for real-life deployments)
 
 Pull Heuristics
 
