@@ -1,3 +1,9 @@
+commit 7e97399d13ee073f0e4263415b850492065a03c6
+Author: Felicitas Pojtinger <felicitas@pojtinger.com>
+Date:   Tue Jul 25 19:37:17 2023 +0200
+
+    feat: Add first chunk latency benchmarks for different backends
+
 commit 30371855b38e6a67d5dea0002c47ef4aae75ac49
 Author: Felicitas Pojtinger <felicitas@pojtinger.com>
 Date:   Tue Jul 25 04:34:12 2023 +0200
