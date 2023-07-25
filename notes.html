@@ -2549,7 +2549,8 @@ Downtime</h3>
 <ul>
 <li>TODO: Benchmark for <code>Open</code> time for userfault vs. r3map
 (doesn’t matter if direct/mount/migration - the NBD overhead counts
-here)</li>
+here. But be very careful about how much of <code>userfaultfd</code> is
+just <code>mmap</code>ing - maybe fix that first (noreserve etc.))</li>
 <li>TODO: Benchmark for minimum downtime of direct/mount (one step -
 <code>Open</code> = downtime) vs. migration (two steps -
 <code>Finalize</code> = downtime)</li>

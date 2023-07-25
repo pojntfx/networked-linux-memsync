@@ -1,3 +1,9 @@
+commit 8d168ab6512d9e70d22a845d0e5d94ee21267e5e
+Author: Felicitas Pojtinger <felicitas@pojtinger.com>
+Date:   Wed Jul 26 01:15:30 2023 +0200
+
+    feat: Add throughput benchmark for varying worker counts
+
 commit 8c28f5b1ee218eee52acd953d1b9d92aabe42198
 Author: Felicitas Pojtinger <felicitas@pojtinger.com>
 Date:   Wed Jul 26 00:34:08 2023 +0200
