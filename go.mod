@@ -38,5 +38,3 @@ require (
 	google.golang.org/protobuf v1.31.0 // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
 )
-
-replace github.com/pojntfx/r3map => ../r3map
