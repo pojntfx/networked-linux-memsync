@@ -10,6 +10,8 @@ benchmarks=(
     "benchmark-userfaultfd-go-server"
     "benchmark-r3map-go-server-direct"
     "benchmark-r3map-go-server-managed"
+    "latency-preemptive-pull"
+    "latency-polling-udev"
 )
 
 # Loop over benchmarks
