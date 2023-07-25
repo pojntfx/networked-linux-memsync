@@ -1,6 +1,9 @@
 # Set 'e' shell option to exit when a command fails
 set -e
 
+# Cleanup
+rm -f /tmp/*.benchout
+
 # Set the default number of runs if not provided
 RUNS=100
 
@@ -24,10 +27,10 @@ rm -rf bench/latency-polling-udev
 mkdir -p bench/latency-polling-udev
 
 # Define headers
-echo "Direct Mount Initialization Time (Polling) (ns),Direct Mount Initialization Time (udev) (ns)" > bench/latency-polling-udev/results.csv
+echo "Direct Mount Initialization Time (Polling) (ns),Direct Mount Initialization Time (udev) (ns)" >bench/latency-polling-udev/results.csv
 
 # Combine outputs
 paste -d',' /tmp/direct-mount-initialization-time-polling.benchout /tmp/direct-mount-initialization-time-udev.benchout >>bench/latency-polling-udev/results.csv
 
 # Cleanup
-rm /tmp/*.benchout
+rm -f /tmp/*.benchout

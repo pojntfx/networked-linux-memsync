@@ -981,8 +981,7 @@ csl: static/ieee.csl
 
 - TODO: Benchmark for `udev` vs. polling time for waiting until NBD device becomes available
 
-- TODO: Benchmark for first chunk latency for memory vs. file vs. directory backends as RTT increases
-- TODO: Benchmark for first chunk latency for Redis, S3 and cassandra backends as RTT increases
+- TODO: Benchmark for first chunk latency for memory vs. file vs. directory vs.Redis vs. S3 vs. Cassandra with RTT = 0 (direct only - the throughput will make the pre-emptive pulls matter)
 
 ### Throughput
 

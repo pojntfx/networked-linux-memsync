@@ -1,6 +1,9 @@
 # Set 'e' shell option to exit when a command fails
 set -e
 
+# Cleanup
+rm -f /tmp/*.benchout
+
 # Set the default number of runs if not provided
 RUNS=5
 
@@ -59,4 +62,4 @@ for rtt in ${rtts[@]}; do
 done
 
 # Cleanup
-rm /tmp/*.benchout
+rm -f /tmp/*.benchout

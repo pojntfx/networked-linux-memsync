@@ -12,6 +12,12 @@ benchmarks=(
     "benchmark-r3map-go-server-managed"
     "latency-preemptive-pull"
     "latency-polling-udev"
+    "latency-first-chunk-r3map-memory"
+    "latency-first-chunk-r3map-file"
+    "latency-first-chunk-r3map-directory"
+    "latency-first-chunk-r3map-redis"
+    "latency-first-chunk-r3map-s3"
+    "latency-first-chunk-r3map-cassandra"
 )
 
 # Loop over benchmarks
