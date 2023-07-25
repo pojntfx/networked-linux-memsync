@@ -1,3 +1,9 @@
+commit 30371855b38e6a67d5dea0002c47ef4aae75ac49
+Author: Felicitas Pojtinger <felicitas@pojtinger.com>
+Date:   Tue Jul 25 04:34:12 2023 +0200
+
+    feat: Add benchmark for udev vs pollling speeds
+
 commit 6b7af9cdb8592766a60c5091163f00e1dff601f0
 Author: Felicitas Pojtinger <felicitas@pojtinger.com>
 Date:   Tue Jul 25 03:58:33 2023 +0200
