@@ -1,3 +1,9 @@
+commit 3ec47351bfcab42b7bf0e9fea6f8704ab5c683b2
+Author: Felicitas Pojtinger <felicitas@pojtinger.com>
+Date:   Tue Jul 25 03:27:55 2023 +0200
+
+    feat: Add benchmark for first chunk latency as worker count increases
+
 commit 728a99343bbc40d6ef99e815ea38745a01d7d26c
 Author: Felicitas Pojtinger <felicitas@pojtinger.com>
 Date:   Tue Jul 25 02:38:01 2023 +0200
