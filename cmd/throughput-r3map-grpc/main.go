@@ -10,6 +10,7 @@ import (
 	"github.com/pojntfx/go-nbd/pkg/backend"
 	v1proto "github.com/pojntfx/r3map/pkg/api/proto/mount/v1"
 	lbackend "github.com/pojntfx/r3map/pkg/backend"
+	"github.com/pojntfx/r3map/pkg/chunks"
 	"github.com/pojntfx/r3map/pkg/mount"
 	"github.com/pojntfx/r3map/pkg/services"
 	"github.com/pojntfx/r3map/pkg/utils"
@@ -103,6 +104,9 @@ func main() {
 
 	rtt := flag.Duration("rtt", 0, "RTT to simulate")
 
+	chunking := flag.Bool("chunking", false, "Whether the backend requires to be interfaced with in fixed chunks")
+	nestedChunkSize := flag.Int64("nested-chunk-size", int64(os.Getpagesize()/2), "Nested chunk size to test chunking with")
+
 	flag.Parse()
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -170,9 +174,24 @@ func main() {
 		},
 	}
 
+	var b backend.Backend
+	b = lbackend.NewRPCBackend(ctx, peer, false)
+
+	if *chunking {
+		b = lbackend.NewReaderAtBackend(
+			chunks.NewArbitraryReadWriterAt(
+				b,
+				*nestedChunkSize,
+			),
+			b.Size,
+			b.Sync,
+			false,
+		)
+	}
+
 	rawRemoteBackend := &dummyBackend{
 		rtt:     *rtt,
-		backend: lbackend.NewRPCBackend(ctx, peer, false),
+		backend: b,
 	}
 
 	var deviceFile *os.File
