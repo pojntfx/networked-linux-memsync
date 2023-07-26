@@ -1,3 +1,9 @@
+commit a67fa0eafef17a9942d58ca5f75a057a7b078e4a
+Author: Felicitas Pojtinger <felicitas@pojtinger.com>
+Date:   Wed Jul 26 06:33:15 2023 +0200
+
+    feat: Add benchmark for direct/managed write speeds
+
 commit 40f1759c5cd857b932314c41ba1cf85f0f9dc519
 Author: Felicitas Pojtinger <felicitas@pojtinger.com>
 Date:   Wed Jul 26 06:06:20 2023 +0200
