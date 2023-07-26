@@ -53,7 +53,6 @@ Felicitas Pojtinger (Stuttgart Media University)
     -   5.2 Throughput
     -   5.3 Transport
     -   5.4 Chunking
-    -   5.5 Downtime
 -   6 Discussion
     -   6.1 Userfaults
     -   6.2 File-Based Synchronization
@@ -1978,15 +1977,6 @@ Chunking
 
 -   TODO: Benchmark for local vs. remote chunking with varying RTT
     (direct mount only)
-
-Downtime
-
--   TODO: Benchmark for Open time for userfault vs. r3map (doesn’t
-    matter if direct/mount/migration - the NBD overhead counts here. But
-    be very careful about how much of userfaultfd is just mmaping -
-    maybe fix that first (noreserve etc.))
--   TODO: Benchmark for minimum downtime of direct/mount (one step -
-    Open = downtime) vs. migration (two steps - Finalize = downtime)
 
 Discussion
 

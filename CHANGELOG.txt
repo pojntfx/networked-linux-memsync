@@ -1,3 +1,9 @@
+commit b4adc0634d48840889ea71b7baac19ea89fbb021
+Author: Felicitas Pojtinger <felicitas@pojtinger.com>
+Date:   Wed Jul 26 07:07:02 2023 +0200
+
+    feat: Add benchmark for client-side vs. server-side chunking
+
 commit a67fa0eafef17a9942d58ca5f75a057a7b078e4a
 Author: Felicitas Pojtinger <felicitas@pojtinger.com>
 Date:   Wed Jul 26 06:33:15 2023 +0200

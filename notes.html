@@ -307,8 +307,6 @@ Throughput</a></li>
 Transport</a></li>
 <li><a href="#chunking"><span class="toc-section-number">1.5.4</span>
 Chunking</a></li>
-<li><a href="#downtime"><span class="toc-section-number">1.5.5</span>
-Downtime</a></li>
 </ul></li>
 <li><a href="#discussion"><span class="toc-section-number">1.6</span>
 Discussion</a>
@@ -2554,19 +2552,6 @@ Chunking</h3>
 <ul>
 <li>TODO: Benchmark for local vs. remote chunking with varying RTT
 (direct mount only)</li>
-</ul>
-</section>
-<section id="downtime" data-number="0.5.5">
-<h3 data-number="1.5.5"><span class="header-section-number">1.5.5</span>
-Downtime</h3>
-<ul>
-<li>TODO: Benchmark for <code>Open</code> time for userfault vs. r3map
-(doesn’t matter if direct/mount/migration - the NBD overhead counts
-here. But be very careful about how much of <code>userfaultfd</code> is
-just <code>mmap</code>ing - maybe fix that first (noreserve etc.))</li>
-<li>TODO: Benchmark for minimum downtime of direct/mount (one step -
-<code>Open</code> = downtime) vs. migration (two steps -
-<code>Finalize</code> = downtime)</li>
 </ul>
 </section>
 </section>
