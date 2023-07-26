@@ -1,3 +1,9 @@
+commit a720b3bef3274d8ce0054c047fba9f1564e34b69
+Author: Felicitas Pojtinger <felicitas@pojtinger.com>
+Date:   Wed Jul 26 21:24:32 2023 +0200
+
+    refactor: Rework all graphs to be consistent with the others, start getting them ready for inclusion in the thesis
+
 commit b4adc0634d48840889ea71b7baac19ea89fbb021
 Author: Felicitas Pojtinger <felicitas@pojtinger.com>
 Date:   Wed Jul 26 07:07:02 2023 +0200
