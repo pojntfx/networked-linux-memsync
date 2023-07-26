@@ -94,10 +94,11 @@ Felicitas Pojtinger (Stuttgart Media University)
     -   4.12 Optimizing Throughput with fRPC
 -   5 Results
     -   5.1 Testing Environment
-    -   5.2 Chunking
-    -   5.3 Latency
-    -   5.4 RPC Frameworks
-    -   5.5 Throughput
+    -   5.2 Access Methods
+    -   5.3 Initialization
+    -   5.4 Chunking
+    -   5.5 RPC Frameworks
+    -   5.6 Backends
 -   6 Discussion
     -   6.1 Remote Swap with ram-dl
     -   6.2 Mapping Tape Into Memory With tapisk
@@ -3677,82 +3678,19 @@ plot the related visualizations can be found in the accompanying
 repository[52], and multiple runs have been conducted for each benchmark
 to ensure consistency.
 
-Chunking
-
-[Average read throughput for server-side and client-side chunking,
-direct mounts and managed mounts by RTT]
-
-[Average read throughput for server-side and client-side chunking with
-direct mounts by RTT]
-
-[Average read throughput for server-side and client-side chunking with
-managed mounts by RTT]
-
-Latency
-
-[Average first chunk latency for memory, file, directory, Redis, S3 and
-Cassandra backends (0ms RTT)]
-
-[Box plot of first chunk latency distribution for memory, file,
-directory, Redis, S3 and Cassandra (0ms RTT)]
+Access Methods
 
 [Average first chunk latency for different direct memory access, disk,
 userfaultfd, direct mounts and managed mounts (0ms RTT)]
 
-[Distribution of first chunk latency for userfaultfd, direct mounts and
-managed mounts (0ms RTT)]
+[Box plot for the distribution of first chunk latency for userfaultfd,
+direct mounts and managed mounts (0ms RTT)]
 
 [Average first chunk latency for userfaultfd, direct mounts and managed
 mounts by RTT]
 
 [Average first chunk latency for managed workers with 0-512 workers by
 RTT]
-
-[Kernel density estimation for the distribution of direct mount
-initialization time with polling vs. udev]
-
-[Amount of pre-emptively pulled data for managed mounts with 0-4096
-workers by RTT]
-
-RPC Frameworks
-
-[Average throughput by RTT for Dudirekta, gRPC and fRPC frameworks for
-direct and managed mounts]
-
-[Average throughput by RTT for Dudirekta, gRPC and fRPC frameworks for
-direct mounts]
-
-[Average throughput by RTT for Dudirekta, gRPC and fRPC frameworks for
-managed mounts]
-
-Throughput
-
-[Average throughput for memory, file, directory, Redis, S3 and Cassandra
-backends for direct mounts by RTT]
-
-[Average throughput for memory, file, directory, Redis, S3 and Cassandra
-backends for managed mounts by RTT]
-
-[Average throughput for Redis, S3 and Cassandra backends for direct
-mounts by RTT]
-
-[Average throughput for Redis, S3 and Cassandra backends for managed
-mounts by RTT]
-
-[Average throughput for memory, file, directory, Redis, S3 and Cassandra
-backends for direct and managed mounts (0ms RTT)]
-
-[Average throughput for Redis, S3 and Cassandra backends for direct
-mounts (0ms RTT)]
-
-[Average throughput for Redis, S3 and Cassandra backends for managed
-mounts (0ms RTT)]
-
-[Kernel density estimation (with logarithmic Y axis) for the throughput
-distribution for Redis, S3 and Cassandra for direct mounts (0ms RTT)]
-
-[Box plot for the throughput distribution for Redis, S3 and Cassandra
-for managed mounts (0ms RTT)]
 
 [Average throughput for memory, disk, userfaultfd, direct mounts and
 managed mounts (0ms RTT)]
@@ -3769,6 +3707,71 @@ RTT]
 [Average throughput for managed mounts with 0-16384 workers by RTT]
 
 [Average write throughput for direct and managed mounts by RTT]
+
+Initialization
+
+[Kernel density estimation for the distribution of direct mount
+initialization time with polling vs. udev]
+
+[Amount of pre-emptively pulled data for managed mounts with 0-4096
+workers by RTT]
+
+Chunking
+
+[Average read throughput for server-side and client-side chunking,
+direct mounts and managed mounts by RTT]
+
+[Average read throughput for server-side and client-side chunking with
+direct mounts by RTT]
+
+[Average read throughput for server-side and client-side chunking with
+managed mounts by RTT]
+
+RPC Frameworks
+
+[Average throughput by RTT for Dudirekta, gRPC and fRPC frameworks for
+direct and managed mounts]
+
+[Average throughput by RTT for Dudirekta, gRPC and fRPC frameworks for
+direct mounts]
+
+[Average throughput by RTT for Dudirekta, gRPC and fRPC frameworks for
+managed mounts]
+
+Backends
+
+[Average first chunk latency for memory, file, directory, Redis, S3 and
+Cassandra backends (0ms RTT)]
+
+[Box plot of first chunk latency distribution for memory, file,
+directory, Redis, S3 and Cassandra (0ms RTT)]
+
+[Average throughput for memory, file, directory, Redis, S3 and Cassandra
+backends for direct and managed mounts (0ms RTT)]
+
+[Average throughput for Redis, S3 and Cassandra backends for direct
+mounts (0ms RTT)]
+
+[Average throughput for Redis, S3 and Cassandra backends for managed
+mounts (0ms RTT)]
+
+[Kernel density estimation (with logarithmic Y axis) for the throughput
+distribution for Redis, S3 and Cassandra for direct mounts (0ms RTT)]
+
+[Box plot for the throughput distribution for Redis, S3 and Cassandra
+for managed mounts (0ms RTT)]
+
+[Average throughput for memory, file, directory, Redis, S3 and Cassandra
+backends for direct mounts by RTT]
+
+[Average throughput for Redis, S3 and Cassandra backends for direct
+mounts by RTT]
+
+[Average throughput for memory, file, directory, Redis, S3 and Cassandra
+backends for managed mounts by RTT]
+
+[Average throughput for Redis, S3 and Cassandra backends for managed
+mounts by RTT]
 
 Discussion
 

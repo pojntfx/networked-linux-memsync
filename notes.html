@@ -299,15 +299,14 @@ Latency with fRPC</a></li>
 <li><a href="#results"><span class="toc-section-number">1.5</span>
 Results</a>
 <ul>
-<li><a href="#testing-environments"><span class="toc-section-number">1.5.1</span> Testing Environments</a></li>
-<li><a href="#latency"><span class="toc-section-number">1.5.2</span>
-Latency</a></li>
-<li><a href="#throughput"><span class="toc-section-number">1.5.3</span>
-Throughput</a></li>
-<li><a href="#transport"><span class="toc-section-number">1.5.4</span>
-Transport</a></li>
-<li><a href="#chunking"><span class="toc-section-number">1.5.5</span>
+<li><a href="#testing-environment"><span class="toc-section-number">1.5.1</span> Testing Environment</a></li>
+<li><a href="#access-methods"><span class="toc-section-number">1.5.2</span> Access Methods</a></li>
+<li><a href="#initialization"><span class="toc-section-number">1.5.3</span> Initialization</a></li>
+<li><a href="#chunking"><span class="toc-section-number">1.5.4</span>
 Chunking</a></li>
+<li><a href="#rpc-frameworks"><span class="toc-section-number">1.5.5</span> RPC frameworks</a></li>
+<li><a href="#backends"><span class="toc-section-number">1.5.6</span>
+Backends</a></li>
 </ul></li>
 <li><a href="#discussion"><span class="toc-section-number">1.6</span>
 Discussion</a>
@@ -2487,9 +2486,9 @@ https://github.com/pojntfx/r3map/blob/main/pkg/services/seeder_frpc.go)</li>
 <section id="results" data-number="0.5">
 <h2 data-number="1.5"><span class="header-section-number">1.5</span>
 Results</h2>
-<section id="testing-environments" data-number="0.5.1">
+<section id="testing-environment" data-number="0.5.1">
 <h3 data-number="1.5.1"><span class="header-section-number">1.5.1</span>
-Testing Environments</h3>
+Testing Environment</h3>
 <ul>
 <li>Hardware specifications</li>
 <li>Benchmark scripts are reproducible (add link here)</li>
@@ -2497,72 +2496,43 @@ Testing Environments</h3>
 consistenly</li>
 </ul>
 </section>
-<section id="latency" data-number="0.5.2">
+<section id="access-methods" data-number="0.5.2">
 <h3 data-number="1.5.2"><span class="header-section-number">1.5.2</span>
-Latency</h3>
+Access Methods</h3>
 <ul>
-<li><p>TODO: Benchmark for development of first chunk latency of
-baseline vs. userfault vs. direct vs. managed with RTT = 0 (we can’t add
-a RTT to baseline)</p></li>
-<li><p>TODO: Benchmark for development of first chunk latency of
-userfault vs. direct vs. managed as RTT increases</p></li>
-<li><p>TODO: Benchmark for development of first chunk latency of
-userfault vs. direct vs. managed with RTT=1ms,10ms,100ms and 1s as
-number of workers increases (always 0 workers for userfault and
-direct)</p></li>
-<li><p>TODO: Benchmark for MB of pre-emptive pulls in managed as RTT
-increases</p></li>
-<li><p>TODO: Benchmark for MB of pre-emptive pulls in managed as number
-of workers increases</p></li>
-<li><p>TODO: Benchmark for <code>udev</code> vs. polling time for
-waiting until NBD device becomes available</p></li>
-<li><p>TODO: Benchmark for first chunk latency for memory vs. file
-vs. directory vs.Redis vs. S3 vs. Cassandra with RTT = 0 (direct only -
-the throughput will make the pre-emptive pulls matter)</p></li>
+<li>Latency for technologies</li>
+<li>Throughput for technologies</li>
+<li>Write throughput for technologies</li>
 </ul>
 </section>
-<section id="throughput" data-number="0.5.3">
+<section id="initialization" data-number="0.5.3">
 <h3 data-number="1.5.3"><span class="header-section-number">1.5.3</span>
-Throughput</h3>
+Initialization</h3>
 <ul>
-<li><p>TODO: Benchmark for development of throughput of baseline
-vs. userfault vs. direct vs. managed with RTT = 0 (we can’t add a RTT to
-baseline)</p></li>
-<li><p>TODO: Benchmark for development of throughput of userfault
-vs. direct vs. managed as RTT increases</p></li>
-<li><p>TODO: Benchmark for development of throughput of userfault
-vs. direct vs. managed with RTT=1ms,10ms,100ms and 1s as number of
-workers increases (always 0 workers for userfault and direct)</p></li>
-<li><p>TODO: Benchmark for throughput for memory vs. file vs. directory
-vs. Redis vs. S3 vs. Cassandra with RTT = 0 (direct mount, managed
-mount)</p></li>
-<li><p>TODO: Benchmark for throughput for memory vs. file vs. directory
-vs. Redis vs. S3 vs. Cassandra with RTT=1ms,10ms,100ms and 1s as number
-of workers increases (direct mount, managed mount) (the point of this is
-to show expected read performance for the backends in real-life - even
-though RTT will be the majority of the delay here, the concurrent access
-speeds/overhead will still matter a bit, and it provids data for
-real-life deployments)</p></li>
-<li><p>TODO: Benchmark for write throughput for direct vs. managed as
-RTT increases</p></li>
+<li>Mount initialization time</li>
+<li>Pre-emptive pulls</li>
 </ul>
 </section>
-<section id="transport" data-number="0.5.4">
+<section id="chunking" data-number="0.5.4">
 <h3 data-number="1.5.4"><span class="header-section-number">1.5.4</span>
-Transport</h3>
-<ul>
-<li>TODO: Benchmark for throughput for dudirekta vs. gRPC vs. fRPC with
-varying RTT (direct mount)</li>
-<li>TODO: Benchmark for throughput for dudirekta vs. gRPC vs. fRPC with
-varying RTT (managed mount)</li>
-</ul>
-</section>
-<section id="chunking" data-number="0.5.5">
-<h3 data-number="1.5.5"><span class="header-section-number">1.5.5</span>
 Chunking</h3>
 <ul>
-<li>TODO: Benchmark for local vs. remote chunking with varying RTT
-(direct mount only)</li>
+<li>Server vs. client-side chunking</li>
+</ul>
+</section>
+<section id="rpc-frameworks" data-number="0.5.5">
+<h3 data-number="1.5.5"><span class="header-section-number">1.5.5</span>
+RPC frameworks</h3>
+<ul>
+<li>Throughput for RPC frameworks</li>
+</ul>
+</section>
+<section id="backends" data-number="0.5.6">
+<h3 data-number="1.5.6"><span class="header-section-number">1.5.6</span>
+Backends</h3>
+<ul>
+<li>Latency for backends</li>
+<li>Throughput for backends</li>
 </ul>
 </section>
 </section>

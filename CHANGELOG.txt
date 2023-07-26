@@ -1,3 +1,9 @@
+commit 95b41099d0078fddfe16671b8a2e507a69fbcc76
+Author: Felicitas Pojtinger <felicitas@pojtinger.com>
+Date:   Wed Jul 26 23:59:07 2023 +0200
+
+    refactor: Structure benchmark results in a way that they semantically fit the analysis
+
 commit 533f07ae45c6e5954de3e08cf088c43bdfaeeaf1
 Author: Felicitas Pojtinger <felicitas@pojtinger.com>
 Date:   Wed Jul 26 23:30:08 2023 +0200
