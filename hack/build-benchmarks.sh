@@ -23,6 +23,12 @@ benchmarks=(
     "throughput-userfaultfd"
     "throughput-r3map-direct"
     "throughput-r3map-managed"
+    "throughput-r3map-memory"
+    "throughput-r3map-file"
+    "throughput-r3map-directory"
+    "throughput-r3map-redis"
+    "throughput-r3map-s3"
+    "throughput-r3map-cassandra"
 )
 
 # Loop over benchmarks
