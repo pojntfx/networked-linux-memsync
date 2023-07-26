@@ -969,44 +969,35 @@ csl: static/ieee.csl
 
 ## Results
 
-### Testing Environments
+### Testing Environment
 
 - Hardware specifications
 - Benchmark scripts are reproducible (add link here)
 - Multiple runs were done for each measurement to ensure consistenly
 
-### Latency
+### Access Methods
 
-- TODO: Benchmark for development of first chunk latency of baseline vs. userfault vs. direct vs. managed with RTT = 0 (we can't add a RTT to baseline)
-- TODO: Benchmark for development of first chunk latency of userfault vs. direct vs. managed as RTT increases
-- TODO: Benchmark for development of first chunk latency of userfault vs. direct vs. managed with RTT=1ms,10ms,100ms and 1s as number of workers increases (always 0 workers for userfault and direct)
+- Latency for technologies
+- Throughput for technologies
+- Write throughput for technologies
 
-- TODO: Benchmark for MB of pre-emptive pulls in managed as RTT increases
-- TODO: Benchmark for MB of pre-emptive pulls in managed as number of workers increases
+### Initialization
 
-- TODO: Benchmark for `udev` vs. polling time for waiting until NBD device becomes available
-
-- TODO: Benchmark for first chunk latency for memory vs. file vs. directory vs.Redis vs. S3 vs. Cassandra with RTT = 0 (direct only - the throughput will make the pre-emptive pulls matter)
-
-### Throughput
-
-- TODO: Benchmark for development of throughput of baseline vs. userfault vs. direct vs. managed with RTT = 0 (we can't add a RTT to baseline)
-- TODO: Benchmark for development of throughput of userfault vs. direct vs. managed as RTT increases
-- TODO: Benchmark for development of throughput of userfault vs. direct vs. managed with RTT=1ms,10ms,100ms and 1s as number of workers increases (always 0 workers for userfault and direct)
-
-- TODO: Benchmark for throughput for memory vs. file vs. directory vs. Redis vs. S3 vs. Cassandra with RTT = 0 (direct mount, managed mount)
-- TODO: Benchmark for throughput for memory vs. file vs. directory vs. Redis vs. S3 vs. Cassandra with RTT=1ms,10ms,100ms and 1s as number of workers increases (direct mount, managed mount) (the point of this is to show expected read performance for the backends in real-life - even though RTT will be the majority of the delay here, the concurrent access speeds/overhead will still matter a bit, and it provids data for real-life deployments)
-
-- TODO: Benchmark for write throughput for direct vs. managed as RTT increases
-
-### Transport
-
-- TODO: Benchmark for throughput for dudirekta vs. gRPC vs. fRPC with varying RTT (direct mount)
-- TODO: Benchmark for throughput for dudirekta vs. gRPC vs. fRPC with varying RTT (managed mount)
+- Mount initialization time
+- Pre-emptive pulls
 
 ### Chunking
 
-- TODO: Benchmark for local vs. remote chunking with varying RTT (direct mount only)
+- Server vs. client-side chunking
+
+### RPC frameworks
+
+- Throughput for RPC frameworks
+
+### Backends
+
+- Latency for backends
+- Throughput for backends
 
 ## Discussion
 
