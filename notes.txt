@@ -49,10 +49,11 @@ Felicitas Pojtinger (Stuttgart Media University)
     -   4.11 Connection Pooling with gRPC
     -   4.12 Optimizing RPC Throughput and Latency with fRPC
 -   5 Results
-    -   5.1 Latency
-    -   5.2 Throughput
-    -   5.3 Transport
-    -   5.4 Chunking
+    -   5.1 Testing Environments
+    -   5.2 Latency
+    -   5.3 Throughput
+    -   5.4 Transport
+    -   5.5 Chunking
 -   6 Discussion
     -   6.1 Userfaults
     -   6.2 File-Based Synchronization
@@ -1911,6 +1912,12 @@ Optimizing RPC Throughput and Latency with fRPC
     https://github.com/pojntfx/r3map/blob/main/pkg/services/seeder_frpc.go)
 
 Results
+
+Testing Environments
+
+-   Hardware specifications
+-   Benchmark scripts are reproducible (add link here)
+-   Multiple runs were done for each measurement to ensure consistenly
 
 Latency
 

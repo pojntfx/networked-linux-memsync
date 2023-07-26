@@ -1,3 +1,9 @@
+commit 4a43c556441d95bd5f42eea1bdae9bbfea0e9e3a
+Author: Felicitas Pojtinger <felicitas@pojtinger.com>
+Date:   Wed Jul 26 22:28:48 2023 +0200
+
+    feat: Add rendered visualizations to main document, start labelling visualizations
+
 commit a720b3bef3274d8ce0054c047fba9f1564e34b69
 Author: Felicitas Pojtinger <felicitas@pojtinger.com>
 Date:   Wed Jul 26 21:24:32 2023 +0200

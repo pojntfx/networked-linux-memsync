@@ -299,13 +299,14 @@ Latency with fRPC</a></li>
 <li><a href="#results"><span class="toc-section-number">1.5</span>
 Results</a>
 <ul>
-<li><a href="#latency"><span class="toc-section-number">1.5.1</span>
+<li><a href="#testing-environments"><span class="toc-section-number">1.5.1</span> Testing Environments</a></li>
+<li><a href="#latency"><span class="toc-section-number">1.5.2</span>
 Latency</a></li>
-<li><a href="#throughput"><span class="toc-section-number">1.5.2</span>
+<li><a href="#throughput"><span class="toc-section-number">1.5.3</span>
 Throughput</a></li>
-<li><a href="#transport"><span class="toc-section-number">1.5.3</span>
+<li><a href="#transport"><span class="toc-section-number">1.5.4</span>
 Transport</a></li>
-<li><a href="#chunking"><span class="toc-section-number">1.5.4</span>
+<li><a href="#chunking"><span class="toc-section-number">1.5.5</span>
 Chunking</a></li>
 </ul></li>
 <li><a href="#discussion"><span class="toc-section-number">1.6</span>
@@ -2486,8 +2487,18 @@ https://github.com/pojntfx/r3map/blob/main/pkg/services/seeder_frpc.go)</li>
 <section id="results" data-number="0.5">
 <h2 data-number="1.5"><span class="header-section-number">1.5</span>
 Results</h2>
-<section id="latency" data-number="0.5.1">
+<section id="testing-environments" data-number="0.5.1">
 <h3 data-number="1.5.1"><span class="header-section-number">1.5.1</span>
+Testing Environments</h3>
+<ul>
+<li>Hardware specifications</li>
+<li>Benchmark scripts are reproducible (add link here)</li>
+<li>Multiple runs were done for each measurement to ensure
+consistenly</li>
+</ul>
+</section>
+<section id="latency" data-number="0.5.2">
+<h3 data-number="1.5.2"><span class="header-section-number">1.5.2</span>
 Latency</h3>
 <ul>
 <li><p>TODO: Benchmark for development of first chunk latency of
@@ -2510,8 +2521,8 @@ vs. directory vs.Redis vs. S3 vs. Cassandra with RTT = 0 (direct only -
 the throughput will make the pre-emptive pulls matter)</p></li>
 </ul>
 </section>
-<section id="throughput" data-number="0.5.2">
-<h3 data-number="1.5.2"><span class="header-section-number">1.5.2</span>
+<section id="throughput" data-number="0.5.3">
+<h3 data-number="1.5.3"><span class="header-section-number">1.5.3</span>
 Throughput</h3>
 <ul>
 <li><p>TODO: Benchmark for development of throughput of baseline
@@ -2536,8 +2547,8 @@ real-life deployments)</p></li>
 RTT increases</p></li>
 </ul>
 </section>
-<section id="transport" data-number="0.5.3">
-<h3 data-number="1.5.3"><span class="header-section-number">1.5.3</span>
+<section id="transport" data-number="0.5.4">
+<h3 data-number="1.5.4"><span class="header-section-number">1.5.4</span>
 Transport</h3>
 <ul>
 <li>TODO: Benchmark for throughput for dudirekta vs. gRPC vs. fRPC with
@@ -2546,8 +2557,8 @@ varying RTT (direct mount)</li>
 varying RTT (managed mount)</li>
 </ul>
 </section>
-<section id="chunking" data-number="0.5.4">
-<h3 data-number="1.5.4"><span class="header-section-number">1.5.4</span>
+<section id="chunking" data-number="0.5.5">
+<h3 data-number="1.5.5"><span class="header-section-number">1.5.5</span>
 Chunking</h3>
 <ul>
 <li>TODO: Benchmark for local vs. remote chunking with varying RTT

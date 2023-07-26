@@ -93,6 +93,11 @@ Felicitas Pojtinger (Stuttgart Media University)
     -   4.11 Connection Pooling with gRPC
     -   4.12 Optimizing Throughput with fRPC
 -   5 Results
+    -   5.1 Testing Environment
+    -   5.2 Chunking
+    -   5.3 Latency
+    -   5.4 RPC Frameworks
+    -   5.5 Throughput
 -   6 Discussion
     -   6.1 Remote Swap with ram-dl
     -   6.2 Mapping Tape Into Memory With tapisk
@@ -3654,6 +3659,110 @@ the gRPC adapter:
 
 Results
 
+Testing Environment
+
+All benchmarks were conducted on a test machine with the following
+specifications:
+
+  Property       Value
+  -------------- -----------------------------------------
+  Device Model   Dell XPS 9320
+  OS             Fedora release 38 (Thirty Eight) x86_64
+  Kernel         6.3.11-200.fc38.x86_64
+  CPU            12th Gen Intel i7-1280P (20) @ 4.700GHz
+  Memory         31687MiB
+
+To make the results reproducible, the benchmark scripts and notebooks to
+plot the related visualizations can be found in the accompanying
+repository[52], and multiple runs have been conducted for each benchmark
+to ensure consistency.
+
+Chunking
+
+[Average read throughput for server-side and client-side chunking,
+direct mounts and managed mounts by RTT]
+
+[Average read throughput for server-side and client-side chunking with
+direct mounts by RTT]
+
+[Average read throughput for server-side and client-side chunking with
+managed mounts by RTT]
+
+Latency
+
+[Average first chunk latency for memory, file, directory, Redis, S3 and
+Cassandra backends (0ms RTT)]
+
+[Box plot of first chunk latency distribution for memory, file,
+directory, Redis, S3 and Cassandra (0ms RTT)]
+
+[Average first chunk latency for different direct memory access, disk,
+userfaultfd, direct mounts and managed mounts (0ms RTT)]
+
+[Distribution of first chunk latency for userfaultfd, direct mounts and
+managed mounts (0ms RTT)]
+
+[Average first chunk latency for userfaultfd, direct mounts and managed
+mounts by RTT]
+
+[Average first chunk latency for managed workers with 0-512 workers by
+RTT]
+
+[Kernel density estimation for the distribution of direct mount
+initialization time with polling vs. udev]
+
+[Amount of pre-emptively pulled data for managed mounts with 0-4096
+workers by RTT]
+
+RPC Frameworks
+
+[Average throughput by RTT for Dudirekta, gRPC and fRPC frameworks for
+direct and managed mounts]
+
+[Average throughput by RTT for Dudirekta, gRPC and fRPC frameworks for
+direct mounts]
+
+[Average throughput by RTT for Dudirekta, gRPC and fRPC frameworks for
+managed mounts]
+
+Throughput
+
+[Average throughput for memory, file, directory, Redis, S3 and Cassandra
+backends for direct mounts by RTT]
+
+[Average throughput for memory, file, directory, Redis, S3 and Cassandra
+backends for managed mounts by RTT]
+
+[Average throughput for Redis, S3 and Cassandra backends for direct
+mounts by RTT]
+
+[Average throughput for Redis, S3 and Cassandra backends for managed
+mounts by RTT]
+
+[]
+
+[]
+
+[]
+
+[]
+
+[]
+
+[]
+
+[]
+
+[]
+
+[]
+
+[]
+
+[]
+
+[]
+
 TODO: Add results
 
 Discussion
@@ -3662,7 +3771,7 @@ TODO: Add discussion once we have the results
 
 Remote Swap with ram-dl
 
-ram-dl[52] is an experimental tech demo built to demonstrate how r3map
+ram-dl[53] is an experimental tech demo built to demonstrate how r3map
 can be used. It uses the fRPC mount backend to expand local system
 memory, enabling a variety of usecases such as mounting a remote
 system’s RAM locally or easily inspecting a remote system’s memory
@@ -3694,7 +3803,7 @@ Mapping Tape Into Memory With tapisk
 
 Overview
 
-tapisk[53] is a tool that exposes a tape drive as a block device. While
+tapisk[54] is a tool that exposes a tape drive as a block device. While
 seemingly unrelated to memory synchronization, it does serve as an
 interesting usecase due to the similarities to STFS (mentioned earlier
 in the FUSE section), which exposed a tape drive as a file system, and
@@ -3817,7 +3926,7 @@ a remote tape library robot’s drive to a system over the network.
 
 Being able to map a tape into memory without having to read the entire
 contents first can have a variety of usecases. Tapes can store a large
-amount of data, in the case of LTO-9, up to 18TB on a single tape[54];
+amount of data, in the case of LTO-9, up to 18TB on a single tape[55];
 being able to access such a large amount of data directly in memory,
 instead of having to work with tooling like tar, can significantly
 improve developer experience. In addition to making it much easier to
@@ -4057,7 +4166,7 @@ be done using a higher-level protocol; moreover, this assumes that the
 in-memory representation of the data structure is consistent across all,
 something which is not necessarily the case with programming languages
 such as Go with multiple processor architectures being involved. While
-projects such as Apache Arrow[55] allow for application state to
+projects such as Apache Arrow[56] allow for application state to
 represented in a language- and CPU architecture-independent way, this
 comes with some of the same restrictions on which state can be
 synchronized as with other solutions such as Firebase.
@@ -4276,16 +4385,21 @@ performance and stability.” https://frpc.io/introduction, 2023.
 framework used for encoding and decoding arbitrary data structures
 across languages.” https://github.com/loopholelabs/polyglot, 2023.
 
-[52] F. Pojtinger, “Ram-dl: A tool to download more RAM (yes,
+[52] F. Pojtinger, GitHub Repository for Efficient Synchronization of
+Linux Memory Regions over a Network: A Comparative Study and
+Implementation. 2023.Available:
+https://github.com/pojntfx/networked-linux-memsync
+
+[53] F. Pojtinger, “Ram-dl: A tool to download more RAM (yes,
 seriously!).” https://github.com/pojntfx/ram-dl, 2023.
 
-[53] F. Pojtinger, “Tapisk: Expose a tape drive as a block device.”
+[54] F. Pojtinger, “Tapisk: Expose a tape drive as a block device.”
 https://github.com/pojntfx/tapisk, 2023.
 
-[54] LTO Program, “The LTO program releases specifications for upcoming
+[55] LTO Program, “The LTO program releases specifications for upcoming
 generation 9.”
 https://www.lto.org/2020/09/the-lto-program-releases-specifications-for-upcoming-generation-9/,
 2020.
 
-[55] T. A. S. Foundation, “Apache arrow website.” 2023.Available:
+[56] T. A. S. Foundation, “Apache arrow website.” 2023.Available:
 https://arrow.apache.org/
