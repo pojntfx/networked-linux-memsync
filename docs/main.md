@@ -2291,31 +2291,28 @@ To make the results reproducible, the benchmark scripts and notebooks to plot th
 
 ![Average throughput for Redis, S3 and Cassandra backends for managed mounts by RTT](./static/throughput-anyvar-4.png)
 
-![](./static/throughput-backendvar-1.png)
+![Average throughput for memory, file, directory, Redis, S3 and Cassandra backends for direct and managed mounts (0ms RTT)](./static/throughput-backendvar-1.png)
 
-![](./static/throughput-backendvar-2.png)
+![Average throughput for Redis, S3 and Cassandra backends for direct mounts (0ms RTT)](./static/throughput-backendvar-2.png)
 
-![](./static/throughput-backendvar-3.png)
+![Average throughput for Redis, S3 and Cassandra backends for managed mounts (0ms RTT)](./static/throughput-backendvar-3.png)
 
-![](./static/throughput-backendvar-4.png)
+![Kernel density estimation (with logarithmic Y axis) for the throughput distribution for Redis, S3 and Cassandra for direct mounts (0ms RTT)](./static/throughput-backendvar-5.png)
 
-![](./static/throughput-backendvar-5.png)
+![Box plot for the throughput distribution for Redis, S3 and Cassandra for managed mounts (0ms RTT)](./static/throughput-backendvar-6.png)
 
-![](./static/throughput-backendvar-6.png)
+![Average throughput for memory, disk, userfaultfd, direct mounts and managed mounts (0ms RTT)](./static/throughput-rtt0-1.png)
 
-![](./static/throughput-rtt0-1.png)
+![Average throughput for userfaultfd, direct mounts and managed mounts (0ms RTT)](./static/throughput-rtt0-2.png)
 
-![](./static/throughput-rtt0-2.png)
+![Box plot for the throughput distribuion for userfaultfd, direct mounts and managed mounts (0ms RTT)](./static/throughput-rtt0-3.png)
 
-![](./static/throughput-rtt0-3.png)
+![Average throughput for userfaultfd, direct mounts and managed mounts by RTT](./static/throughput-rttvar-1.png)
 
-![](./static/throughput-rttvar-1.png)
+![Average throughput for managed mounts with 0-16384 workers by RTT](./static/throughput-workervar-1.png)
 
-![](./static/throughput-workervar-1.png)
+![Average write throughput for direct and managed mounts by RTT](./static/throughput-write-rttvar-1.png)
 
-![](./static/throughput-write-rttvar-1.png)
-
-TODO: Add results
 
 ## Discussion
 
