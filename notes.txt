@@ -51,8 +51,9 @@ Felicitas Pojtinger (Stuttgart Media University)
 -   5 Results
     -   5.1 Latency
     -   5.2 Throughput
-    -   5.3 Pull Heuristics
-    -   5.4 Downtime
+    -   5.3 Transport
+    -   5.4 Chunking
+    -   5.5 Downtime
 -   6 Discussion
     -   6.1 Userfaults
     -   6.2 File-Based Synchronization
@@ -1963,12 +1964,20 @@ Throughput
     the concurrent access speeds/overhead will still matter a bit, and
     it provids data for real-life deployments)
 
-Pull Heuristics
+-   TODO: Benchmark for write throughput for direct vs. managed as RTT
+    increases
 
--   TODO: Benchmark for effect of correct (return n) vs wrong (return
-    -n) pull heuristic on first chunk latency for managed API
--   TODO: Benchmark for effect of correct (return n) vs wrong (return
-    -n) pull heuristic on throughput for managed API
+Transport
+
+-   TODO: Benchmark for throughput for dudirekta vs. gRPC vs. fRPC with
+    varying RTT (direct mount)
+-   TODO: Benchmark for throughput for dudirekta vs. gRPC vs. fRPC with
+    varying RTT (managed mount)
+
+Chunking
+
+-   TODO: Benchmark for local vs. remote chunking with varying RTT
+    (direct mount only)
 
 Downtime
 

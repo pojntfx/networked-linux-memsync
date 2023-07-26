@@ -148,8 +148,11 @@ Results</a>
 Latency</a></li>
 <li><a href="#throughput"><span class="toc-section-number">5.2</span>
 Throughput</a></li>
-<li><a href="#pull-heuristics"><span class="toc-section-number">5.3</span> Pull Heuristics</a></li>
-<li><a href="#downtime"><span class="toc-section-number">5.4</span>
+<li><a href="#transport"><span class="toc-section-number">5.3</span>
+Transport</a></li>
+<li><a href="#chunking"><span class="toc-section-number">5.4</span>
+Chunking</a></li>
+<li><a href="#downtime"><span class="toc-section-number">5.5</span>
 Downtime</a></li>
 </ul></li>
 <li><a href="#discussion"><span class="toc-section-number">6</span>
@@ -2295,16 +2298,24 @@ to show expected read performance for the backends in real-life - even
 though RTT will be the majority of the delay here, the concurrent access
 speeds/overhead will still matter a bit, and it provids data for
 real-life deployments)</p></li>
+<li><p>TODO: Benchmark for write throughput for direct vs. managed as
+RTT increases</p></li>
 </ul>
-<h2 id="pull-heuristics"><span class="header-section-number">5.3</span>
-Pull Heuristics</h2>
+<h2 id="transport"><span class="header-section-number">5.3</span>
+Transport</h2>
 <ul>
-<li>TODO: Benchmark for effect of correct (return n) vs wrong (return
--n) pull heuristic on first chunk latency for managed API</li>
-<li>TODO: Benchmark for effect of correct (return n) vs wrong (return
--n) pull heuristic on throughput for managed API</li>
+<li>TODO: Benchmark for throughput for dudirekta vs. gRPC vs. fRPC with
+varying RTT (direct mount)</li>
+<li>TODO: Benchmark for throughput for dudirekta vs. gRPC vs. fRPC with
+varying RTT (managed mount)</li>
 </ul>
-<h2 id="downtime"><span class="header-section-number">5.4</span>
+<h2 id="chunking"><span class="header-section-number">5.4</span>
+Chunking</h2>
+<ul>
+<li>TODO: Benchmark for local vs. remote chunking with varying RTT
+(direct mount only)</li>
+</ul>
+<h2 id="downtime"><span class="header-section-number">5.5</span>
 Downtime</h2>
 <ul>
 <li>TODO: Benchmark for <code>Open</code> time for userfault vs. r3map
