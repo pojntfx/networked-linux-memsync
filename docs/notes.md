@@ -991,10 +991,16 @@ csl: static/ieee.csl
 - TODO: Benchmark for throughput for memory vs. file vs. directory vs. Redis vs. S3 vs. Cassandra with RTT = 0 (direct mount, managed mount)
 - TODO: Benchmark for throughput for memory vs. file vs. directory vs. Redis vs. S3 vs. Cassandra with RTT=1ms,10ms,100ms and 1s as number of workers increases (direct mount, managed mount) (the point of this is to show expected read performance for the backends in real-life - even though RTT will be the majority of the delay here, the concurrent access speeds/overhead will still matter a bit, and it provids data for real-life deployments)
 
-### Pull Heuristics
+- TODO: Benchmark for write throughput for direct vs. managed as RTT increases
 
-- TODO: Benchmark for effect of correct (return n) vs wrong (return -n) pull heuristic on first chunk latency for managed API
-- TODO: Benchmark for effect of correct (return n) vs wrong (return -n) pull heuristic on throughput for managed API
+### Transport
+
+- TODO: Benchmark for throughput for dudirekta vs. gRPC vs. fRPC with varying RTT (direct mount)
+- TODO: Benchmark for throughput for dudirekta vs. gRPC vs. fRPC with varying RTT (managed mount)
+
+### Chunking
+
+- TODO: Benchmark for local vs. remote chunking with varying RTT (direct mount only)
 
 ### Downtime
 

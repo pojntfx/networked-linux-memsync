@@ -29,6 +29,10 @@ benchmarks=(
     "throughput-r3map-redis"
     "throughput-r3map-s3"
     "throughput-r3map-cassandra"
+    "transport-server"
+    "throughput-r3map-dudirekta"
+    "throughput-r3map-grpc"
+    "throughput-r3map-frpc"
 )
 
 # Loop over benchmarks
