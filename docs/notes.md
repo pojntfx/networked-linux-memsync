@@ -969,6 +969,12 @@ csl: static/ieee.csl
 
 ## Results
 
+### Testing Environments
+
+- Hardware specifications
+- Benchmark scripts are reproducible (add link here)
+- Multiple runs were done for each measurement to ensure consistenly
+
 ### Latency
 
 - TODO: Benchmark for development of first chunk latency of baseline vs. userfault vs. direct vs. managed with RTT = 0 (we can't add a RTT to baseline)

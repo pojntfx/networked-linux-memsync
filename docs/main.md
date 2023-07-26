@@ -2233,6 +2233,88 @@ func (s *SeederFrpc) ReadAt(ctx context.Context, args *v1.ComPojtingerFelicitasR
 
 ## Results
 
+### Testing Environment
+
+All benchmarks were conducted on a test machine with the following specifications:
+
+| Property     | Value                                   |
+| ------------ | --------------------------------------- |
+| Device Model | Dell XPS 9320                           |
+| OS           | Fedora release 38 (Thirty Eight) x86_64 |
+| Kernel       | 6.3.11-200.fc38.x86_64                  |
+| CPU          | 12th Gen Intel i7-1280P (20) @ 4.700GHz |
+| Memory       | 31687MiB                                |
+
+To make the results reproducible, the benchmark scripts and notebooks to plot the related visualizations can be found in the accompanying repository[@pojtinger2023memsync], and multiple runs have been conducted for each benchmark to ensure consistency.
+
+### Chunking
+
+![Average read throughput for server-side and client-side chunking, direct mounts and managed mounts by RTT](./static/chunking-local-remote-1.png)
+
+![Average read throughput for server-side and client-side chunking with direct mounts by RTT](./static/chunking-local-remote-2.png)
+
+![Average read throughput for server-side and client-side chunking with managed mounts by RTT](./static/chunking-local-remote-3.png)
+
+### Latency
+
+![Average first chunk latency for memory, file, directory, Redis, S3 and Cassandra backends (0ms RTT)](./static/latency-first-chunk-backendvar-1.png)
+
+![Box plot of first chunk latency distribution for memory, file, directory, Redis, S3 and Cassandra (0ms RTT)](./static/latency-first-chunk-backendvar-2.png)
+
+![Average first chunk latency for different direct memory access, disk, userfaultfd, direct mounts and managed mounts (0ms RTT)](./static/latency-first-chunk-rtt0-1.png)
+
+![Distribution of first chunk latency for userfaultfd, direct mounts and managed mounts (0ms RTT)](./static/latency-first-chunk-rtt0-2.png)
+
+![Average first chunk latency for userfaultfd, direct mounts and managed mounts by RTT](./static/latency-first-chunk-rttvar-1.png)
+
+![Average first chunk latency for managed workers with 0-512 workers by RTT](./static/latency-first-chunk-workervar-1.png)
+
+![Kernel density estimation for the distribution of direct mount initialization time with polling vs. udev](./static/latency-polling-udev-1.png)
+
+![Amount of pre-emptively pulled data for managed mounts with 0-4096 workers by RTT](./static/latency-preemptive-pull-1.png)
+
+### RPC Frameworks
+
+![Average throughput by RTT for Dudirekta, gRPC and fRPC frameworks for direct and managed mounts](./static/rpc-rttvar-1.png)
+
+![Average throughput by RTT for Dudirekta, gRPC and fRPC frameworks for direct mounts](./static/rpc-rttvar-2.png)
+
+![Average throughput by RTT for Dudirekta, gRPC and fRPC frameworks for managed mounts](./static/rpc-rttvar-3.png)
+
+### Throughput
+
+![Average throughput for memory, file, directory, Redis, S3 and Cassandra backends for direct mounts by RTT](./static/throughput-anyvar-1.png)
+
+![Average throughput for memory, file, directory, Redis, S3 and Cassandra backends for managed mounts by RTT](./static/throughput-anyvar-2.png)
+
+![Average throughput for Redis, S3 and Cassandra backends for direct mounts by RTT](./static/throughput-anyvar-3.png)
+
+![Average throughput for Redis, S3 and Cassandra backends for managed mounts by RTT](./static/throughput-anyvar-4.png)
+
+![](./static/throughput-backendvar-1.png)
+
+![](./static/throughput-backendvar-2.png)
+
+![](./static/throughput-backendvar-3.png)
+
+![](./static/throughput-backendvar-4.png)
+
+![](./static/throughput-backendvar-5.png)
+
+![](./static/throughput-backendvar-6.png)
+
+![](./static/throughput-rtt0-1.png)
+
+![](./static/throughput-rtt0-2.png)
+
+![](./static/throughput-rtt0-3.png)
+
+![](./static/throughput-rttvar-1.png)
+
+![](./static/throughput-workervar-1.png)
+
+![](./static/throughput-write-rttvar-1.png)
+
 TODO: Add results
 
 ## Discussion
