@@ -3739,31 +3739,36 @@ mounts by RTT]
 [Average throughput for Redis, S3 and Cassandra backends for managed
 mounts by RTT]
 
-[]
+[Average throughput for memory, file, directory, Redis, S3 and Cassandra
+backends for direct and managed mounts (0ms RTT)]
 
-[]
+[Average throughput for Redis, S3 and Cassandra backends for direct
+mounts (0ms RTT)]
 
-[]
+[Average throughput for Redis, S3 and Cassandra backends for managed
+mounts (0ms RTT)]
 
-[]
+[Kernel density estimation (with logarithmic Y axis) for the throughput
+distribution for Redis, S3 and Cassandra for direct mounts (0ms RTT)]
 
-[]
+[Box plot for the throughput distribution for Redis, S3 and Cassandra
+for managed mounts (0ms RTT)]
 
-[]
+[Average throughput for memory, disk, userfaultfd, direct mounts and
+managed mounts (0ms RTT)]
 
-[]
+[Average throughput for userfaultfd, direct mounts and managed mounts
+(0ms RTT)]
 
-[]
+[Box plot for the throughput distribuion for userfaultfd, direct mounts
+and managed mounts (0ms RTT)]
 
-[]
+[Average throughput for userfaultfd, direct mounts and managed mounts by
+RTT]
 
-[]
+[Average throughput for managed mounts with 0-16384 workers by RTT]
 
-[]
-
-[]
-
-TODO: Add results
+[Average write throughput for direct and managed mounts by RTT]
 
 Discussion
 

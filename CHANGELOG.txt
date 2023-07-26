@@ -1,3 +1,9 @@
+commit 533f07ae45c6e5954de3e08cf088c43bdfaeeaf1
+Author: Felicitas Pojtinger <felicitas@pojtinger.com>
+Date:   Wed Jul 26 23:30:08 2023 +0200
+
+    feat: Add figure descriptions for rest of graphs
+
 commit 4a43c556441d95bd5f42eea1bdae9bbfea0e9e3a
 Author: Felicitas Pojtinger <felicitas@pojtinger.com>
 Date:   Wed Jul 26 22:28:48 2023 +0200
