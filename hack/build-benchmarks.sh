@@ -33,6 +33,8 @@ benchmarks=(
     "throughput-r3map-dudirekta"
     "throughput-r3map-grpc"
     "throughput-r3map-frpc"
+    "throughput-r3map-direct-write"
+    "throughput-r3map-managed-write"
 )
 
 # Loop over benchmarks
