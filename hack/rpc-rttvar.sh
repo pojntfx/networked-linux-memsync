@@ -48,15 +48,15 @@ for rtt in ${rtts[@]}; do
 done
 
 # Remove and recreate output directory
-rm -rf bench/transport-rttvar
-mkdir -p bench/transport-rttvar
+rm -rf bench/rpc-rttvar
+mkdir -p bench/rpc-rttvar
 
 # Define headers
-echo "RTT (ms),Throughput for dudirekta (Direct Mount) (MB/s),Throughput for dudirekta (Managed Mount) (MB/s),Throughput for grpc (Direct Mount) (MB/s),Throughput for grpc (Managed Mount) (MB/s),Throughput for frpc (Direct Mount) (MB/s),Throughput for frpc (Managed Mount) (MB/s)" >bench/transport-rttvar/results.csv
+echo "RTT (ms),Throughput for dudirekta (Direct Mount) (MB/s),Throughput for dudirekta (Managed Mount) (MB/s),Throughput for grpc (Direct Mount) (MB/s),Throughput for grpc (Managed Mount) (MB/s),Throughput for frpc (Direct Mount) (MB/s),Throughput for frpc (Managed Mount) (MB/s)" >bench/rpc-rttvar/results.csv
 
 # Combine outputs and add rtt label
 for rtt in ${rtts[@]}; do
-    paste -d',' <(printf "%s\n" $rtt) /tmp/transport-r3map-dudirekta-direct-$rtt.benchout /tmp/transport-r3map-dudirekta-managed-$rtt.benchout /tmp/transport-r3map-grpc-direct-$rtt.benchout /tmp/transport-r3map-grpc-managed-$rtt.benchout /tmp/transport-r3map-frpc-direct-$rtt.benchout /tmp/transport-r3map-frpc-managed-$rtt.benchout >>bench/transport-rttvar/results.csv
+    paste -d',' <(printf "%s\n" $rtt) /tmp/transport-r3map-dudirekta-direct-$rtt.benchout /tmp/transport-r3map-dudirekta-managed-$rtt.benchout /tmp/transport-r3map-grpc-direct-$rtt.benchout /tmp/transport-r3map-grpc-managed-$rtt.benchout /tmp/transport-r3map-frpc-direct-$rtt.benchout /tmp/transport-r3map-frpc-managed-$rtt.benchout >>bench/rpc-rttvar/results.csv
 done
 
 # Cleanup
