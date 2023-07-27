@@ -2395,7 +2395,23 @@ When looking at just the network-capable backends in isolation, S3's low through
 
 ## Discussion
 
-TODO: Add discussion once we have the results
+### Userfaults
+
+`userfaultfd` is a simple way to map almost any object into memory. It is a comparatively simple approach, but also has significant architecture-related problems that limit it's use. One problem is that it is only able to catch page faults, which means that it can only ever handle a data request the first time a chunk of memory gets accessed, since all future requests to a memory region handled by `userfaultfd` will simply return directly from RAM. This prevents the usage of this approach for accessing remote ressources that update over time, and also makes it hard to use it for applications with concurrent writers or shared ressources, sicne there would be no way of updating a section with a conflict.
+
+Due to these limitations, `userfaultfd` is essentially limited to read-only mounts of remote ressources, not synchronization. While it could be a viable solution for post-copy migration, it also prevents pullling chunks from being pulled before they have been accesed without adding an additional layer of indirection. The `userfaultfd` API socket is also synchronous, meaning that each page fault for each chunk needs to be handled one after the other, making it very vulnerable to long RTT values. This also means that the initial latency will be at minimum the RTT to the backend.
+
+While it has a lower first chunk latency compared to direct mounts and managed mounts at 0 ms RTT, the latency grows linearly as the RTT increases due to the aforementioned synchronous API socket and no way of pulling data in the background. While it has more predictable throughput and latency than the NBD-based solutions, for high RTT deployments, it becomes essentially unusable due to the low throughput. In summary, while this approach is interesting and idiomatic to Go, for most data, esp. larger datasets and high-RTT networks like a WAN, one of the alternative solutions is a better choice.
+
+### File-Based Synchronization
+
+Similarly to `userfaultfd`, the approach based on `mmap`ing a memory region to a file and then synchronizing this file also has limitations. While `userfaultfd` is only able to catch the first reads to a file, this system is only able to catch wries, making it unsuitable for post-copy migration scenarios. It makes this system write-only, and very inefficient when it comes to adding hosts to the network at a later point, since all data needs to be continously synced to all other hosts that state could potentially be migrated too.
+
+To work around this issue, a central forwarding hub can be used, which reduces the amount of data streams required from the host currently hosting the data, but also adds other drawbacks such as operational complexity and additional latency. Thanks to this support for the central forwarding hub, file-based synchronization might be a good choice for highly throughput-constrained networks, but the inability to do post-copy migration due to it being write-only makes it a suboptimal choice for migration scenarios.
+
+### FUSE
+
+File systems in user space provide a solution that allows for both pre- and post-copy migration, but doesn't come without downsides. As it operates in user space, it depends on context switching, which does add additional overhead compared to a file system implementation in kernel space. While some advanced file system features like `inotify` and others aren't available for a FUSE, the biggest problem is the development overhead of implementing a FUSE, which requires the implementation of a completely custom file system. The optimal solution for memory synchronization is not to provide an entire file system to track reads and writes on, but instead to track a single file; for this use case, NBD serves as as an existing API providing this simpler approach, making FUSE not the optimal technology to implement memory synchronization.
 
 ### Remote Swap with `ram-dl`
 

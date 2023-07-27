@@ -1137,6 +1137,7 @@ csl: static/ieee.csl
 ### NBD
 
 - Limitations of NBD and `ublk` as an alternative
+  - NBD is the underlying technology for both direct and managed mounts
   - NBD is a battle-tested solution for this with fairly good performance, but in the future a more lean implemenation called `ublk` could also be used
   - `ublk` uses `io_uring`, which means that it could potentially allow for much faster concurrent access
   - It is similar to NBD; it also uses a user space server to provide the block device backend, and a kernel `ublk` driver that creates `/dev/ublkb*` devices
