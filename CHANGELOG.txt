@@ -1,3 +1,9 @@
+commit e1ad05806c3e6e8c8bfa042c1b3d0972b9e4404f
+Author: Felicitas Pojtinger <felicitas@pojtinger.com>
+Date:   Thu Jul 27 04:54:27 2023 +0200
+
+    refactor: Add skeleton for rest of abstract thesis requirements
+
 commit 379f5710d47633c7917b9c290fae6964ebd44283
 Author: Felicitas Pojtinger <felicitas@pojtinger.com>
 Date:   Thu Jul 27 04:43:54 2023 +0200

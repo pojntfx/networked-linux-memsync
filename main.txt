@@ -3,120 +3,136 @@ Comparative Study and Implementation
 Felicitas Pojtinger (Stuttgart Media University)
 2023-08-04
 
--   1 Introduction
--   2 Technology
-    -   2.1 The Linux Kernel
-    -   2.2 Linux Kernel Modules
-    -   2.3 UNIX Signals and Handlers
-    -   2.4 Principle of Locality
-    -   2.5 Memory Hierarchy
-    -   2.6 Memory Management in Linux
-    -   2.7 Swap Space
-    -   2.8 Page Faults
-    -   2.9 mmap
-    -   2.10 inotify
-    -   2.11 Linux Kernel Caching
-    -   2.12 TCP, UDP and QUIC
-    -   2.13 Delta Synchronization
-    -   2.14 File Systems In Userspace (FUSE)
-    -   2.15 Network Block Device (NBD)
-    -   2.16 Virtual Machine Live Migration
-        -   2.16.1 Pre-Copy
-        -   2.16.2 Post-Copy
-        -   2.16.3 Workload Analysis
-    -   2.17 Streams and Pipelines
-    -   2.18 gRPC
-    -   2.19 Redis
-    -   2.20 S3 and Minio
-    -   2.21 Cassandra and ScylllaDB
--   3 Planning
-    -   3.1 Pull-Based Synchronization With userfaultfd
-    -   3.2 Push-Based Synchronization With mmap and Hashing
-    -   3.3 Push-Pull Synchronization with FUSE
-    -   3.4 Mounts with NBD
-    -   3.5 Push-Pull Synchronization with Mounts
-        -   3.5.1 Overview
-        -   3.5.2 Chunking
-        -   3.5.3 Background Pull and Push
-    -   3.6 Pull-Based Synchronization with Migrations
-        -   3.6.1 Overview
-        -   3.6.2 Migration Protocol and Critical Phases
--   4 Implementation
-    -   4.1 Userfaults in Go with userfaultfd
-        -   4.1.1 Registration and Handlers
-        -   4.1.2 userfaultfd Backends
-    -   4.2 File-Based Synchronization
-        -   4.2.1 Caching Restrictions
-        -   4.2.2 Detecting File Changes
-        -   4.2.3 Synchronization Protocol
-        -   4.2.4 Multiplexer Hub
-        -   4.2.5 File Advertisement
-        -   4.2.6 File Receiver
-        -   4.2.7 File Transmission
-        -   4.2.8 Hash Calculation
-        -   4.2.9 File Reception
-    -   4.3 FUSE Implementation in Go
-    -   4.4 NBD with go-nbd
-        -   4.4.1 Overview
-        -   4.4.2 Server
-        -   4.4.3 Client
-        -   4.4.4 Client Lifecycle
-        -   4.4.5 Optimizing Access to the Block Device
-        -   4.4.6 Combining the NBD Client and Server to a Mount
-    -   4.5 Managed Mounts with r3map
-        -   4.5.1 Stages
+-   1 Tables
+    -   1.1 Graphics
+    -   1.2 Abbrevations
+-   2 Introduction
+-   3 Technology
+    -   3.1 The Linux Kernel
+    -   3.2 Linux Kernel Modules
+    -   3.3 UNIX Signals and Handlers
+    -   3.4 Principle of Locality
+    -   3.5 Memory Hierarchy
+    -   3.6 Memory Management in Linux
+    -   3.7 Swap Space
+    -   3.8 Page Faults
+    -   3.9 mmap
+    -   3.10 inotify
+    -   3.11 Linux Kernel Caching
+    -   3.12 TCP, UDP and QUIC
+    -   3.13 Delta Synchronization
+    -   3.14 File Systems In Userspace (FUSE)
+    -   3.15 Network Block Device (NBD)
+    -   3.16 Virtual Machine Live Migration
+        -   3.16.1 Pre-Copy
+        -   3.16.2 Post-Copy
+        -   3.16.3 Workload Analysis
+    -   3.17 Streams and Pipelines
+    -   3.18 gRPC
+    -   3.19 Redis
+    -   3.20 S3 and Minio
+    -   3.21 Cassandra and ScylllaDB
+-   4 Planning
+    -   4.1 Pull-Based Synchronization With userfaultfd
+    -   4.2 Push-Based Synchronization With mmap and Hashing
+    -   4.3 Push-Pull Synchronization with FUSE
+    -   4.4 Mounts with NBD
+    -   4.5 Push-Pull Synchronization with Mounts
+        -   4.5.1 Overview
         -   4.5.2 Chunking
-        -   4.5.3 Background Pull
-        -   4.5.4 Background Push
-        -   4.5.5 Pipeline
-        -   4.5.6 Concurrent Device Initialization
-        -   4.5.7 Device Lifecycles
-        -   4.5.8 WAN Optimization
-    -   4.6 Live Migration
+        -   4.5.3 Background Pull and Push
+    -   4.6 Pull-Based Synchronization with Migrations
         -   4.6.1 Overview
-        -   4.6.2 Seeder
-        -   4.6.3 Leecher
-    -   4.7 Pluggable Encryption, Authentication and Transport
-    -   4.8 Concurrent Backends
-    -   4.9 Remote Stores as Backends
-        -   4.9.1 Overview
-        -   4.9.2 Key-Value Stores with Redis
-        -   4.9.3 Object Stores with S3
-        -   4.9.4 Document Databases with Cassandra
-    -   4.10 Concurrent Bi-Directional RPCs with Dudirekta
-        -   4.10.1 Overview
-        -   4.10.2 Usage
-        -   4.10.3 Protocol
-        -   4.10.4 RPC Providers
-        -   4.10.5 RPC Calls
-        -   4.10.6 Adapter for Mounts and Migrations
-    -   4.11 Connection Pooling with gRPC
-    -   4.12 Optimizing Throughput with fRPC
--   5 Results
-    -   5.1 Testing Environment
-    -   5.2 Access Methods
-    -   5.3 Initialization
-    -   5.4 Chunking
-    -   5.5 RPC Frameworks
-    -   5.6 Backends
--   6 Discussion
-    -   6.1 Remote Swap with ram-dl
-    -   6.2 Mapping Tape Into Memory With tapisk
-        -   6.2.1 Overview
-        -   6.2.2 Implementation
-        -   6.2.3 Evaluation
-    -   6.3 Improving Cloud Storage Clients
-        -   6.3.1 Existing Solutions
-        -   6.3.2 Hybrid Approach
-    -   6.4 Universal Database, Media and Asset Streaming
-        -   6.4.1 Streaming Access to Remote Databases
-        -   6.4.2 Making Arbitrary File Formats Streamable
-        -   6.4.3 Streaming App and Game Assets
-    -   6.5 Universal App State Mounts and Migrations
-        -   6.5.1 Modelling State
-        -   6.5.2 Mounting State
-        -   6.5.3 Migrating State
-        -   6.5.4 Migrating Virtual Machines
+        -   4.6.2 Migration Protocol and Critical Phases
+-   5 Implementation
+    -   5.1 Userfaults in Go with userfaultfd
+        -   5.1.1 Registration and Handlers
+        -   5.1.2 userfaultfd Backends
+    -   5.2 File-Based Synchronization
+        -   5.2.1 Caching Restrictions
+        -   5.2.2 Detecting File Changes
+        -   5.2.3 Synchronization Protocol
+        -   5.2.4 Multiplexer Hub
+        -   5.2.5 File Advertisement
+        -   5.2.6 File Receiver
+        -   5.2.7 File Transmission
+        -   5.2.8 Hash Calculation
+        -   5.2.9 File Reception
+    -   5.3 FUSE Implementation in Go
+    -   5.4 NBD with go-nbd
+        -   5.4.1 Overview
+        -   5.4.2 Server
+        -   5.4.3 Client
+        -   5.4.4 Client Lifecycle
+        -   5.4.5 Optimizing Access to the Block Device
+        -   5.4.6 Combining the NBD Client and Server to a Mount
+    -   5.5 Managed Mounts with r3map
+        -   5.5.1 Stages
+        -   5.5.2 Chunking
+        -   5.5.3 Background Pull
+        -   5.5.4 Background Push
+        -   5.5.5 Pipeline
+        -   5.5.6 Concurrent Device Initialization
+        -   5.5.7 Device Lifecycles
+        -   5.5.8 WAN Optimization
+    -   5.6 Live Migration
+        -   5.6.1 Overview
+        -   5.6.2 Seeder
+        -   5.6.3 Leecher
+    -   5.7 Pluggable Encryption, Authentication and Transport
+    -   5.8 Concurrent Backends
+    -   5.9 Remote Stores as Backends
+        -   5.9.1 Overview
+        -   5.9.2 Key-Value Stores with Redis
+        -   5.9.3 Object Stores with S3
+        -   5.9.4 Document Databases with Cassandra
+    -   5.10 Concurrent Bi-Directional RPCs with Dudirekta
+        -   5.10.1 Overview
+        -   5.10.2 Usage
+        -   5.10.3 Protocol
+        -   5.10.4 RPC Providers
+        -   5.10.5 RPC Calls
+        -   5.10.6 Adapter for Mounts and Migrations
+    -   5.11 Connection Pooling with gRPC
+    -   5.12 Optimizing Throughput with fRPC
+-   6 Results
+    -   6.1 Testing Environment
+    -   6.2 Access Methods
+    -   6.3 Initialization
+    -   6.4 Chunking
+    -   6.5 RPC Frameworks
+    -   6.6 Backends
+-   7 Discussion
+    -   7.1 Remote Swap with ram-dl
+    -   7.2 Mapping Tape Into Memory With tapisk
+        -   7.2.1 Overview
+        -   7.2.2 Implementation
+        -   7.2.3 Evaluation
+    -   7.3 Improving Cloud Storage Clients
+        -   7.3.1 Existing Solutions
+        -   7.3.2 Hybrid Approach
+    -   7.4 Universal Database, Media and Asset Streaming
+        -   7.4.1 Streaming Access to Remote Databases
+        -   7.4.2 Making Arbitrary File Formats Streamable
+        -   7.4.3 Streaming App and Game Assets
+    -   7.5 Universal App State Mounts and Migrations
+        -   7.5.1 Modelling State
+        -   7.5.2 Mounting State
+        -   7.5.3 Migrating State
+        -   7.5.4 Migrating Virtual Machines
+-   8 Summary
+-   9 Conclusion
+-   References
+
+Tables
+
+Graphics
+
+TODO: Add graphics table
+
+Abbrevations
+
+TODO: Add abbrevations table
 
 Introduction
 
@@ -4199,6 +4215,16 @@ a block device or memory region, essentially adding the capability to
 suspend/resume and migrate any application in the same way that is
 possible today over WAN, without requiring any or only minimal changes
 to the applications themselves.
+
+Summary
+
+TODO: Add summary
+
+Conclusion
+
+TODO: Add conclusion
+
+References
 
 [1] T. kernel development community, “Quick start.”
 https://www.kernel.org/doc/html/next/rust/quick-start.html, 2023.
