@@ -366,15 +366,21 @@ Backends</a></li>
 <li><a href="#discussion"><span class="toc-section-number">1.7</span>
 Discussion</a>
 <ul>
-<li><a href="#remote-swap-with-ram-dl"><span class="toc-section-number">1.7.1</span> Remote Swap with
+<li><a href="#userfaults"><span class="toc-section-number">1.7.1</span>
+Userfaults</a></li>
+<li><a href="#file-based-synchronization-1"><span class="toc-section-number">1.7.2</span> File-Based
+Synchronization</a></li>
+<li><a href="#fuse"><span class="toc-section-number">1.7.3</span>
+FUSE</a></li>
+<li><a href="#remote-swap-with-ram-dl"><span class="toc-section-number">1.7.4</span> Remote Swap with
 <code>ram-dl</code></a></li>
-<li><a href="#mapping-tape-into-memory-with-tapisk"><span class="toc-section-number">1.7.2</span> Mapping Tape Into Memory With
+<li><a href="#mapping-tape-into-memory-with-tapisk"><span class="toc-section-number">1.7.5</span> Mapping Tape Into Memory With
 <code>tapisk</code></a></li>
-<li><a href="#improving-cloud-storage-clients"><span class="toc-section-number">1.7.3</span> Improving Cloud Storage
+<li><a href="#improving-cloud-storage-clients"><span class="toc-section-number">1.7.6</span> Improving Cloud Storage
 Clients</a></li>
-<li><a href="#universal-database-media-and-asset-streaming"><span class="toc-section-number">1.7.4</span> Universal Database, Media and
+<li><a href="#universal-database-media-and-asset-streaming"><span class="toc-section-number">1.7.7</span> Universal Database, Media and
 Asset Streaming</a></li>
-<li><a href="#universal-app-state-mounts-and-migrations"><span class="toc-section-number">1.7.5</span> Universal App State Mounts and
+<li><a href="#universal-app-state-mounts-and-migrations"><span class="toc-section-number">1.7.8</span> Universal App State Mounts and
 Migrations</a></li>
 </ul></li>
 <li><a href="#summary"><span class="toc-section-number">1.8</span>
@@ -4213,9 +4219,79 @@ slightly higher throughputs compared to Cassandra.</p>
 <section id="discussion" data-number="0.7">
 <h2 data-number="1.7"><span class="header-section-number">1.7</span>
 Discussion</h2>
-<p>TODO: Add discussion once we have the results</p>
-<section id="remote-swap-with-ram-dl" data-number="0.7.1">
+<section id="userfaults" data-number="0.7.1">
 <h3 data-number="1.7.1"><span class="header-section-number">1.7.1</span>
+Userfaults</h3>
+<p><code>userfaultfd</code> is a simple way to map almost any object
+into memory. It is a comparatively simple approach, but also has
+significant architecture-related problems that limit it’s use. One
+problem is that it is only able to catch page faults, which means that
+it can only ever handle a data request the first time a chunk of memory
+gets accessed, since all future requests to a memory region handled by
+<code>userfaultfd</code> will simply return directly from RAM. This
+prevents the usage of this approach for accessing remote ressources that
+update over time, and also makes it hard to use it for applications with
+concurrent writers or shared ressources, sicne there would be no way of
+updating a section with a conflict.</p>
+<p>Due to these limitations, <code>userfaultfd</code> is essentially
+limited to read-only mounts of remote ressources, not synchronization.
+While it could be a viable solution for post-copy migration, it also
+prevents pullling chunks from being pulled before they have been accesed
+without adding an additional layer of indirection. The
+<code>userfaultfd</code> API socket is also synchronous, meaning that
+each page fault for each chunk needs to be handled one after the other,
+making it very vulnerable to long RTT values. This also means that the
+initial latency will be at minimum the RTT to the backend.</p>
+<p>While it has a lower first chunk latency compared to direct mounts
+and managed mounts at 0 ms RTT, the latency grows linearly as the RTT
+increases due to the aforementioned synchronous API socket and no way of
+pulling data in the background. While it has more predictable throughput
+and latency than the NBD-based solutions, for high RTT deployments, it
+becomes essentially unusable due to the low throughput. In summary,
+while this approach is interesting and idiomatic to Go, for most data,
+esp. larger datasets and high-RTT networks like a WAN, one of the
+alternative solutions is a better choice.</p>
+</section>
+<section id="file-based-synchronization-1" data-number="0.7.2">
+<h3 data-number="1.7.2"><span class="header-section-number">1.7.2</span>
+File-Based Synchronization</h3>
+<p>Similarly to <code>userfaultfd</code>, the approach based on
+<code>mmap</code>ing a memory region to a file and then synchronizing
+this file also has limitations. While <code>userfaultfd</code> is only
+able to catch the first reads to a file, this system is only able to
+catch wries, making it unsuitable for post-copy migration scenarios. It
+makes this system write-only, and very inefficient when it comes to
+adding hosts to the network at a later point, since all data needs to be
+continously synced to all other hosts that state could potentially be
+migrated too.</p>
+<p>To work around this issue, a central forwarding hub can be used,
+which reduces the amount of data streams required from the host
+currently hosting the data, but also adds other drawbacks such as
+operational complexity and additional latency. Thanks to this support
+for the central forwarding hub, file-based synchronization might be a
+good choice for highly throughput-constrained networks, but the
+inability to do post-copy migration due to it being write-only makes it
+a suboptimal choice for migration scenarios.</p>
+</section>
+<section id="fuse" data-number="0.7.3">
+<h3 data-number="1.7.3"><span class="header-section-number">1.7.3</span>
+FUSE</h3>
+<p>File systems in user space provide a solution that allows for both
+pre- and post-copy migration, but doesn’t come without downsides. As it
+operates in user space, it depends on context switching, which does add
+additional overhead compared to a file system implementation in kernel
+space. While some advanced file system features like
+<code>inotify</code> and others aren’t available for a FUSE, the biggest
+problem is the development overhead of implementing a FUSE, which
+requires the implementation of a completely custom file system. The
+optimal solution for memory synchronization is not to provide an entire
+file system to track reads and writes on, but instead to track a single
+file; for this use case, NBD serves as as an existing API providing this
+simpler approach, making FUSE not the optimal technology to implement
+memory synchronization.</p>
+</section>
+<section id="remote-swap-with-ram-dl" data-number="0.7.4">
+<h3 data-number="1.7.4"><span class="header-section-number">1.7.4</span>
 Remote Swap with <code>ram-dl</code></h3>
 <p><code>ram-dl</code><span class="citation" data-cites="pojtinger2023ramdl">[53]</span> is an experimental tech demo
 built to demonstrate how r3map can be used. It uses the fRPC mount
@@ -4244,11 +4320,11 @@ r3map API can be be, as the entire project consistents of under 300
 source lines of code, most of which is argument handling and boilerplate
 around configuration.</p>
 </section>
-<section id="mapping-tape-into-memory-with-tapisk" data-number="0.7.2">
-<h3 data-number="1.7.2"><span class="header-section-number">1.7.2</span>
+<section id="mapping-tape-into-memory-with-tapisk" data-number="0.7.5">
+<h3 data-number="1.7.5"><span class="header-section-number">1.7.5</span>
 Mapping Tape Into Memory With <code>tapisk</code></h3>
-<section id="overview-6" data-number="0.7.2.1">
-<h4 data-number="1.7.2.1"><span class="header-section-number">1.7.2.1</span> Overview</h4>
+<section id="overview-6" data-number="0.7.5.1">
+<h4 data-number="1.7.5.1"><span class="header-section-number">1.7.5.1</span> Overview</h4>
 <p><code>tapisk</code><span class="citation" data-cites="pojtinger2023tapisk">[54]</span> is a tool that exposes a
 tape drive as a block device. While seemingly unrelated to memory
 synchronization, it does serve as an interesting usecase due to the
@@ -4265,8 +4341,8 @@ is being accessed. Due to the modularity of r3map’s managed mount API
 however, it is possible to work around these issues, and make the tape
 appear as a random-access block device.</p>
 </section>
-<section id="implementation-1" data-number="0.7.2.2">
-<h4 data-number="1.7.2.2"><span class="header-section-number">1.7.2.2</span> Implementation</h4>
+<section id="implementation-1" data-number="0.7.5.2">
+<h4 data-number="1.7.5.2"><span class="header-section-number">1.7.5.2</span> Implementation</h4>
 <p>To achieve this, the background writes and reads provided by the
 managed mount API can be used. Using these, a faster storage backend
 (i.e. the disk) can be used as a caching layer, although the concurrent
@@ -4356,8 +4432,8 @@ iterations of chunks:</p>
 <span id="cb88-28"><a href="#cb88-28" aria-hidden="true" tabindex="-1"></a>    <span class="co">// ...</span></span>
 <span id="cb88-29"><a href="#cb88-29" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
 </section>
-<section id="evaluation" data-number="0.7.2.3">
-<h4 data-number="1.7.2.3"><span class="header-section-number">1.7.2.3</span> Evaluation</h4>
+<section id="evaluation" data-number="0.7.5.3">
+<h4 data-number="1.7.5.3"><span class="header-section-number">1.7.5.3</span> Evaluation</h4>
 <p><code>tapisk</code> is a unique application of r3map’s technology,
 and shows how flexible it is.By using this index, the effectively
 becomes tape a standard <code>ReadWriterAt</code> stage (and
@@ -4389,11 +4465,11 @@ LTFS is tens of thousands of kernel-level source lines of code,
 under 350.</p>
 </section>
 </section>
-<section id="improving-cloud-storage-clients" data-number="0.7.3">
-<h3 data-number="1.7.3"><span class="header-section-number">1.7.3</span>
+<section id="improving-cloud-storage-clients" data-number="0.7.6">
+<h3 data-number="1.7.6"><span class="header-section-number">1.7.6</span>
 Improving Cloud Storage Clients</h3>
-<section id="existing-solutions" data-number="0.7.3.1">
-<h4 data-number="1.7.3.1"><span class="header-section-number">1.7.3.1</span> Existing Solutions</h4>
+<section id="existing-solutions" data-number="0.7.6.1">
+<h4 data-number="1.7.6.1"><span class="header-section-number">1.7.6.1</span> Existing Solutions</h4>
 <p>r3map can also be used to create mountable remote filesystems with
 unique advantages over existing solutions. Currently, there are two main
 approaches to implementing cloud storage clients. Dropbox and Nextcloud
@@ -4421,8 +4497,8 @@ FUSE-based approach, and features such as <code>inotify</code>, symlinks
 etc. are hard to implement, leaving two imperfect solutions to
 implementing a cloud storage client.</p>
 </section>
-<section id="hybrid-approach" data-number="0.7.3.2">
-<h4 data-number="1.7.3.2"><span class="header-section-number">1.7.3.2</span> Hybrid Approach</h4>
+<section id="hybrid-approach" data-number="0.7.6.2">
+<h4 data-number="1.7.6.2"><span class="header-section-number">1.7.6.2</span> Hybrid Approach</h4>
 <p>Using r3map makes it possible to get the benefits of both approaches
 by not having to download any files in advance and also being able to
 write back changes asynchronously, as well as being able to use almost
@@ -4447,11 +4523,11 @@ synchronization technology like r3map can be used to not only
 synchronize memory regions, but other state too, including disks.</p>
 </section>
 </section>
-<section id="universal-database-media-and-asset-streaming" data-number="0.7.4">
-<h3 data-number="1.7.4"><span class="header-section-number">1.7.4</span>
+<section id="universal-database-media-and-asset-streaming" data-number="0.7.7">
+<h3 data-number="1.7.7"><span class="header-section-number">1.7.7</span>
 Universal Database, Media and Asset Streaming</h3>
-<section id="streaming-access-to-remote-databases" data-number="0.7.4.1">
-<h4 data-number="1.7.4.1"><span class="header-section-number">1.7.4.1</span> Streaming Access to Remote
+<section id="streaming-access-to-remote-databases" data-number="0.7.7.1">
+<h4 data-number="1.7.7.1"><span class="header-section-number">1.7.7.1</span> Streaming Access to Remote
 Databases</h4>
 <p>Another usecase that r3map can be used for is accessing a remote
 database locally. While using a database backend (such as the Cassandra
@@ -4477,8 +4553,8 @@ block device, no changes to SQLite are be required in order for it to
 support such streaming access; the SQLite file could simply be stored on
 a mounted file system provided by the mount’s block device.</p>
 </section>
-<section id="making-arbitrary-file-formats-streamable" data-number="0.7.4.2">
-<h4 data-number="1.7.4.2"><span class="header-section-number">1.7.4.2</span> Making Arbitrary File
+<section id="making-arbitrary-file-formats-streamable" data-number="0.7.7.2">
+<h4 data-number="1.7.7.2"><span class="header-section-number">1.7.7.2</span> Making Arbitrary File
 Formats Streamable</h4>
 <p>In addition to making databases streamable, r3map can also be used to
 access files in formats that usually don’t support being accessed before
@@ -4504,8 +4580,8 @@ does not require any changes to the media player being used, since the
 block device providing the ressource can simply be mounted as a file
 system and thus be used transparently.</p>
 </section>
-<section id="streaming-app-and-game-assets" data-number="0.7.4.3">
-<h4 data-number="1.7.4.3"><span class="header-section-number">1.7.4.3</span> Streaming App and Game
+<section id="streaming-app-and-game-assets" data-number="0.7.7.3">
+<h4 data-number="1.7.7.3"><span class="header-section-number">1.7.7.3</span> Streaming App and Game
 Assets</h4>
 <p>Another streaming usecase relates to the in-place streaming of
 assets. Usually, a game needs to be fully downloaded before it is
@@ -4548,11 +4624,11 @@ block device, or, if the interpreter/VM supports it,
 resulting memory region.</p>
 </section>
 </section>
-<section id="universal-app-state-mounts-and-migrations" data-number="0.7.5">
-<h3 data-number="1.7.5"><span class="header-section-number">1.7.5</span>
+<section id="universal-app-state-mounts-and-migrations" data-number="0.7.8">
+<h3 data-number="1.7.8"><span class="header-section-number">1.7.8</span>
 Universal App State Mounts and Migrations</h3>
-<section id="modelling-state" data-number="0.7.5.1">
-<h4 data-number="1.7.5.1"><span class="header-section-number">1.7.5.1</span> Modelling State</h4>
+<section id="modelling-state" data-number="0.7.8.1">
+<h4 data-number="1.7.8.1"><span class="header-section-number">1.7.8.1</span> Modelling State</h4>
 <p>Synchronization of app state is a fairly complex problem, and even
 for simple scenarios, a custom protocol is built for simple apps. While
 it possible to real-time databases like Firebase to synchronize some
@@ -4571,8 +4647,8 @@ the managed mount, direct mount or migration APIs to implement a
 universal way of both synchronization and migration of application
 state, without having to implement a custom protocol.</p>
 </section>
-<section id="mounting-state" data-number="0.7.5.2">
-<h4 data-number="1.7.5.2"><span class="header-section-number">1.7.5.2</span> Mounting State</h4>
+<section id="mounting-state" data-number="0.7.8.2">
+<h4 data-number="1.7.8.2"><span class="header-section-number">1.7.8.2</span> Mounting State</h4>
 <p>By allocating all structures on r3map’s provided <code>mmap</code>ed
 byte slice, many interesting usecases become possible. For example, a
 TODO app could use it as it’s backend. Once loaded, the app mounts the
@@ -4591,8 +4667,8 @@ writebacks can sync them back to the remtote. If the local backend is
 persistent, i.e. file-based, such a system can even survive network
 outages.</p>
 </section>
-<section id="migrating-state" data-number="0.7.5.3">
-<h4 data-number="1.7.5.3"><span class="header-section-number">1.7.5.3</span> Migrating State</h4>
+<section id="migrating-state" data-number="0.7.8.3">
+<h4 data-number="1.7.8.3"><span class="header-section-number">1.7.8.3</span> Migrating State</h4>
 <p>In addition to using managed mounts to access remotely stored
 application state, migration of arbitrary app state also becomes a
 posibility. If a user has a TODO app running on a host like their
@@ -4608,8 +4684,8 @@ migration API deeply with system events, i.e. by registering a service
 that migrates applications off a system before a shutdown procedure
 completes.</p>
 </section>
-<section id="migrating-virtual-machines" data-number="0.7.5.4">
-<h4 data-number="1.7.5.4"><span class="header-section-number">1.7.5.4</span> Migrating Virtual
+<section id="migrating-virtual-machines" data-number="0.7.8.4">
+<h4 data-number="1.7.8.4"><span class="header-section-number">1.7.8.4</span> Migrating Virtual
 Machines</h4>
 <p>It is important to note that there are a few limitations with
 synchronizing and migrating an application’s internal stateful data
