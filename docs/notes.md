@@ -978,26 +978,119 @@ csl: static/ieee.csl
 ### Access Methods
 
 - Latency for technologies
+  - Compared to disk and memory, all three other access methods (userfaultfd, direct mounts, managed mounts) are slow
+  - Latency of accessing a chunk on userfaultfd is 15x slower than on disk
+  - Latency of accessing a chunk on direct mounts is 28x slower than on disk, almost double the latency of `userfaultfd`
+  - Managed mounts is 40x slower than disk
+  - It is however important to consider the total scale: All of these are in the scale of µs
+  - Interesting to see that managed mounts have a significantly higher latency
+  - Looking at the distribution, we can see a similar pattern
+  - Spread for managed mount is the smallest, but there are significant outliers up until 1750 µs
+  - Direct mounts has the highest spread of the access methods
+  - Up until now we took a look at 0ms RTT, meaning that we connected the backend to the mount/userfault handler directly
+  - If we take a look at how it behaves as the RTT changes, we get a different story
+  - Both userfaultfd and direct mounts first chunk latency grows linearly
+  - For managed mount, the latency gets slightly higher up to a RTT of 25ms, but even then max. 1/2 the RTT of the latency that is expected compared to the direct mount of userfaultfd
+  - After 25ms, the first chunk latency is the same or lower as it was for 0 RTT
+  - Similar pattern if workers are tuned for managed mounts
+  - For zero workers, latency grows almost linearly with the RTT
+  - If more than 0 workers are used, the latency keeps growing almost linearly, until it peaks at 10ms and then drops down to the pre-0ms value
 - Throughput for technologies
+  - For throughput of the memory, disk, userfaultfd, direct mounts and managed mounts access methods, we can see similar trends but some distinctions
+  - Memory has the highest throughput at over 20 GB/s
+  - This however is not followed by the disk as it was in latency, but rather by the direct mounts (at 2.8GB/s) and managed mounts (2.4GBs)
+  - The disk is at 2.3GB/s, while userfaultfd falls behind at 450 MB/s
+  - If we only look at userfaultfd, managed mounts and direct mounts this different between the access methods becomes more clear
+  - When it comes to the throughput distribution, userfaultfd has the lowest spread, while managed mounts has the highest, closely followed by direct mounts
+  - Interestingly, the median of direct mounts is especially high compared to the other access methods
+  - As with latency, the results are very different if the RTT increases
+  - Direct mounts and userfaultfd drop to below 10MB/s and 1MB/s respectively after the RTT reaches 6ms and continue to drop as the RTT increases
+  - Managed mounts also drop, but mess less drastically, even at a RTT of 25ms the throughput is still at over 500MB/s
+  - If the RTT is lower than 10ms, almost 1GB/s can still be achieved with managed mounts
+  - Similar results to what was measured with latency can be seen with different pull worker counts for the managed mount as RTT increases
+  - Low worker counts have good performance at 0ms RTT
+  - As RTT increases, the higher the pull worker count, the higher the throughput continues to be
+  - For 16384 workers, throughput can be kept at consistently over 1GB/s even at 30ms latency
 - Write throughput for technologies
+  - So far we've looked at read throughput
+  - For a migration/remote access usecase that mostly makes sense
+  - But for completeness, data for write throughput is also available
+  - Note that the file is opened with O_DIRECT for this benchmark, causing additional overhead when writing, but also - for benchmark purposes - don't require `msync`
+  - As RTT increases, managed mounts have much better write performance
+  - Write speed for direct mounts drop down to below 1 MB/s after 4ms, while they are consistenly above 230 MB/s for managed mounts, independent of RTT
+  - Write throughput for technologies
 
 ### Initialization
 
 - Mount initialization time
+  - There are two diffent ways to check for whether a device is ready: Polling or subscribing to the udev events
+  - Initialization time for udev is higher on average than the polling method
+  - Spread is similar for both methods
 - Pre-emptive pulls
+  - When looking at pre-emptive pulls as RTT increases, the role of workers becomes apparent
+  - The higher the worker count is, the more data can be pulled
+  - While for 4096 workers, almost 40 MB can be pulled pre-emptively at 7ms, this drops to 20 MB for 2048 workers, 5 MB for 512 workers and continues to drop
+  - Even for a RTT of 0ms, more workers mean more pre-emptively pulled data in general
 
 ### Chunking
 
 - Server vs. client-side chunking
+  - Chunking can be done on either client- or server-side for both direct and managed mount
+  - It is clear that unless the RTT is 0, managed mounts yield significantly higher throughput than direct mounts of both server- and client side chunking
+  - When looking at the direct mounts, server-side chunking is very fast for 0ms RTT at almost 500 MB/s throughput, but drops very quickly to 75MB/s at 1ms, 40MB/s at 2ms, and continues to drop down to just over 5MB/s at 20ms RTT
+  - For client-side chunking, the result is lower at just 30MB/s even at a 0ms RTT, and then continues to drop steadily it reaches 4.5MB/s at 20ms RTT
+  - Looking at managed mounts the scenario is very different
+  - Throughput also declines as RTT increases, but less drastically
+  - Server-side chunking has much higher throughputs, at 450MB/s at 0ms RTT vs. 230MB/s at 0ms for the client-side chunking
+  - As RTT increases, both direct and managed backends drop following a similar pattern, dropping to 300 MB/s for managed mounts and 240MB/s for direct mounts at 20ms RTT
 
 ### RPC frameworks
 
 - Throughput for RPC frameworks
+  - Looking at the performance for dudirekta, gRPC and fRPC for managed and direct mounts, quite drastic throughput differences can be seen as the RTT increases
+  - While for 0 RTT, the direct mounts provide the best throughput in line with the measurements for the different access technologies, the throughput drops drastically as RTT increases compared to managed mounts
+  - In general, dudirekta has much lower throughput than both gRPC and fRPC
+  - When looking at direct mounts specifically, the sharp difference between dudirekta and gRPC/RPC is visible
+  - While at 0 RTT, fRPC is at 390MB/s and gRPC is at 500MB/s, dudirekta reaches just 50MB/s
+  - At 2ms, throughput for all RPC frameworks drop drastically as the RTT increases, with fRPC and gRPC both reaching 40MB/s, and Dudirekta dropping to just 20MB/s
+  - All three RPC frameworks reach a throughput of just 7 MB/s at 14ms, and then continue to decrease until they reach 3 MB/s at 40ms
+  - For managed mounts, there is a similarly stark difference between dudirekta and the other RPC frameworks
+  - Dudirekta's throughput stays consistently low, at an average of 45MB/s, interestingly performing better in the >20ms RTT section
+  - Like in direct mounts, gRPC manages to outperform fRPC at 0ms RTT at 395MB/s vs. 250MB/s, but fRPC gets consistenly higher values starting at 2ms RTT
+  - fRPC has a better throughput than gRPC on average, managing to keep above 300MB/s throughput until 25ms RTT, while gRPC drops to below this after 14ms RTT
+  - Average throughput of fRPC is higher, but as RTT reaches 40 it becomes less drastic at a max. of 50MB/s difference after 28ms RTT is reached
 
 ### Backends
 
 - Latency for backends
+  - Average first chunk latency for memory, file, directory, Redis and Cassandra backends at 0ms RTT are all similar and within µs range
+  - The latency for accessing Redis is the lowest at 2.5µs
+  - Looking at the latency distribution, Redis once again is visible as having both the smallest amount of spread and the lowest amount of latency
+  - Memory and S3 stick out for having a low amount of outlyers when it comes to first chunk latency, while the directory backend is notable for it's significant spread
 - Throughput for backends
+  - When looking at throughput, the backends have significantly more different characteristics compared to latency
+  - File and memory consistently have high throughput
+  - For direct mounts, file throughput is higher than memory througput at 2081 MB/s vs 1630MB/s on average respectively
+  - For managed mounts, this increases to 2372MB/s vs. 2178MB/s respectively
+  - When comparing the direct vs. managed mount values, Cassandra and the remote backends in general show vast differences in throughput
+  - Cassandra reaches almost 700MB/s for a managed mount, while it falls to 3MB/s when using a direct one
+  - Similarly so, for Redis and the directory backend, direct mounts are roughly 3.5 times slower than the managed mounts, while for S3 it is 5.5 times slower
+  - When looking at the throughput for the direct mounts with the option of having remote access, Redis has a much higher average throughput at 114MB/s compared to both Cassandra at 3MB/s and S3 at 8MB/s
+  - For managed mounts, Cassandra performs better than both S3 and Redis, managing 689MB/s compared to 439MB/s for Redis and 44 MB/s for S3
+  - The throughput distribution for the different backends with direct mounts is similarly interesting
+  - A logarithmic Y axis is used to show the kernel density estimation for Redis, which has a much wider spread compared to Redis and S3, but is also consistently higher than both even with this spread
+  - For managed mounts, Cassandra has a high spread but also the highest throughput, while Redis has the lowest
+  - S3 is also noticable here again for having a consistently lower througput compared to both alternatives, with an average spread
+  - When looking at average throughput for direct mounts, all backends see their throughput drop drastically as RTT increases
+  - Memory and file have vey high throughputs above 1.4GB/s at 0MS RTT, while Redis achieves just 140MB/s as the closest network-capable alternative
+  - Directory noticably has a lower throughput than Redis, despite not being network-capable
+  - All other technologies are at below 15MB/s for direct mounts, even at 0ms RTT, and all technologies towards below 3MB/s at 40ms for direct mounts
+  - When looking at the network-capable backends in isolation, the difference between Redis and the others in direct mount performance is striking, but all trend towards low throughput as the RTT increases
+  - For managed mounts, the memory and file backends again outperform all other options at over 2.5GB/s, while the closest network-capable technology reaches just 660MB/s
+  - Similarly to the latency, all technologies trend towards a similar throughput as RTT increases, with sharp drops for the memory and file backends after 2ms
+  - Noticably, both the directory and S3 backends underperform, even for managed mounts, dropping down to just 55MB/s at 40ms RTT
+  - When looking at just the network-capable backends, it is clear again that S3 underperforms drastically
+  - Both Redis and Cassandra start between 550-660MB/s at 0 RTT, and then begin to drop after 6ms RTT until the drop to 170-180MB/s at 40ms RTT, with Redis consistently being slightly above the throughput for Cassandra
 
 ## Discussion
 
