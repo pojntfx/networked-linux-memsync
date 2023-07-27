@@ -164,19 +164,29 @@ Synchronization</a></li>
 FUSE</a></li>
 <li><a href="#nbd"><span class="toc-section-number">6.4</span>
 NBD</a></li>
-<li><a href="#mounts-and-live-migration"><span class="toc-section-number">6.5</span> Mounts and Live Migration</a></li>
-<li><a href="#use-cases"><span class="toc-section-number">6.6</span> Use
-Cases</a>
+<li><a href="#direct-mounts"><span class="toc-section-number">6.5</span>
+Direct Mounts</a></li>
+<li><a href="#managed-mounts"><span class="toc-section-number">6.6</span> Managed Mounts</a></li>
+<li><a href="#chunking-1"><span class="toc-section-number">6.7</span>
+Chunking</a></li>
+<li><a href="#rpc-frameworks-1"><span class="toc-section-number">6.8</span> RPC Frameworks</a></li>
+<li><a href="#backends-1"><span class="toc-section-number">6.9</span>
+Backends</a></li>
+<li><a href="#regionfs"><span class="toc-section-number">6.10</span>
+RegionFS</a></li>
+<li><a href="#language-limitations"><span class="toc-section-number">6.11</span> Language Limitations</a></li>
+<li><a href="#use-cases"><span class="toc-section-number">6.12</span>
+Use Cases</a>
 <ul>
-<li><a href="#remote-swap-with-ram-dl"><span class="toc-section-number">6.6.1</span> Remote Swap With
+<li><a href="#remote-swap-with-ram-dl"><span class="toc-section-number">6.12.1</span> Remote Swap With
 <code>ram-dl</code></a></li>
-<li><a href="#mapping-tape-into-memory-with-tapisk"><span class="toc-section-number">6.6.2</span> Mapping Tape Into Memory With
+<li><a href="#mapping-tape-into-memory-with-tapisk"><span class="toc-section-number">6.12.2</span> Mapping Tape Into Memory With
 <code>tapisk</code></a></li>
-<li><a href="#improving-file-system-synchronization-solutions"><span class="toc-section-number">6.6.3</span> Improving File System
+<li><a href="#improving-file-system-synchronization-solutions"><span class="toc-section-number">6.12.3</span> Improving File System
 Synchronization Solutions</a></li>
-<li><a href="#universal-database-media-and-asset-streaming"><span class="toc-section-number">6.6.4</span> Universal Database, Media and
+<li><a href="#universal-database-media-and-asset-streaming"><span class="toc-section-number">6.12.4</span> Universal Database, Media and
 Asset Streaming</a></li>
-<li><a href="#universal-app-state-synchronization-and-migration"><span class="toc-section-number">6.6.5</span> Universal App State
+<li><a href="#universal-app-state-synchronization-and-migration"><span class="toc-section-number">6.12.5</span> Universal App State
 Synchronization and Migration</a></li>
 </ul></li>
 </ul></li>
@@ -2542,12 +2552,17 @@ vulnerable to long RTT values</li>
 <li>Also means that the initial latency will be at minimum the RTT to
 the remote source, and (without caching) so will be each future
 request</li>
-<li>The biggest problem however: All of these drawbacks mean that in
-real-life usecases, the maximum throughput, even if the RTT is 0 and it
-runs on a modern computer, is only ~500MB/s, and gets drastically worse
-as RTT increases due to the synchronous reads</li>
-<li>Problem with such a low throughput is also that the network speed
-quickly becomes the limit</li>
+<li>Has faster acccess latency compared to direct mounts and managed
+mounts at 0 RTT</li>
+<li>Latency grows with RTT linearly as with direct mounts because there
+are no background pulls and no pre-emptive pulls like for managed
+mounts</li>
+<li>Significantly lower througput than direct mounts and managed mounts,
+esp. compared to managed mounts due to linear access</li>
+<li>Has a lower spread than direct mounts and managed mounts, but even
+with the more predictable throughput, its still consistently slower than
+both</li>
+<li>For high RTT, it becomes essentially unusable</li>
 <li>In summary, while this approach is interesting and very idiomatic to
 Go, for most data, esp. larger datasets and in high-latency scenarios/in
 WAN, we need a better solution</li>
@@ -2658,37 +2673,156 @@ since it provides a stable base to build the mounts and migration APIs
 on</li>
 </ul></li>
 </ul>
-<h2 id="mounts-and-live-migration"><span class="header-section-number">6.5</span> Mounts and Live Migration</h2>
+<h2 id="direct-mounts"><span class="header-section-number">6.5</span>
+Direct Mounts</h2>
 <ul>
-<li>Overhead of using managed mounts
+<li>Have a high spread/are unpredictable when from a first chunk latency
+perspective at 0ms RTT, but is more predictable when it comes to
+throughput</li>
+<li>First chunk latency grows linearly like userfaultfd as RTT
+increases, because there are no pre-emptive pulls</li>
+<li>Has the highest throughput at 0ms RTT, even higher than managed
+mounts, because the duplicate I/O operations for the background pull are
+not necessary</li>
+<li>Throughput doesn’t drop as rapidly as userfaultfd, but still
+significantly because there is no background pulls, all data needs to be
+accessed one by one</li>
+<li>Write speed is subpar because writes need to be delivered directly
+remotely, as there are no background pushes compared to managed
+mounts</li>
+<li>Is a good solution if the internal overhead of managed mounts is
+higher than the overhead of the RTT, which can be the case in LAN or
+other low-latency networks</li>
+</ul>
+<h2 id="managed-mounts"><span class="header-section-number">6.6</span>
+Managed Mounts</h2>
 <ul>
-<li>Another interesting aspect of optimization to look at is the
-overhead of managed mounts</li>
-<li>It is possible for managed mounts (and migrations) to deliver
-signficantly lower performance compared to direct mounts</li>
-<li>This is because using managed mounts come with the cost of potential
-duplicate I/O operations</li>
-<li>For example, if memory is being accessed linearly from the first to
-the last offset immediately after it being mounted, then using the
-background pulls will have no effect other than causing a write
-operation (to the local caching backend) compared to just directly
-reading from the remote backend</li>
-<li>This however is only the case in scenarios with a very low latency
-between the local and remote backends</li>
-<li>If latency becomes higher, then the ability to pull the chunks in
-the background and in parallel with the puller will offset the cost of
-duplicate I/O</li>
-<li>The same applies to slow local backends, e.g. if slow disks or
-memory are being used, which can mean that offsetting the duplicate I/O
-will need a significantly higher latency to be worth it</li>
+<li>Have an internal overhead due to duplicate I/O operations for
+background pull, resulting in worse throughput for low (esp. 0ms) RTT
+scenarios and higher inital latencies</li>
+<li>As soon as the RTT reaches levels more typical for a WAN deployment,
+this becomes</li>
+<li>Tuning the background workers can substantially increase the
+throughput values, since data can be accessed in parallel</li>
+<li>Pull priority function can allow for even more optimized pulls</li>
+<li>Pre-emptive pulls can significantly reduce initial chunk latency,
+since multiple MB can be pulled before the device is open</li>
+<li>Higher worker counts can significanlty increase the amount of chunks
+that can be pre-emptively pulled</li>
+<li>Generally speaking, polling is almost always the better choice for
+an initialization algorithm in order to reduce the overall
+<code>Open()</code> time and thus reduce the overhead of mounting a
+remote ressource</li>
+<li>Write throughput for managed mounts is significantly better than
+that of the direct mounts, since writes only go to the local backend,
+and are then asynchronously synced to the remote using the periodic
+background push system</li>
+<li>Is a good solution for WAN deployments, as soon as the RTT increases
+to a point that is high enough for it to balance out the internal
+overhead of the duplicate I/O operations</li>
+</ul>
+<h2 id="chunking-1"><span class="header-section-number">6.7</span>
+Chunking</h2>
+<ul>
+<li>In general, server-side chunking should always be preferred due to
+the much better throughput</li>
+<li>For direct mounts, due to the linear access, the throughput is low
+for both server- and client-side chunking due to linear access as RTT
+increases, but server-side chunking is much more performant in this
+circumstance for low RTTs</li>
+<li>For managed mounts, client-side chunking can half the throughput of
+a mount compared to server-side chunking, mostly because if the chunks
+are smaller than the NBD block size, it decreases the amount of chunks
+that can be pulled relative if the worker count stays the same, while
+server-side chunking doesn’t require and extra worker on the client for
+each extra chunk that needs to be pulled, making it possible for the
+background pull system to pull more, increasing the throughput</li>
+</ul>
+<h2 id="rpc-frameworks-1"><span class="header-section-number">6.8</span>
+RPC Frameworks</h2>
+<ul>
+<li>Dudirekta
+<ul>
+<li>Consistently has lower throughput than the alternaties</li>
+<li>Performs better for managed mounts than direct mounts thanks to
+support for concurrent RPCs</li>
+<li>Less sensistive to RTT compared to gRPC and fRPC for managed
+mounts</li>
+<li>Even with managed mounts, much worse throughput compared to both due
+to no connection pooling support</li>
+<li>Remains a good option for prototyping due to lower development
+overhead and transport layer independence</li>
 </ul></li>
-<li>Comparing mount vs. migration API performance
+<li>gRPC
 <ul>
-<li>It is interesting to look at how the migration API performs compared
-to the single-phase mount API</li>
-<li>The mounts API should have a shorter total latency, but a higher
-“downtime” since it needs to initialize the device first</li>
+<li>Considerably faster than Dudirekta for managed and direct
+mounts</li>
+<li>Has support for connection pooling, giving it a significant
+performance benefit over Dudirekta for managed mounts</li>
+<li>Very good performance for direct mounts with 0ms RTT</li>
+<li>Is an industry standard, and has good tooling and known scalability
+characteristics</li>
 </ul></li>
+<li>fRPC
+<ul>
+<li>Has consistently higher throughput than gRPC in managed mounts due
+to internal optimizations</li>
+<li>Is faster than Dudirekta in both direct mounts and managed mounts
+due to support for connection pooling</li>
+<li>Is much more minimal than gRPC/Protocol Buffers, making it more
+maintainable</li>
+<li>Has less enterprise testing and tooling available, making it a more
+performant but also less proven solution</li>
+</ul></li>
+</ul>
+<h2 id="backends-1"><span class="header-section-number">6.9</span>
+Backends</h2>
+<ul>
+<li>Redis
+<ul>
+<li>Has the smallest amount of spread and lowest amount of initial chunk
+latency at 0ms RTT</li>
+<li>Direct mounts have a lower throughput compared to managed mounts,
+showing good support for concurrent chunk access</li>
+<li>Has the highest throughput for direct mounts by a significant margin
+due to its optimized protocol and fast key lookups</li>
+<li>Is also the fastest network-capable backend for managed mounts, once
+again due to the good support for concurrent access</li>
+<li>Good choice for ephermeral data like caches, where speed or the need
+for the direct mount API is important</li>
+</ul></li>
+<li>Cassandra
+<ul>
+<li>Has highest throughput in 0ms RTT deployments for direct mounts,
+showing very good concurrent access performance</li>
+<li>Falls short when it comes to usage in direct mounts, where the
+performance is worse than any other backend, showing a high read latency
+overhead for looking up individual chunks</li>
+<li>As RTT increases, has only slightly less throughput compared to
+Redis</li>
+<li>Is a good choice if most data will be accessed by the managed
+mount’s background pull system, but a bad choice if chunks will be
+accessed outside of this due to the low direct mount throughput</li>
+<li>Is a good choice if the data should be persistent, since Cassandra
+can provide varying consistency guarantees, unlike Redis</li>
+</ul></li>
+<li>S3
+<ul>
+<li>Has the lowest performance of the network-capable backends that were
+implemented for managed mounts</li>
+<li>Performance for managed mounts is consistently low even as RTT
+increases, presumably due to the high overhead of having to make HTTP
+requests to retrieve individual chunks</li>
+<li>Does perform better than Cassandra for direct mounts</li>
+<li>Is a good choice if S3 is the only choice due to architectural
+constraints or if the chance of chunks being read outside of the managed
+mount’s background pull system is high, where Cassandra has worse
+throughput</li>
+</ul></li>
+</ul>
+<h2 id="regionfs"><span class="header-section-number">6.10</span>
+RegionFS</h2>
+<ul>
 <li>Comparing this API to RegionFS, an existing remote memory system
 <ul>
 <li>A similar approach was made in RegionFS<span class="citation">[33]</span></li>
@@ -2715,6 +2849,9 @@ authentication could work</li>
 mostly LAN with protocols like RDMA comm modules, while r3map targets
 mostly WAN with a pluggable transport protocol interface</li>
 </ul></li>
+</ul>
+<h2 id="language-limitations"><span class="header-section-number">6.11</span> Language Limitations</h2>
+<ul>
 <li>Issues with the r3map implementation
 <ul>
 <li>While the managed mounts API mostly works, there are some issues
@@ -2743,9 +2880,9 @@ provide a good alternative</li>
 through a different interface to make it usable in Go</li>
 </ul></li>
 </ul>
-<h2 id="use-cases"><span class="header-section-number">6.6</span> Use
+<h2 id="use-cases"><span class="header-section-number">6.12</span> Use
 Cases</h2>
-<h3 id="remote-swap-with-ram-dl"><span class="header-section-number">6.6.1</span> Remote Swap With
+<h3 id="remote-swap-with-ram-dl"><span class="header-section-number">6.12.1</span> Remote Swap With
 <code>ram-dl</code></h3>
 <ul>
 <li>ram-dl is a fun experiment</li>
@@ -2767,8 +2904,8 @@ can be used for interesting usecases such as real, remote RAM/Swap</li>
 project is just ~300 SLOC including backend configuration, flags and
 other boilerplate</li>
 </ul>
-<h3 id="mapping-tape-into-memory-with-tapisk"><span class="header-section-number">6.6.2</span> Mapping Tape Into Memory With
-<code>tapisk</code></h3>
+<h3 id="mapping-tape-into-memory-with-tapisk"><span class="header-section-number">6.12.2</span> Mapping Tape Into Memory
+With <code>tapisk</code></h3>
 <ul>
 <li>Overview
 <ul>
@@ -2844,7 +2981,7 @@ is 10s of thousands of SLOC, tapisk achieves a similar feature set in
 just under 350 SLOC</li>
 </ul></li>
 </ul>
-<h3 id="improving-file-system-synchronization-solutions"><span class="header-section-number">6.6.3</span> Improving File System
+<h3 id="improving-file-system-synchronization-solutions"><span class="header-section-number">6.12.3</span> Improving File System
 Synchronization Solutions</h3>
 <ul>
 <li>Existing Solutions
@@ -2906,8 +3043,8 @@ synchronization tooling can be used to solve essentially the
 synchronization of any state, including disks</li>
 </ul></li>
 </ul>
-<h3 id="universal-database-media-and-asset-streaming"><span class="header-section-number">6.6.4</span> Universal Database, Media and
-Asset Streaming</h3>
+<h3 id="universal-database-media-and-asset-streaming"><span class="header-section-number">6.12.4</span> Universal Database, Media
+and Asset Streaming</h3>
 <ul>
 <li>Streaming access to remote databases
 <ul>
@@ -3004,7 +3141,7 @@ binaries/scripts/libraries from, or by using the block device as a file
 or <code>mmap</code>ing it directly to fetch it</li>
 </ul></li>
 </ul>
-<h3 id="universal-app-state-synchronization-and-migration"><span class="header-section-number">6.6.5</span> Universal App State
+<h3 id="universal-app-state-synchronization-and-migration"><span class="header-section-number">6.12.5</span> Universal App State
 Synchronization and Migration</h3>
 <ul>
 <li>Modelling state

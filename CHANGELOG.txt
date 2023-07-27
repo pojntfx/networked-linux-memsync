@@ -1,3 +1,9 @@
+commit 379f5710d47633c7917b9c290fae6964ebd44283
+Author: Felicitas Pojtinger <felicitas@pojtinger.com>
+Date:   Thu Jul 27 04:43:54 2023 +0200
+
+    feat: Add discussion notes for direct mounts, managed mounts, chunking, RPC frameworks and backends
+
 commit c9fbc6069131f14257c5cf882b2e69a1785450e0
 Author: Felicitas Pojtinger <felicitas@pojtinger.com>
 Date:   Thu Jul 27 03:10:48 2023 +0200
