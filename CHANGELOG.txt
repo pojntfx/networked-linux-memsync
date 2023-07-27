@@ -1,3 +1,9 @@
+commit fad74642f867c6567e0c5a2d884aaa92c1827352
+Author: Felicitas Pojtinger <felicitas@pojtinger.com>
+Date:   Fri Jul 28 01:38:37 2023 +0200
+
+    refactor: Add memory specifications
+
 commit dcb080aba1cc32eff9a72150a91fb3f382fc990b
 Author: Felicitas Pojtinger <felicitas@pojtinger.com>
 Date:   Fri Jul 28 01:29:52 2023 +0200
