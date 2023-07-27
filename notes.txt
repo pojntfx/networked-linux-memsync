@@ -1982,7 +1982,7 @@ Access Methods
     -   Direct mounts and userfaultfd drop to below 10MB/s and 1MB/s
         respectively after the RTT reaches 6ms and continue to drop as
         the RTT increases
-    -   Managed mounts also drop, but mess less drastically, even at a
+    -   Managed mounts also drop, but much less drastically, even at a
         RTT of 25ms the throughput is still at over 500MB/s
     -   If the RTT is lower than 10ms, almost 1GB/s can still be
         achieved with managed mounts
@@ -2007,7 +2007,6 @@ Access Methods
     -   Write speed for direct mounts drop down to below 1 MB/s after
         4ms, while they are consistenly above 230 MB/s for managed
         mounts, independent of RTT
-    -   Write throughput for technologies
 
 Initialization
 

@@ -1,3 +1,9 @@
+commit 4491d58a9bf94afdea5d85e3effc93e2f15da534
+Author: Felicitas Pojtinger <felicitas@pojtinger.com>
+Date:   Thu Jul 27 22:53:40 2023 +0200
+
+    feat: Add analysis to results section as paragraphs
+
 commit e1ad05806c3e6e8c8bfa042c1b3d0972b9e4404f
 Author: Felicitas Pojtinger <felicitas@pojtinger.com>
 Date:   Thu Jul 27 04:54:27 2023 +0200
