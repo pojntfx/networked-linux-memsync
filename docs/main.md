@@ -16,6 +16,16 @@ csl: static/ieee.csl
 
 # Efficient Synchronization of Linux Memory Regions over a Network: A Comparative Study and Implementation
 
+## Tables
+
+### Graphics
+
+TODO: Add graphics table
+
+### Abbrevations
+
+TODO: Add abbrevations table
+
 ## Introduction
 
 TODO: Add introduction
@@ -2483,3 +2493,13 @@ It is important to note that there are a few limitations with synchronizing and 
 In order to keep the possibility of migrating arbitrary state, but also allow for cross-architecture compatibility, VMs can be used. Keeping with the TODO app example, if the resulting app is compiled to Wasm, instead of having to allocate all memory that is to be synchronized from the r3map-provided `mmap`ed byte slice, it is possible to instead simply synchronize the Wasm VM's linear memory as a whole, which also allows storing the entire app's state on a remote as well as migrating an entire app. Similarly so, the app's binary, mounted WASI filesystems etc. could all be synchronized this way, too. Thanks to the preemptive pull implementation outlined earlier, the VM startup and device initialization can also be parallized to allow for shorter latencies while resuming the VM.
 
 This capability is not limited to Wasm VMs however; rather, it is possible to add these features to almost any hypervisor or virtual machine that supports mapping a application's/virtual machine's state to a block device or memory region, essentially adding the capability to suspend/resume and migrate any application in the same way that is possible today over WAN, without requiring any or only minimal changes to the applications themselves.
+
+## Summary
+
+TODO: Add summary
+
+## Conclusion
+
+TODO: Add conclusion
+
+## References
