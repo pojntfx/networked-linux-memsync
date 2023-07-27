@@ -1134,33 +1134,6 @@ csl: static/ieee.csl
 - The optimal solution would be to not expose a full file system to track changes, but rather a single file
 - As a result of this, the significant implementation overhead of such a file system led to it not being chosen, since NBD is available as an alternative
 
-### NBD
-
-- Limitations of NBD and `ublk` as an alternative
-  - NBD is the underlying technology for both direct and managed mounts
-  - NBD is a battle-tested solution for this with fairly good performance, but in the future a more lean implemenation called `ublk` could also be used
-  - `ublk` uses `io_uring`, which means that it could potentially allow for much faster concurrent access
-  - It is similar to NBD; it also uses a user space server to provide the block device backend, and a kernel `ublk` driver that creates `/dev/ublkb*` devices
-  - Unlike as it is the case for the NBD kernel module, which uses a rather slow UNIX or TCP socket to communicate, `ublk` is able to use `io_uring` pass-through commands
-  - The `io_uring` architecture promises lower latency and better throughput
-  - Because it is however still experimental and docs are lacking, NBD was chosen
-- `BUSE` and `CUSE` as alternatives to NBD
-  - Another option of implementing a block device is BUSE (block devices in user space)
-  - BUSE is similar to FUSE in nature, and similarly to it has a kernel and user space server component
-  - Similarly to `ublk` however, BUSE is experimental
-  - Client libraries in Go are also experimental, preventing it from being used as easily as NBD
-  - Similarly so, a CUSE could be implemented (char device in user space)
-  - CUSE is a very flexible way of defining a char (and thus block) device, but also lacks documentation
-  - The interface being exposed by CUSE is more complicated than that of e.g. NBD, but allows for interesting features such as custom `ioctl`s (code snippet from https://github.com/pojntfx/webpipe/blob/main/pkg/cuse/device.go#L3-L15)
-  - The only way of implementing it without too much overhead however is CGo, which comes with its own overhead
-  - It also requires calling Go closures from C code, which is complicated (code snippet from https://github.com/pojntfx/webpipe/blob/main/pkg/cuse/bindings.go#L79-L132)
-  - Implementing closures is possible by using the `userdata` parameter in the CUSE C API (code snippet from https://github.com/pojntfx/webpipe/blob/main/pkg/cuse/cuse.c#L20-L22)
-  - To fully use it, it needs to first resolve a Go callback in C, and then call it with a pointer to the method's struct in user data, effectively allowing for the use of closures (code snippet from https://github.com/pojntfx/webpipe/blob/main/pkg/cuse/bindings.go#L134-L162)
-  - Even with this however, it is hard to implement even a simple backend, and the CGo overhead is a significant drawback (code snippet from https://github.com/pojntfx/webpipe/blob/main/pkg/devices/trace_device.go)
-  - The last alternative to NBD devices would be to extend the kernel with a new construct that allows for essentially a virtual file to be `mmap`ed, not a block device
-  - This could use a custom protocol that is optimized for this use case instead of a full block device
-  - Because of the extensive setup required to implement such a system however, and the possibility of `ublk` providing a performant alternative in the future, going forward with NBD was chosen for now, since it provides a stable base to build the mounts and migration APIs on
-
 ### Direct Mounts
 
 - Have a high spread/are unpredictable when from a first chunk latency perspective at 0ms RTT, but is more predictable when it comes to throughput
@@ -1227,18 +1200,17 @@ csl: static/ieee.csl
   - Does perform better than Cassandra for direct mounts
   - Is a good choice if S3 is the only choice due to architectural constraints or if the chance of chunks being read outside of the managed mount's background pull system is high, where Cassandra has worse throughput
 
-### RegionFS
+### NBD
 
-- Comparing this API to RegionFS, an existing remote memory system
-  - A similar approach was made in RegionFS[@aguilera2018remoteregions]
-  - RegionFS is implemented as a kernel module, but it is functionally similar to how this API exposes a NBD device for memory interaction
-  - In RegionFS, the regions file system is mounted to a path, which then exposes regions as virtual files
-  - Instead of using a custom configuration (such as configuring the amount of pushers to make a mount read-only), such an approach makes it possible to use `chmod` on the virtual file for a memory region to set permissions
-  - By using standard utilities like `open` and `chmod`, this API usable from different programming languages with ease
-  - Unlike the managed mounts API however, the system proposed in Remote Regions is mostly intended for private usecases with a limited amount of hosts and in LAN, with low-RTT connections
-  - It is also not designed to be used for a potential migration scenarios, which the modular approach of r3map allows for
-  - While Remote Regions' file system approach does allow for authorization based on permissions, it doesn't specify how authentication could work
-  - In terms of the wire protocol, Remote Regions also seems to target mostly LAN with protocols like RDMA comm modules, while r3map targets mostly WAN with a pluggable transport protocol interface
+- Limitations of NBD and `ublk` as an alternative
+  - NBD is the underlying technology for both direct and managed mounts
+  - NBD is a battle-tested solution for this with fairly good performance
+  - In the future a more lean implemenation called `ublk` could also be used
+  - `ublk` uses `io_uring`, which means that it could potentially allow for much faster concurrent access
+  - It is similar to NBD; it also uses a user space server to provide the block device backend, and a kernel `ublk` driver that creates `/dev/ublkb*` devices
+  - Unlike as it is the case for the NBD kernel module, which uses a rather slow UNIX or TCP socket to communicate, `ublk` is able to use `io_uring` pass-through commands
+  - The `io_uring` architecture promises lower latency and better throughput
+  - Because it is however still experimental and docs are lacking, NBD was chosen
 
 ### Language Limitations
 
@@ -1246,7 +1218,7 @@ csl: static/ieee.csl
   - While the managed mounts API mostly works, there are some issues with it being implemented in Go
   - This is mostly due to deadlocking issues; if the GC tries to release memory, it has to stop the world
   - If the `mmap` API is used, it is possible that the GC tries to manage the underlying slice, or tries to release memory as data is being copied from the mount
-  - Because the NBD server that provides the byte slice is also running in the same process, this causes a deadlock as the server that provides the backend for the mount is also frozen (https://github.com/pojntfx/r3map/blob/main/pkg/mount/slice_managed.go#L70-L93)
+  - Because the NBD server that provides the byte slice is also running in the same process that is consuming the byte slice, this causes a deadlock as the server that provides the backend for the mount is also frozen (https://github.com/pojntfx/r3map/blob/main/pkg/mount/slice_managed.go#L70-L93)
   - A workaround for this is to lock the `mmap`ed region into memory, but this will also cause all chunks to be fetched, which leads to a high `Open()` latency
   - This is fixable by simply starting the server in separate process or other context where the GC does not cause it to stop, and then `mmap`ing
   - Issues like this however are hard to fix, and point to Go potentially not being the correct language to use for this part of the system
