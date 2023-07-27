@@ -1005,7 +1005,7 @@ csl: static/ieee.csl
   - Interestingly, the median of direct mounts is especially high compared to the other access methods
   - As with latency, the results are very different if the RTT increases
   - Direct mounts and userfaultfd drop to below 10MB/s and 1MB/s respectively after the RTT reaches 6ms and continue to drop as the RTT increases
-  - Managed mounts also drop, but mess less drastically, even at a RTT of 25ms the throughput is still at over 500MB/s
+  - Managed mounts also drop, but much less drastically, even at a RTT of 25ms the throughput is still at over 500MB/s
   - If the RTT is lower than 10ms, almost 1GB/s can still be achieved with managed mounts
   - Similar results to what was measured with latency can be seen with different pull worker counts for the managed mount as RTT increases
   - Low worker counts have good performance at 0ms RTT
@@ -1018,7 +1018,6 @@ csl: static/ieee.csl
   - Note that the file is opened with O_DIRECT for this benchmark, causing additional overhead when writing, but also - for benchmark purposes - don't require `msync`
   - As RTT increases, managed mounts have much better write performance
   - Write speed for direct mounts drop down to below 1 MB/s after 4ms, while they are consistenly above 230 MB/s for managed mounts, independent of RTT
-  - Write throughput for technologies
 
 ### Initialization
 
