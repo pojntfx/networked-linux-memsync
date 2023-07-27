@@ -111,23 +111,29 @@ Felicitas Pojtinger (Stuttgart Media University)
     -   7.1 Userfaults
     -   7.2 File-Based Synchronization
     -   7.3 FUSE
-    -   7.4 Remote Swap with ram-dl
-    -   7.5 Mapping Tape Into Memory With tapisk
-        -   7.5.1 Overview
-        -   7.5.2 Implementation
-        -   7.5.3 Evaluation
-    -   7.6 Improving Cloud Storage Clients
-        -   7.6.1 Existing Solutions
-        -   7.6.2 Hybrid Approach
-    -   7.7 Universal Database, Media and Asset Streaming
-        -   7.7.1 Streaming Access to Remote Databases
-        -   7.7.2 Making Arbitrary File Formats Streamable
-        -   7.7.3 Streaming App and Game Assets
-    -   7.8 Universal App State Mounts and Migrations
-        -   7.8.1 Modelling State
-        -   7.8.2 Mounting State
-        -   7.8.3 Migrating State
-        -   7.8.4 Migrating Virtual Machines
+    -   7.4 Direct Mounts
+    -   7.5 Managed Mounts
+    -   7.6 Chunking
+    -   7.7 RPC Frameworks
+    -   7.8 Backends
+    -   7.9 Limitations
+    -   7.10 Using Mounts for Remote Swap with ram-dl
+    -   7.11 Mapping Tape Into Memory With tapisk
+        -   7.11.1 Overview
+        -   7.11.2 Implementation
+        -   7.11.3 Evaluation
+    -   7.12 Improving Cloud Storage Clients
+        -   7.12.1 Existing Solutions
+        -   7.12.2 Hybrid Approach
+    -   7.13 Universal Database, Media and Asset Streaming
+        -   7.13.1 Streaming Access to Remote Databases
+        -   7.13.2 Making Arbitrary File Formats Streamable
+        -   7.13.3 Streaming App and Game Assets
+    -   7.14 Universal App State Mounts and Migrations
+        -   7.14.1 Modelling State
+        -   7.14.2 Mounting State
+        -   7.14.3 Migrating State
+        -   7.14.4 Migrating Virtual Machines
 -   8 Summary
 -   9 Conclusion
 -   References
@@ -4087,11 +4093,173 @@ and writes on, but instead to track a single file; for this use case,
 NBD serves as as an existing API providing this simpler approach, making
 FUSE not the optimal technology to implement memory synchronization.
 
-Remote Swap with ram-dl
+Direct Mounts
 
-ram-dl[53] is an experimental tech demo built to demonstrate how r3map
-can be used. It uses the fRPC mount backend to expand local system
-memory, enabling a variety of usecases such as mounting a remote
+Direct mounts have a high spread when it comes to first chunk latency at
+0 ms RTT, but are more predictable when it comes to their throughput.
+Similarly to the drawbacks of userfaultfd, it’s first chunk latency
+grows linearly as the RTT increases, due to the lack of pre-emptive
+pulls. Despite this, it has the highest throughput at 0 ms RTT, even
+higher than managed mounts due to it having less expensive internal I/O
+operations because of the lack of this pull system. While compared to
+userfaultfd, it’s read throughput doesn’t drop as rapidly as RTT
+increases, it’s write speed is heavily influenced by RTT since writes
+need to be written to the remote as they happen, as there is no
+background push system either. These characteristics make direct mounts
+a good access method to choose if the internal overhead of using managed
+mounts is higher than the overhead caused for direct mounts by the RTT,
+which can be the case in LAN or other very low-latency networks.
+
+Managed Mounts
+
+Managed mounts have a internal overhead to due to the duplicate I/O
+operations required for background pull, resulting in a worse throughput
+for low RTT scenarios (esp. for 0 ms RTT), as well as higher first chunk
+latencies. As soon as the RTT reaches levels more typical for a WAN
+enviornmnet however, this overhead becomes negligible compared to the
+benefits gained over the other access methods thanks to the background
+push and pull systems.
+
+Tuning the background workers to the specific environment can
+substantially increase a managed mount’s performance, since data can be
+fetched in parallel. The pull priority function can allow for even more
+optimized pulls, and pre-emptive pulls can significantly reduce initial
+chunk latency since data can be pulled asynchronously before the device
+is even available. Higher worker counts to increase the amount of data
+that is being pulled preemptively, as well as preferring polling over
+the udev-based method for detecting device readiness, both can reduce
+the overall device Open() time and thus reduce the initial overhead of
+using this access method for a remote resource. Write throughput for
+managed mounts is also significantly higher than for direct mounts,
+which is the case due the background push system; writes are first
+written to the faster local backend, and are then asynchronously written
+to the remote, resulting in much faster write speeds. These
+characteristics make managed mounts the perferred access method for WAN
+environments, where the RTT usually is high enough to balance out the
+internal overhead caused by the background push and pull system’s I/O
+operations.
+
+Chunking
+
+In general, server-side chunking should almost always be the preferred
+technology due to the much better throughput compared to client-side
+chunking. For direct mounts, due to their linear/synchronous access
+pattern, the throughput is low for both server- and client-side chunking
+as RTT increases, but even with linear access server-side chunking still
+outperforms the alternative. For managed mounts, client-side chunking
+can still halve the throughput of a mount compared to server-side
+chunking. If the data chunks are smaller than the NBD block size, it
+reduces the number of chunks that can be fetched if the number of
+workers remains the same. This isn’t the case with server-side chunking
+because it doesn’t need an extra worker on the client side for each
+additional chunk that needs to be fetched. This allows the background
+pull system to fetch more, thus increasing throughput.
+
+RPC Frameworks
+
+Out of the frameworks tested, Dudirekta consistently has lower
+throughput than the alternatives. It performs better for managed mounts
+than direct mounts thanks to it’s support for concurrent RPCs and is
+less sensitive to RTT compared to gRPC and fRPC for managed mounts, but
+even for the latter, it’s throughput is much lower compared to both
+alternatives due to it’s lack of connecting pooling. Despite these
+drawbacks however, Dudirekta remains an interesting option for
+prototyping due to the decreased friction in developer overhead,
+bi-directional PC support and transport layer independence.
+
+gRPC offers considerably faster throughput compared to Dudirekta for
+both managed and direct mounts. It has support for connection pooling,
+giving it a significant performance benefit over Dudirekta for managed
+mounts, do to it being able to more efficiently pull chunks in the
+background concurrently. It also has good throughput for 0 ms RTT
+scenarios, and is essentially an industry standard, resulting in good
+tooling as well as known scalability characterstics.
+
+While gRPC offers a throughput improvement compared to Dudirekta, fRPC
+is able to improve on gRPC even further due to it’s internal
+optimizations. It is also faster than Dudirekta in both direct and
+managed mounts due to it’s support for connection pooling, and compared
+to gRPC, is a more lean stack than gRPC and Protocol Buffers, making it
+more simple and maintainable. As a less commonly used solutionn however
+it also has less enterprise testing and tooling available, which means
+that is a more performant, but also less proven solution.
+
+Backends
+
+Redis is the backend with the smallest amount of spread and the lowest
+amount of initial chunk latency at a 0 ms RTT. When used for direct
+mounts, it has a ower throughput compared to managed mounts, showing
+good support for concurrent chunk access; it also has the highest
+thoughput for direct mounts by a significant margin due to it’s
+optimized wire protocol and fast key lookups. It also has good
+throughput in managed mounts due to these optimizations, making it a
+good choice for ephemeral data like caches, where quick access times are
+necessary or the direct mount API provides benefits, i.e. in LAN
+deployments.
+
+Cassandra has the highest throughput for 0 ms RTT deployments for direct
+mounts, showing a very good concurrent access performance. It does
+howwever fall short when it comes to usage in direct mounts, where the
+performance is worse than any other backend, showing the databases high
+read latency overhead for looking up individual chunks. For managed
+mounts however, as the RTT increases, it shows only slightly lower
+performance compared to Redis; as a result, it is a good choice of
+backend if most data will be accessed by the managed mount’s background
+pull system, but a bad choice if chunks will be accessed outside of this
+due to the low direct mount throughput. Another use case where Cassandra
+can potentially be beneficial due to it’s configurable consistency is
+storing persistent data in a way that is more dependable than Redis or
+S3.
+
+S3 has the lowestperformance of all network-capable backends that were
+implemented for managed mounts. It’s performance is consistently low
+even as RTT increases, presumably due to the high overhead of having to
+make multiple HTTP requests to retrieve individual chunks, despite
+performing better than Cassandra for a direct mount scenario. S3 remains
+a good choice of backends if it’s use is required due to architectural
+constraints, or if the chance of persistently stored chunks being read
+outside of the managed mount’s background pull system is high, where
+Casssandra has considerably worse throughput.
+
+Limitations
+
+While the mount APIs are functional for most usecases, there are
+performance and usability issues due it being implemented in Go. Go is a
+garbage collected language, and if the garbage collector is active, it
+has to stop goroutines. If the mmap API is used to access a managed
+mount or a direct mount, it is possible that the garbage collector tries
+to manage an object with a reference to the exposed slice, or tries to
+release memory as data is being copied from the NBD device. If the
+garbage collector then tries to access the slice, it can stop the
+goroutine providing the slice in the form of the NBD server, causing the
+deadlock. One workaroudn for this is to lock the mmaped region into
+memory, but this will also cause all chunks to be fetched from the
+remote into memory, which leads to a high Open() latency; as a result,
+the current workaround for this is to simply start the NBD server in a
+separate process, so as to prevent the garbage collector from stopping
+the NBD server and trying to access the slice at the same time. Another
+workaround for this issue could be to instead use a language without a
+garbage collector such as Rust, which doesn’t allow for the deadlock to
+occur in the first place.
+
+NBD, the underlying technology and protocol for the mount API, has
+proven to be fairly performant, but it still could be improved upon to
+get closer to the performance of other access methods, like raw memory
+access. One such option is ublk[53], which has the potential to
+significantly improve concurrent access speeds over the socket-based
+connection between the client and server that NBD uses. It is similar in
+architecture to NBD, where a user space server provides the block device
+backend, and a kernel ublk driver creates /dev/ublkb* block devices not
+unlike the /dev/nbd* devices created by NBD. At the point of this thesis
+being written however, documentation on this emerging kernel technology
+is still lacking, and NBD continues to be the standard way of creating
+block devices in user space.
+
+Using Mounts for Remote Swap with ram-dl
+
+ram-dl[54] is an experimental tech demo built to demonstrate how the
+mount API can be used. It uses the fRPC mount backend to expand local
+system memory, enabling a variety of usecases such as mounting a remote
 system’s RAM locally or easily inspecting a remote system’s memory
 contents.
 
@@ -4121,7 +4289,7 @@ Mapping Tape Into Memory With tapisk
 
 Overview
 
-tapisk[54] is a tool that exposes a tape drive as a block device. While
+tapisk[55] is a tool that exposes a tape drive as a block device. While
 seemingly unrelated to memory synchronization, it does serve as an
 interesting usecase due to the similarities to STFS (mentioned earlier
 in the FUSE section), which exposed a tape drive as a file system, and
@@ -4244,7 +4412,7 @@ a remote tape library robot’s drive to a system over the network.
 
 Being able to map a tape into memory without having to read the entire
 contents first can have a variety of usecases. Tapes can store a large
-amount of data, in the case of LTO-9, up to 18TB on a single tape[55];
+amount of data, in the case of LTO-9, up to 18TB on a single tape[56];
 being able to access such a large amount of data directly in memory,
 instead of having to work with tooling like tar, can significantly
 improve developer experience. In addition to making it much easier to
@@ -4484,7 +4652,7 @@ be done using a higher-level protocol; moreover, this assumes that the
 in-memory representation of the data structure is consistent across all,
 something which is not necessarily the case with programming languages
 such as Go with multiple processor architectures being involved. While
-projects such as Apache Arrow[56] allow for application state to
+projects such as Apache Arrow[57] allow for application state to
 represented in a language- and CPU architecture-independent way, this
 comes with some of the same restrictions on which state can be
 synchronized as with other solutions such as Firebase.
@@ -4718,16 +4886,19 @@ Linux Memory Regions over a Network: A Comparative Study and
 Implementation. 2023.Available:
 https://github.com/pojntfx/networked-linux-memsync
 
-[53] F. Pojtinger, “Ram-dl: A tool to download more RAM (yes,
+[53] T. K. D. Community, “Userspace block device driver (ublk driver),”
+2023. https://docs.kernel.org/block/ublk.html (accessed Jul. 28, 2023).
+
+[54] F. Pojtinger, “Ram-dl: A tool to download more RAM (yes,
 seriously!).” https://github.com/pojntfx/ram-dl, 2023.
 
-[54] F. Pojtinger, “Tapisk: Expose a tape drive as a block device.”
+[55] F. Pojtinger, “Tapisk: Expose a tape drive as a block device.”
 https://github.com/pojntfx/tapisk, 2023.
 
-[55] LTO Program, “The LTO program releases specifications for upcoming
+[56] LTO Program, “The LTO program releases specifications for upcoming
 generation 9.”
 https://www.lto.org/2020/09/the-lto-program-releases-specifications-for-upcoming-generation-9/,
 2020.
 
-[56] T. A. S. Foundation, “Apache arrow website.” 2023.Available:
+[57] T. A. S. Foundation, “Apache arrow website.” 2023.Available:
 https://arrow.apache.org/

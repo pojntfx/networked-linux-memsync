@@ -325,40 +325,50 @@ Userfaults</a></li>
 Synchronization</a></li>
 <li><a href="#fuse"><span class="toc-section-number">7.3</span>
 FUSE</a></li>
-<li><a href="#remote-swap-with-ram-dl"><span class="toc-section-number">7.4</span> Remote Swap with
+<li><a href="#direct-mounts"><span class="toc-section-number">7.4</span>
+Direct Mounts</a></li>
+<li><a href="#managed-mounts"><span class="toc-section-number">7.5</span> Managed Mounts</a></li>
+<li><a href="#chunking-3"><span class="toc-section-number">7.6</span>
+Chunking</a></li>
+<li><a href="#rpc-frameworks-1"><span class="toc-section-number">7.7</span> RPC Frameworks</a></li>
+<li><a href="#backends-1"><span class="toc-section-number">7.8</span>
+Backends</a></li>
+<li><a href="#limitations"><span class="toc-section-number">7.9</span>
+Limitations</a></li>
+<li><a href="#using-mounts-for-remote-swap-with-ram-dl"><span class="toc-section-number">7.10</span> Using Mounts for Remote Swap with
 <code>ram-dl</code></a></li>
-<li><a href="#mapping-tape-into-memory-with-tapisk"><span class="toc-section-number">7.5</span> Mapping Tape Into Memory With
+<li><a href="#mapping-tape-into-memory-with-tapisk"><span class="toc-section-number">7.11</span> Mapping Tape Into Memory With
 <code>tapisk</code></a>
 <ul>
-<li><a href="#overview-6"><span class="toc-section-number">7.5.1</span>
+<li><a href="#overview-6"><span class="toc-section-number">7.11.1</span>
 Overview</a></li>
-<li><a href="#implementation-1"><span class="toc-section-number">7.5.2</span> Implementation</a></li>
-<li><a href="#evaluation"><span class="toc-section-number">7.5.3</span>
+<li><a href="#implementation-1"><span class="toc-section-number">7.11.2</span> Implementation</a></li>
+<li><a href="#evaluation"><span class="toc-section-number">7.11.3</span>
 Evaluation</a></li>
 </ul></li>
-<li><a href="#improving-cloud-storage-clients"><span class="toc-section-number">7.6</span> Improving Cloud Storage
+<li><a href="#improving-cloud-storage-clients"><span class="toc-section-number">7.12</span> Improving Cloud Storage
 Clients</a>
 <ul>
-<li><a href="#existing-solutions"><span class="toc-section-number">7.6.1</span> Existing Solutions</a></li>
-<li><a href="#hybrid-approach"><span class="toc-section-number">7.6.2</span> Hybrid Approach</a></li>
+<li><a href="#existing-solutions"><span class="toc-section-number">7.12.1</span> Existing Solutions</a></li>
+<li><a href="#hybrid-approach"><span class="toc-section-number">7.12.2</span> Hybrid Approach</a></li>
 </ul></li>
-<li><a href="#universal-database-media-and-asset-streaming"><span class="toc-section-number">7.7</span> Universal Database, Media and
+<li><a href="#universal-database-media-and-asset-streaming"><span class="toc-section-number">7.13</span> Universal Database, Media and
 Asset Streaming</a>
 <ul>
-<li><a href="#streaming-access-to-remote-databases"><span class="toc-section-number">7.7.1</span> Streaming Access to Remote
+<li><a href="#streaming-access-to-remote-databases"><span class="toc-section-number">7.13.1</span> Streaming Access to Remote
 Databases</a></li>
-<li><a href="#making-arbitrary-file-formats-streamable"><span class="toc-section-number">7.7.2</span> Making Arbitrary File Formats
+<li><a href="#making-arbitrary-file-formats-streamable"><span class="toc-section-number">7.13.2</span> Making Arbitrary File Formats
 Streamable</a></li>
-<li><a href="#streaming-app-and-game-assets"><span class="toc-section-number">7.7.3</span> Streaming App and Game
+<li><a href="#streaming-app-and-game-assets"><span class="toc-section-number">7.13.3</span> Streaming App and Game
 Assets</a></li>
 </ul></li>
-<li><a href="#universal-app-state-mounts-and-migrations"><span class="toc-section-number">7.8</span> Universal App State Mounts and
+<li><a href="#universal-app-state-mounts-and-migrations"><span class="toc-section-number">7.14</span> Universal App State Mounts and
 Migrations</a>
 <ul>
-<li><a href="#modelling-state"><span class="toc-section-number">7.8.1</span> Modelling State</a></li>
-<li><a href="#mounting-state"><span class="toc-section-number">7.8.2</span> Mounting State</a></li>
-<li><a href="#migrating-state"><span class="toc-section-number">7.8.3</span> Migrating State</a></li>
-<li><a href="#migrating-virtual-machines"><span class="toc-section-number">7.8.4</span> Migrating Virtual
+<li><a href="#modelling-state"><span class="toc-section-number">7.14.1</span> Modelling State</a></li>
+<li><a href="#mounting-state"><span class="toc-section-number">7.14.2</span> Mounting State</a></li>
+<li><a href="#migrating-state"><span class="toc-section-number">7.14.3</span> Migrating State</a></li>
+<li><a href="#migrating-virtual-machines"><span class="toc-section-number">7.14.4</span> Migrating Virtual
 Machines</a></li>
 </ul></li>
 </ul></li>
@@ -4066,13 +4076,166 @@ file system to track reads and writes on, but instead to track a single
 file; for this use case, NBD serves as as an existing API providing this
 simpler approach, making FUSE not the optimal technology to implement
 memory synchronization.</p>
-<h2 id="remote-swap-with-ram-dl"><span class="header-section-number">7.4</span> Remote Swap with
-<code>ram-dl</code></h2>
-<p><code>ram-dl</code><span class="citation">[53]</span> is an
-experimental tech demo built to demonstrate how r3map can be used. It
-uses the fRPC mount backend to expand local system memory, enabling a
-variety of usecases such as mounting a remote system’s RAM locally or
-easily inspecting a remote system’s memory contents.</p>
+<h2 id="direct-mounts"><span class="header-section-number">7.4</span>
+Direct Mounts</h2>
+<p>Direct mounts have a high spread when it comes to first chunk latency
+at 0 ms RTT, but are more predictable when it comes to their throughput.
+Similarly to the drawbacks of <code>userfaultfd</code>, it’s first chunk
+latency grows linearly as the RTT increases, due to the lack of
+pre-emptive pulls. Despite this, it has the highest throughput at 0 ms
+RTT, even higher than managed mounts due to it having less expensive
+internal I/O operations because of the lack of this pull system. While
+compared to <code>userfaultfd</code>, it’s read throughput doesn’t drop
+as rapidly as RTT increases, it’s write speed is heavily influenced by
+RTT since writes need to be written to the remote as they happen, as
+there is no background push system either. These characteristics make
+direct mounts a good access method to choose if the internal overhead of
+using managed mounts is higher than the overhead caused for direct
+mounts by the RTT, which can be the case in LAN or other very
+low-latency networks.</p>
+<h2 id="managed-mounts"><span class="header-section-number">7.5</span>
+Managed Mounts</h2>
+<p>Managed mounts have a internal overhead to due to the duplicate I/O
+operations required for background pull, resulting in a worse throughput
+for low RTT scenarios (esp. for 0 ms RTT), as well as higher first chunk
+latencies. As soon as the RTT reaches levels more typical for a WAN
+enviornmnet however, this overhead becomes negligible compared to the
+benefits gained over the other access methods thanks to the background
+push and pull systems.</p>
+<p>Tuning the background workers to the specific environment can
+substantially increase a managed mount’s performance, since data can be
+fetched in parallel. The pull priority function can allow for even more
+optimized pulls, and pre-emptive pulls can significantly reduce initial
+chunk latency since data can be pulled asynchronously before the device
+is even available. Higher worker counts to increase the amount of data
+that is being pulled preemptively, as well as preferring polling over
+the <code>udev</code>-based method for detecting device readiness, both
+can reduce the overall device <code>Open()</code> time and thus reduce
+the initial overhead of using this access method for a remote resource.
+Write throughput for managed mounts is also significantly higher than
+for direct mounts, which is the case due the background push system;
+writes are first written to the faster local backend, and are then
+asynchronously written to the remote, resulting in much faster write
+speeds. These characteristics make managed mounts the perferred access
+method for WAN environments, where the RTT usually is high enough to
+balance out the internal overhead caused by the background push and pull
+system’s I/O operations.</p>
+<h2 id="chunking-3"><span class="header-section-number">7.6</span>
+Chunking</h2>
+<p>In general, server-side chunking should almost always be the
+preferred technology due to the much better throughput compared to
+client-side chunking. For direct mounts, due to their linear/synchronous
+access pattern, the throughput is low for both server- and client-side
+chunking as RTT increases, but even with linear access server-side
+chunking still outperforms the alternative. For managed mounts,
+client-side chunking can still halve the throughput of a mount compared
+to server-side chunking. If the data chunks are smaller than the NBD
+block size, it reduces the number of chunks that can be fetched if the
+number of workers remains the same. This isn’t the case with server-side
+chunking because it doesn’t need an extra worker on the client side for
+each additional chunk that needs to be fetched. This allows the
+background pull system to fetch more, thus increasing throughput.</p>
+<h2 id="rpc-frameworks-1"><span class="header-section-number">7.7</span>
+RPC Frameworks</h2>
+<p>Out of the frameworks tested, Dudirekta consistently has lower
+throughput than the alternatives. It performs better for managed mounts
+than direct mounts thanks to it’s support for concurrent RPCs and is
+less sensitive to RTT compared to gRPC and fRPC for managed mounts, but
+even for the latter, it’s throughput is much lower compared to both
+alternatives due to it’s lack of connecting pooling. Despite these
+drawbacks however, Dudirekta remains an interesting option for
+prototyping due to the decreased friction in developer overhead,
+bi-directional PC support and transport layer independence.</p>
+<p>gRPC offers considerably faster throughput compared to Dudirekta for
+both managed and direct mounts. It has support for connection pooling,
+giving it a significant performance benefit over Dudirekta for managed
+mounts, do to it being able to more efficiently pull chunks in the
+background concurrently. It also has good throughput for 0 ms RTT
+scenarios, and is essentially an industry standard, resulting in good
+tooling as well as known scalability characterstics.</p>
+<p>While gRPC offers a throughput improvement compared to Dudirekta,
+fRPC is able to improve on gRPC even further due to it’s internal
+optimizations. It is also faster than Dudirekta in both direct and
+managed mounts due to it’s support for connection pooling, and compared
+to gRPC, is a more lean stack than gRPC and Protocol Buffers, making it
+more simple and maintainable. As a less commonly used solutionn however
+it also has less enterprise testing and tooling available, which means
+that is a more performant, but also less proven solution.</p>
+<h2 id="backends-1"><span class="header-section-number">7.8</span>
+Backends</h2>
+<p>Redis is the backend with the smallest amount of spread and the
+lowest amount of initial chunk latency at a 0 ms RTT. When used for
+direct mounts, it has a ower throughput compared to managed mounts,
+showing good support for concurrent chunk access; it also has the
+highest thoughput for direct mounts by a significant margin due to it’s
+optimized wire protocol and fast key lookups. It also has good
+throughput in managed mounts due to these optimizations, making it a
+good choice for ephemeral data like caches, where quick access times are
+necessary or the direct mount API provides benefits, i.e. in LAN
+deployments.</p>
+<p>Cassandra has the highest throughput for 0 ms RTT deployments for
+direct mounts, showing a very good concurrent access performance. It
+does howwever fall short when it comes to usage in direct mounts, where
+the performance is worse than any other backend, showing the databases
+high read latency overhead for looking up individual chunks. For managed
+mounts however, as the RTT increases, it shows only slightly lower
+performance compared to Redis; as a result, it is a good choice of
+backend if most data will be accessed by the managed mount’s background
+pull system, but a bad choice if chunks will be accessed outside of this
+due to the low direct mount throughput. Another use case where Cassandra
+can potentially be beneficial due to it’s configurable consistency is
+storing persistent data in a way that is more dependable than Redis or
+S3.</p>
+<p>S3 has the lowestperformance of all network-capable backends that
+were implemented for managed mounts. It’s performance is consistently
+low even as RTT increases, presumably due to the high overhead of having
+to make multiple HTTP requests to retrieve individual chunks, despite
+performing better than Cassandra for a direct mount scenario. S3 remains
+a good choice of backends if it’s use is required due to architectural
+constraints, or if the chance of persistently stored chunks being read
+outside of the managed mount’s background pull system is high, where
+Casssandra has considerably worse throughput.</p>
+<h2 id="limitations"><span class="header-section-number">7.9</span>
+Limitations</h2>
+<p>While the mount APIs are functional for most usecases, there are
+performance and usability issues due it being implemented in Go. Go is a
+garbage collected language, and if the garbage collector is active, it
+has to stop goroutines. If the <code>mmap</code> API is used to access a
+managed mount or a direct mount, it is possible that the garbage
+collector tries to manage an object with a reference to the exposed
+slice, or tries to release memory as data is being copied from the NBD
+device. If the garbage collector then tries to access the slice, it can
+stop the goroutine providing the slice in the form of the NBD server,
+causing the deadlock. One workaroudn for this is to lock the
+<code>mmap</code>ed region into memory, but this will also cause all
+chunks to be fetched from the remote into memory, which leads to a high
+<code>Open()</code> latency; as a result, the current workaround for
+this is to simply start the NBD server in a separate process, so as to
+prevent the garbage collector from stopping the NBD server and trying to
+access the slice at the same time. Another workaround for this issue
+could be to instead use a language without a garbage collector such as
+Rust, which doesn’t allow for the deadlock to occur in the first
+place.</p>
+<p>NBD, the underlying technology and protocol for the mount API, has
+proven to be fairly performant, but it still could be improved upon to
+get closer to the performance of other access methods, like raw memory
+access. One such option is <code>ublk</code><span class="citation">[53]</span>, which has the potential to significantly
+improve concurrent access speeds over the socket-based connection
+between the client and server that NBD uses. It is similar in
+architecture to NBD, where a user space server provides the block device
+backend, and a kernel <code>ublk</code> driver creates
+<code>/dev/ublkb*</code> block devices not unlike the
+<code>/dev/nbd*</code> devices created by NBD. At the point of this
+thesis being written however, documentation on this emerging kernel
+technology is still lacking, and NBD continues to be the standard way of
+creating block devices in user space.</p>
+<h2 id="using-mounts-for-remote-swap-with-ram-dl"><span class="header-section-number">7.10</span> Using Mounts for Remote Swap
+with <code>ram-dl</code></h2>
+<p><code>ram-dl</code><span class="citation">[54]</span> is an
+experimental tech demo built to demonstrate how the mount API can be
+used. It uses the fRPC mount backend to expand local system memory,
+enabling a variety of usecases such as mounting a remote system’s RAM
+locally or easily inspecting a remote system’s memory contents.</p>
 <p>In is based on the direct mount API and uses <code>mkswap</code>,
 <code>swapon</code> and <code>swapoff</code> to enable the Kernel to
 page out to the mount’s block device:</p>
@@ -4094,11 +4257,11 @@ intended for critical deployments, it does show how simple using the
 r3map API can be be, as the entire project consistents of under 300
 source lines of code, most of which is argument handling and boilerplate
 around configuration.</p>
-<h2 id="mapping-tape-into-memory-with-tapisk"><span class="header-section-number">7.5</span> Mapping Tape Into Memory With
+<h2 id="mapping-tape-into-memory-with-tapisk"><span class="header-section-number">7.11</span> Mapping Tape Into Memory With
 <code>tapisk</code></h2>
-<h3 id="overview-6"><span class="header-section-number">7.5.1</span>
+<h3 id="overview-6"><span class="header-section-number">7.11.1</span>
 Overview</h3>
-<p><code>tapisk</code><span class="citation">[54]</span> is a tool that
+<p><code>tapisk</code><span class="citation">[55]</span> is a tool that
 exposes a tape drive as a block device. While seemingly unrelated to
 memory synchronization, it does serve as an interesting usecase due to
 the similarities to STFS (mentioned earlier in the FUSE section), which
@@ -4113,7 +4276,7 @@ taking up to more than a minute depending on the offset of the tape that
 is being accessed. Due to the modularity of r3map’s managed mount API
 however, it is possible to work around these issues, and make the tape
 appear as a random-access block device.</p>
-<h3 id="implementation-1"><span class="header-section-number">7.5.2</span> Implementation</h3>
+<h3 id="implementation-1"><span class="header-section-number">7.11.2</span> Implementation</h3>
 <p>To achieve this, the background writes and reads provided by the
 managed mount API can be used. Using these, a faster storage backend
 (i.e. the disk) can be used as a caching layer, although the concurrent
@@ -4202,7 +4365,7 @@ iterations of chunks:</p>
 <span id="cb88-27"><a href="#cb88-27" aria-hidden="true" tabindex="-1"></a>    b<span class="op">.</span>drive<span class="op">.</span>Write<span class="op">(</span>p<span class="op">)</span></span>
 <span id="cb88-28"><a href="#cb88-28" aria-hidden="true" tabindex="-1"></a>    <span class="co">// ...</span></span>
 <span id="cb88-29"><a href="#cb88-29" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
-<h3 id="evaluation"><span class="header-section-number">7.5.3</span>
+<h3 id="evaluation"><span class="header-section-number">7.11.3</span>
 Evaluation</h3>
 <p><code>tapisk</code> is a unique application of r3map’s technology,
 and shows how flexible it is.By using this index, the effectively
@@ -4218,7 +4381,7 @@ a remote tape library robot’s drive to a system over the network.</p>
 <p>Being able to map a tape into memory without having to read the
 entire contents first can have a variety of usecases. Tapes can store a
 large amount of data, in the case of LTO-9, up to 18TB on a single
-tape<span class="citation">[55]</span>; being able to access such a
+tape<span class="citation">[56]</span>; being able to access such a
 large amount of data directly in memory, instead of having to work with
 tooling like <code>tar</code>, can significantly improve developer
 experience. In addition to making it much easier to access tape drives,
@@ -4233,9 +4396,9 @@ LTFS approach, this results in a much more maintainable project; while
 LTFS is tens of thousands of kernel-level source lines of code,
 <code>tapisk</code> achieves effectively the same usecase with just
 under 350.</p>
-<h2 id="improving-cloud-storage-clients"><span class="header-section-number">7.6</span> Improving Cloud Storage
+<h2 id="improving-cloud-storage-clients"><span class="header-section-number">7.12</span> Improving Cloud Storage
 Clients</h2>
-<h3 id="existing-solutions"><span class="header-section-number">7.6.1</span> Existing Solutions</h3>
+<h3 id="existing-solutions"><span class="header-section-number">7.12.1</span> Existing Solutions</h3>
 <p>r3map can also be used to create mountable remote filesystems with
 unique advantages over existing solutions. Currently, there are two main
 approaches to implementing cloud storage clients. Dropbox and Nextcloud
@@ -4262,7 +4425,7 @@ sensitive to networks with a high RTT. Offline usage is also usually not
 possible with a FUSE-based approach, and features such as
 <code>inotify</code>, symlinks etc. are hard to implement, leaving two
 imperfect solutions to implementing a cloud storage client.</p>
-<h3 id="hybrid-approach"><span class="header-section-number">7.6.2</span> Hybrid Approach</h3>
+<h3 id="hybrid-approach"><span class="header-section-number">7.12.2</span> Hybrid Approach</h3>
 <p>Using r3map makes it possible to get the benefits of both approaches
 by not having to download any files in advance and also being able to
 write back changes asynchronously, as well as being able to use almost
@@ -4285,9 +4448,9 @@ file system between two hosts in a highly efficient way.</p>
 is possible to bridge the gap between them, showing that memory
 synchronization technology like r3map can be used to not only
 synchronize memory regions, but other state too, including disks.</p>
-<h2 id="universal-database-media-and-asset-streaming"><span class="header-section-number">7.7</span> Universal Database, Media and
+<h2 id="universal-database-media-and-asset-streaming"><span class="header-section-number">7.13</span> Universal Database, Media and
 Asset Streaming</h2>
-<h3 id="streaming-access-to-remote-databases"><span class="header-section-number">7.7.1</span> Streaming Access to Remote
+<h3 id="streaming-access-to-remote-databases"><span class="header-section-number">7.13.1</span> Streaming Access to Remote
 Databases</h3>
 <p>Another usecase that r3map can be used for is accessing a remote
 database locally. While using a database backend (such as the Cassandra
@@ -4312,8 +4475,8 @@ up initial queries. Thanks to the managed mount API providing a standard
 block device, no changes to SQLite are be required in order for it to
 support such streaming access; the SQLite file could simply be stored on
 a mounted file system provided by the mount’s block device.</p>
-<h3 id="making-arbitrary-file-formats-streamable"><span class="header-section-number">7.7.2</span> Making Arbitrary File Formats
-Streamable</h3>
+<h3 id="making-arbitrary-file-formats-streamable"><span class="header-section-number">7.13.2</span> Making Arbitrary File
+Formats Streamable</h3>
 <p>In addition to making databases streamable, r3map can also be used to
 access files in formats that usually don’t support being accessed before
 they are fully available locally possible. One such format is MP4;
@@ -4337,7 +4500,7 @@ being accessed.</p>
 does not require any changes to the media player being used, since the
 block device providing the ressource can simply be mounted as a file
 system and thus be used transparently.</p>
-<h3 id="streaming-app-and-game-assets"><span class="header-section-number">7.7.3</span> Streaming App and Game
+<h3 id="streaming-app-and-game-assets"><span class="header-section-number">7.13.3</span> Streaming App and Game
 Assets</h3>
 <p>Another streaming usecase relates to the in-place streaming of
 assets. Usually, a game needs to be fully downloaded before it is
@@ -4378,9 +4541,9 @@ systems by simply pointing them to a filesystem provided by the mount’s
 block device, or, if the interpreter/VM supports it,
 <code>mmap</code>ing the block device directly and executing the
 resulting memory region.</p>
-<h2 id="universal-app-state-mounts-and-migrations"><span class="header-section-number">7.8</span> Universal App State Mounts and
+<h2 id="universal-app-state-mounts-and-migrations"><span class="header-section-number">7.14</span> Universal App State Mounts and
 Migrations</h2>
-<h3 id="modelling-state"><span class="header-section-number">7.8.1</span> Modelling State</h3>
+<h3 id="modelling-state"><span class="header-section-number">7.14.1</span> Modelling State</h3>
 <p>Synchronization of app state is a fairly complex problem, and even
 for simple scenarios, a custom protocol is built for simple apps. While
 it possible to real-time databases like Firebase to synchronize some
@@ -4398,8 +4561,7 @@ allocating them from a slice <code>mmap</code>ed by r3map, we can use
 the managed mount, direct mount or migration APIs to implement a
 universal way of both synchronization and migration of application
 state, without having to implement a custom protocol.</p>
-<h3 id="mounting-state"><span class="header-section-number">7.8.2</span>
-Mounting State</h3>
+<h3 id="mounting-state"><span class="header-section-number">7.14.2</span> Mounting State</h3>
 <p>By allocating all structures on r3map’s provided <code>mmap</code>ed
 byte slice, many interesting usecases become possible. For example, a
 TODO app could use it as it’s backend. Once loaded, the app mounts the
@@ -4417,7 +4579,7 @@ block device, and thus to the local backend, where the asynchronous
 writebacks can sync them back to the remtote. If the local backend is
 persistent, i.e. file-based, such a system can even survive network
 outages.</p>
-<h3 id="migrating-state"><span class="header-section-number">7.8.3</span> Migrating State</h3>
+<h3 id="migrating-state"><span class="header-section-number">7.14.3</span> Migrating State</h3>
 <p>In addition to using managed mounts to access remotely stored
 application state, migration of arbitrary app state also becomes a
 posibility. If a user has a TODO app running on a host like their
@@ -4432,7 +4594,7 @@ latencies and high throughputs. It is also possible to integrate the
 migration API deeply with system events, i.e. by registering a service
 that migrates applications off a system before a shutdown procedure
 completes.</p>
-<h3 id="migrating-virtual-machines"><span class="header-section-number">7.8.4</span> Migrating Virtual
+<h3 id="migrating-virtual-machines"><span class="header-section-number">7.14.4</span> Migrating Virtual
 Machines</h3>
 <p>It is important to note that there are a few limitations with
 synchronizing and migrating an application’s internal stateful data
@@ -4441,7 +4603,7 @@ be done using a higher-level protocol; moreover, this assumes that the
 in-memory representation of the data structure is consistent across all,
 something which is not necessarily the case with programming languages
 such as Go with multiple processor architectures being involved. While
-projects such as Apache Arrow<span class="citation">[56]</span> allow
+projects such as Apache Arrow<span class="citation">[57]</span> allow
 for application state to represented in a language- and CPU
 architecture-independent way, this comes with some of the same
 restrictions on which state can be synchronized as with other solutions
@@ -4757,23 +4919,29 @@ Pojtinger, <em><span class="nocase">GitHub Repository for Efficient
 Synchronization of Linux Memory Regions over a Network: A Comparative
 Study and Implementation</span></em>. 2023.Available: <a href="https://github.com/pojntfx/networked-linux-memsync">https://github.com/pojntfx/networked-linux-memsync</a></div>
 </div>
+<div id="ref-linux2023ublk" class="csl-entry">
+<div class="csl-left-margin">[53] </div><div class="csl-right-inline">T.
+K. D. Community, <span>“Userspace block device driver (ublk
+driver),”</span> 2023. <a href="https://docs.kernel.org/block/ublk.html">https://docs.kernel.org/block/ublk.html</a>
+(accessed Jul. 28, 2023).</div>
+</div>
 <div id="ref-pojtinger2023ramdl" class="csl-entry">
-<div class="csl-left-margin">[53] </div><div class="csl-right-inline">F.
+<div class="csl-left-margin">[54] </div><div class="csl-right-inline">F.
 Pojtinger, <span>“Ram-dl: A tool to download more RAM (yes,
 seriously!).”</span> <a href="https://github.com/pojntfx/ram-dl" class="uri">https://github.com/pojntfx/ram-dl</a>, 2023.</div>
 </div>
 <div id="ref-pojtinger2023tapisk" class="csl-entry">
-<div class="csl-left-margin">[54] </div><div class="csl-right-inline">F.
+<div class="csl-left-margin">[55] </div><div class="csl-right-inline">F.
 Pojtinger, <span>“Tapisk: Expose a tape drive as a block device.”</span>
 <a href="https://github.com/pojntfx/tapisk" class="uri">https://github.com/pojntfx/tapisk</a>, 2023.</div>
 </div>
 <div id="ref-lto2020gen9" class="csl-entry">
-<div class="csl-left-margin">[55] </div><div class="csl-right-inline">LTO Program, <span>“The LTO program releases
+<div class="csl-left-margin">[56] </div><div class="csl-right-inline">LTO Program, <span>“The LTO program releases
 specifications for upcoming generation 9.”</span> <a href="https://www.lto.org/2020/09/the-lto-program-releases-specifications-for-upcoming-generation-9/" class="uri">https://www.lto.org/2020/09/the-lto-program-releases-specifications-for-upcoming-generation-9/</a>,
 2020.</div>
 </div>
 <div id="ref-apache2023arrow" class="csl-entry">
-<div class="csl-left-margin">[56] </div><div class="csl-right-inline">T.
+<div class="csl-left-margin">[57] </div><div class="csl-right-inline">T.
 A. S. Foundation, <span>“Apache arrow website.”</span> 2023.Available:
 <a href="https://arrow.apache.org/">https://arrow.apache.org/</a></div>
 </div>

@@ -162,31 +162,29 @@ Userfaults</a></li>
 Synchronization</a></li>
 <li><a href="#fuse"><span class="toc-section-number">6.3</span>
 FUSE</a></li>
-<li><a href="#nbd"><span class="toc-section-number">6.4</span>
-NBD</a></li>
-<li><a href="#direct-mounts"><span class="toc-section-number">6.5</span>
+<li><a href="#direct-mounts"><span class="toc-section-number">6.4</span>
 Direct Mounts</a></li>
-<li><a href="#managed-mounts"><span class="toc-section-number">6.6</span> Managed Mounts</a></li>
-<li><a href="#chunking-1"><span class="toc-section-number">6.7</span>
+<li><a href="#managed-mounts"><span class="toc-section-number">6.5</span> Managed Mounts</a></li>
+<li><a href="#chunking-1"><span class="toc-section-number">6.6</span>
 Chunking</a></li>
-<li><a href="#rpc-frameworks-1"><span class="toc-section-number">6.8</span> RPC Frameworks</a></li>
-<li><a href="#backends-1"><span class="toc-section-number">6.9</span>
+<li><a href="#rpc-frameworks-1"><span class="toc-section-number">6.7</span> RPC Frameworks</a></li>
+<li><a href="#backends-1"><span class="toc-section-number">6.8</span>
 Backends</a></li>
-<li><a href="#regionfs"><span class="toc-section-number">6.10</span>
-RegionFS</a></li>
-<li><a href="#language-limitations"><span class="toc-section-number">6.11</span> Language Limitations</a></li>
-<li><a href="#use-cases"><span class="toc-section-number">6.12</span>
+<li><a href="#nbd"><span class="toc-section-number">6.9</span>
+NBD</a></li>
+<li><a href="#language-limitations"><span class="toc-section-number">6.10</span> Language Limitations</a></li>
+<li><a href="#use-cases"><span class="toc-section-number">6.11</span>
 Use Cases</a>
 <ul>
-<li><a href="#remote-swap-with-ram-dl"><span class="toc-section-number">6.12.1</span> Remote Swap With
+<li><a href="#remote-swap-with-ram-dl"><span class="toc-section-number">6.11.1</span> Remote Swap With
 <code>ram-dl</code></a></li>
-<li><a href="#mapping-tape-into-memory-with-tapisk"><span class="toc-section-number">6.12.2</span> Mapping Tape Into Memory With
+<li><a href="#mapping-tape-into-memory-with-tapisk"><span class="toc-section-number">6.11.2</span> Mapping Tape Into Memory With
 <code>tapisk</code></a></li>
-<li><a href="#improving-file-system-synchronization-solutions"><span class="toc-section-number">6.12.3</span> Improving File System
+<li><a href="#improving-file-system-synchronization-solutions"><span class="toc-section-number">6.11.3</span> Improving File System
 Synchronization Solutions</a></li>
-<li><a href="#universal-database-media-and-asset-streaming"><span class="toc-section-number">6.12.4</span> Universal Database, Media and
+<li><a href="#universal-database-media-and-asset-streaming"><span class="toc-section-number">6.11.4</span> Universal Database, Media and
 Asset Streaming</a></li>
-<li><a href="#universal-app-state-synchronization-and-migration"><span class="toc-section-number">6.12.5</span> Universal App State
+<li><a href="#universal-app-state-synchronization-and-migration"><span class="toc-section-number">6.11.5</span> Universal App State
 Synchronization and Migration</a></li>
 </ul></li>
 </ul></li>
@@ -2607,74 +2605,7 @@ track changes, but rather a single file</li>
 a file system led to it not being chosen, since NBD is available as an
 alternative</li>
 </ul>
-<h2 id="nbd"><span class="header-section-number">6.4</span> NBD</h2>
-<ul>
-<li>Limitations of NBD and <code>ublk</code> as an alternative
-<ul>
-<li>NBD is the underlying technology for both direct and managed
-mounts</li>
-<li>NBD is a battle-tested solution for this with fairly good
-performance, but in the future a more lean implemenation called
-<code>ublk</code> could also be used</li>
-<li><code>ublk</code> uses <code>io_uring</code>, which means that it
-could potentially allow for much faster concurrent access</li>
-<li>It is similar to NBD; it also uses a user space server to provide
-the block device backend, and a kernel <code>ublk</code> driver that
-creates <code>/dev/ublkb*</code> devices</li>
-<li>Unlike as it is the case for the NBD kernel module, which uses a
-rather slow UNIX or TCP socket to communicate, <code>ublk</code> is able
-to use <code>io_uring</code> pass-through commands</li>
-<li>The <code>io_uring</code> architecture promises lower latency and
-better throughput</li>
-<li>Because it is however still experimental and docs are lacking, NBD
-was chosen</li>
-</ul></li>
-<li><code>BUSE</code> and <code>CUSE</code> as alternatives to NBD
-<ul>
-<li>Another option of implementing a block device is BUSE (block devices
-in user space)</li>
-<li>BUSE is similar to FUSE in nature, and similarly to it has a kernel
-and user space server component</li>
-<li>Similarly to <code>ublk</code> however, BUSE is experimental</li>
-<li>Client libraries in Go are also experimental, preventing it from
-being used as easily as NBD</li>
-<li>Similarly so, a CUSE could be implemented (char device in user
-space)</li>
-<li>CUSE is a very flexible way of defining a char (and thus block)
-device, but also lacks documentation</li>
-<li>The interface being exposed by CUSE is more complicated than that of
-e.g. NBD, but allows for interesting features such as custom
-<code>ioctl</code>s (code snippet from
-https://github.com/pojntfx/webpipe/blob/main/pkg/cuse/device.go#L3-L15)</li>
-<li>The only way of implementing it without too much overhead however is
-CGo, which comes with its own overhead</li>
-<li>It also requires calling Go closures from C code, which is
-complicated (code snippet from
-https://github.com/pojntfx/webpipe/blob/main/pkg/cuse/bindings.go#L79-L132)</li>
-<li>Implementing closures is possible by using the <code>userdata</code>
-parameter in the CUSE C API (code snippet from
-https://github.com/pojntfx/webpipe/blob/main/pkg/cuse/cuse.c#L20-L22)</li>
-<li>To fully use it, it needs to first resolve a Go callback in C, and
-then call it with a pointer to the method’s struct in user data,
-effectively allowing for the use of closures (code snippet from
-https://github.com/pojntfx/webpipe/blob/main/pkg/cuse/bindings.go#L134-L162)</li>
-<li>Even with this however, it is hard to implement even a simple
-backend, and the CGo overhead is a significant drawback (code snippet
-from
-https://github.com/pojntfx/webpipe/blob/main/pkg/devices/trace_device.go)</li>
-<li>The last alternative to NBD devices would be to extend the kernel
-with a new construct that allows for essentially a virtual file to be
-<code>mmap</code>ed, not a block device</li>
-<li>This could use a custom protocol that is optimized for this use case
-instead of a full block device</li>
-<li>Because of the extensive setup required to implement such a system
-however, and the possibility of <code>ublk</code> providing a performant
-alternative in the future, going forward with NBD was chosen for now,
-since it provides a stable base to build the mounts and migration APIs
-on</li>
-</ul></li>
-</ul>
-<h2 id="direct-mounts"><span class="header-section-number">6.5</span>
+<h2 id="direct-mounts"><span class="header-section-number">6.4</span>
 Direct Mounts</h2>
 <ul>
 <li>Have a high spread/are unpredictable when from a first chunk latency
@@ -2695,7 +2626,7 @@ mounts</li>
 higher than the overhead of the RTT, which can be the case in LAN or
 other low-latency networks</li>
 </ul>
-<h2 id="managed-mounts"><span class="header-section-number">6.6</span>
+<h2 id="managed-mounts"><span class="header-section-number">6.5</span>
 Managed Mounts</h2>
 <ul>
 <li>Have an internal overhead due to duplicate I/O operations for
@@ -2722,7 +2653,7 @@ background push system</li>
 to a point that is high enough for it to balance out the internal
 overhead of the duplicate I/O operations</li>
 </ul>
-<h2 id="chunking-1"><span class="header-section-number">6.7</span>
+<h2 id="chunking-1"><span class="header-section-number">6.6</span>
 Chunking</h2>
 <ul>
 <li>In general, server-side chunking should always be preferred due to
@@ -2739,7 +2670,7 @@ server-side chunking doesn’t require and extra worker on the client for
 each extra chunk that needs to be pulled, making it possible for the
 background pull system to pull more, increasing the throughput</li>
 </ul>
-<h2 id="rpc-frameworks-1"><span class="header-section-number">6.8</span>
+<h2 id="rpc-frameworks-1"><span class="header-section-number">6.7</span>
 RPC Frameworks</h2>
 <ul>
 <li>Dudirekta
@@ -2776,7 +2707,7 @@ maintainable</li>
 performant but also less proven solution</li>
 </ul></li>
 </ul>
-<h2 id="backends-1"><span class="header-section-number">6.9</span>
+<h2 id="backends-1"><span class="header-section-number">6.8</span>
 Backends</h2>
 <ul>
 <li>Redis
@@ -2821,37 +2752,31 @@ mount’s background pull system is high, where Cassandra has worse
 throughput</li>
 </ul></li>
 </ul>
-<h2 id="regionfs"><span class="header-section-number">6.10</span>
-RegionFS</h2>
+<h2 id="nbd"><span class="header-section-number">6.9</span> NBD</h2>
 <ul>
-<li>Comparing this API to RegionFS, an existing remote memory system
+<li>Limitations of NBD and <code>ublk</code> as an alternative
 <ul>
-<li>A similar approach was made in RegionFS<span class="citation">[33]</span></li>
-<li>RegionFS is implemented as a kernel module, but it is functionally
-similar to how this API exposes a NBD device for memory interaction</li>
-<li>In RegionFS, the regions file system is mounted to a path, which
-then exposes regions as virtual files</li>
-<li>Instead of using a custom configuration (such as configuring the
-amount of pushers to make a mount read-only), such an approach makes it
-possible to use <code>chmod</code> on the virtual file for a memory
-region to set permissions</li>
-<li>By using standard utilities like <code>open</code> and
-<code>chmod</code>, this API usable from different programming languages
-with ease</li>
-<li>Unlike the managed mounts API however, the system proposed in Remote
-Regions is mostly intended for private usecases with a limited amount of
-hosts and in LAN, with low-RTT connections</li>
-<li>It is also not designed to be used for a potential migration
-scenarios, which the modular approach of r3map allows for</li>
-<li>While Remote Regions’ file system approach does allow for
-authorization based on permissions, it doesn’t specify how
-authentication could work</li>
-<li>In terms of the wire protocol, Remote Regions also seems to target
-mostly LAN with protocols like RDMA comm modules, while r3map targets
-mostly WAN with a pluggable transport protocol interface</li>
+<li>NBD is the underlying technology for both direct and managed
+mounts</li>
+<li>NBD is a battle-tested solution for this with fairly good
+performance</li>
+<li>In the future a more lean implemenation called <code>ublk</code>
+could also be used</li>
+<li><code>ublk</code> uses <code>io_uring</code>, which means that it
+could potentially allow for much faster concurrent access</li>
+<li>It is similar to NBD; it also uses a user space server to provide
+the block device backend, and a kernel <code>ublk</code> driver that
+creates <code>/dev/ublkb*</code> devices</li>
+<li>Unlike as it is the case for the NBD kernel module, which uses a
+rather slow UNIX or TCP socket to communicate, <code>ublk</code> is able
+to use <code>io_uring</code> pass-through commands</li>
+<li>The <code>io_uring</code> architecture promises lower latency and
+better throughput</li>
+<li>Because it is however still experimental and docs are lacking, NBD
+was chosen</li>
 </ul></li>
 </ul>
-<h2 id="language-limitations"><span class="header-section-number">6.11</span> Language Limitations</h2>
+<h2 id="language-limitations"><span class="header-section-number">6.10</span> Language Limitations</h2>
 <ul>
 <li>Issues with the r3map implementation
 <ul>
@@ -2863,8 +2788,9 @@ memory, it has to stop the world</li>
 tries to manage the underlying slice, or tries to release memory as data
 is being copied from the mount</li>
 <li>Because the NBD server that provides the byte slice is also running
-in the same process, this causes a deadlock as the server that provides
-the backend for the mount is also frozen
+in the same process that is consuming the byte slice, this causes a
+deadlock as the server that provides the backend for the mount is also
+frozen
 (https://github.com/pojntfx/r3map/blob/main/pkg/mount/slice_managed.go#L70-L93)</li>
 <li>A workaround for this is to lock the <code>mmap</code>ed region into
 memory, but this will also cause all chunks to be fetched, which leads
@@ -2881,9 +2807,9 @@ provide a good alternative</li>
 through a different interface to make it usable in Go</li>
 </ul></li>
 </ul>
-<h2 id="use-cases"><span class="header-section-number">6.12</span> Use
+<h2 id="use-cases"><span class="header-section-number">6.11</span> Use
 Cases</h2>
-<h3 id="remote-swap-with-ram-dl"><span class="header-section-number">6.12.1</span> Remote Swap With
+<h3 id="remote-swap-with-ram-dl"><span class="header-section-number">6.11.1</span> Remote Swap With
 <code>ram-dl</code></h3>
 <ul>
 <li>ram-dl is a fun experiment</li>
@@ -2905,7 +2831,7 @@ can be used for interesting usecases such as real, remote RAM/Swap</li>
 project is just ~300 SLOC including backend configuration, flags and
 other boilerplate</li>
 </ul>
-<h3 id="mapping-tape-into-memory-with-tapisk"><span class="header-section-number">6.12.2</span> Mapping Tape Into Memory
+<h3 id="mapping-tape-into-memory-with-tapisk"><span class="header-section-number">6.11.2</span> Mapping Tape Into Memory
 With <code>tapisk</code></h3>
 <ul>
 <li>Overview
@@ -2982,7 +2908,7 @@ is 10s of thousands of SLOC, tapisk achieves a similar feature set in
 just under 350 SLOC</li>
 </ul></li>
 </ul>
-<h3 id="improving-file-system-synchronization-solutions"><span class="header-section-number">6.12.3</span> Improving File System
+<h3 id="improving-file-system-synchronization-solutions"><span class="header-section-number">6.11.3</span> Improving File System
 Synchronization Solutions</h3>
 <ul>
 <li>Existing Solutions
@@ -3044,7 +2970,7 @@ synchronization tooling can be used to solve essentially the
 synchronization of any state, including disks</li>
 </ul></li>
 </ul>
-<h3 id="universal-database-media-and-asset-streaming"><span class="header-section-number">6.12.4</span> Universal Database, Media
+<h3 id="universal-database-media-and-asset-streaming"><span class="header-section-number">6.11.4</span> Universal Database, Media
 and Asset Streaming</h3>
 <ul>
 <li>Streaming access to remote databases
@@ -3142,7 +3068,7 @@ binaries/scripts/libraries from, or by using the block device as a file
 or <code>mmap</code>ing it directly to fetch it</li>
 </ul></li>
 </ul>
-<h3 id="universal-app-state-synchronization-and-migration"><span class="header-section-number">6.12.5</span> Universal App State
+<h3 id="universal-app-state-synchronization-and-migration"><span class="header-section-number">6.11.5</span> Universal App State
 Synchronization and Migration</h3>
 <ul>
 <li>Modelling state
@@ -3463,13 +3389,6 @@ file system for tapes and tar files</span>.”</span> <a href="https://github.co
 <div class="csl-left-margin">[32] </div><div class="csl-right-inline">J.
 Waibel and F. Pojtinger, <span>“<span class="nocase">sile-fystem: A
 generic FUSE implementation</span>.”</span> <a href="https://github.com/jakWai01/sile-fystem" class="uri">https://github.com/jakWai01/sile-fystem</a>, 2022.</div>
-</div>
-<div id="ref-aguilera2018remoteregions" class="csl-entry">
-<div class="csl-left-margin">[33] </div><div class="csl-right-inline">M.
-K. Aguilera <em>et al.</em>, <span>“Remote regions: A simple abstraction
-for remote memory,”</span> in <em>Proceedings of the 2018 USENIX
-conference on usenix annual technical conference</em>, 2018, pp.
-775–787.</div>
 </div>
 </div>
 </div>

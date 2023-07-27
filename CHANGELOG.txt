@@ -1,3 +1,9 @@
+commit dcb080aba1cc32eff9a72150a91fb3f382fc990b
+Author: Felicitas Pojtinger <felicitas@pojtinger.com>
+Date:   Fri Jul 28 01:29:52 2023 +0200
+
+    feat: Add rest of discussion section
+
 commit 60f8350ff3e481594a5c303ca37f8311c8296ec8
 Author: Felicitas Pojtinger <felicitas@pojtinger.com>
 Date:   Thu Jul 27 23:33:07 2023 +0200
