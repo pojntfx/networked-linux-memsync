@@ -2253,7 +2253,7 @@ All benchmarks were conducted on a test machine with the following specification
 | OS           | Fedora release 38 (Thirty Eight) x86_64 |
 | Kernel       | 6.3.11-200.fc38.x86_64                  |
 | CPU          | 12th Gen Intel i7-1280P (20) @ 4.700GHz |
-| Memory       | 31687MiB                                |
+| Memory       | 31687MiB LPDDR5, 6000 MHz dual-channel  |
 
 To make the results reproducible, the benchmark scripts and notebooks to plot the related visualizations can be found in the accompanying repository[@pojtinger2023memsync], and multiple runs have been conducted for each benchmark to ensure consistency.
 
