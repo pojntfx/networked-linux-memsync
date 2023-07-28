@@ -3701,7 +3701,7 @@ specifications:
   OS             Fedora release 38 (Thirty Eight) x86_64
   Kernel         6.3.11-200.fc38.x86_64
   CPU            12th Gen Intel i7-1280P (20) @ 4.700GHz
-  Memory         31687MiB LPDDR5, 6000 MHz dual-channel
+  Memory         31687MiB LPDDR5, 6400 MT/s
 
 To make the results reproducible, the benchmark scripts and notebooks to
 plot the related visualizations can be found in the accompanying
@@ -4049,14 +4049,15 @@ values. This also means that the initial latency will be at minimum the
 RTT to the backend.
 
 While it has a lower first chunk latency compared to direct mounts and
-managed mounts at 0 ms RTT, the latency grows linearly as the RTT
-increases due to the aforementioned synchronous API socket and no way of
-pulling data in the background. While it has more predictable throughput
-and latency than the NBD-based solutions, for high RTT deployments, it
-becomes essentially unusable due to the low throughput. In summary,
-while this approach is interesting and idiomatic to Go, for most data,
-esp. larger datasets and high-RTT networks like a WAN, one of the
-alternative solutions is a better choice.
+managed mounts at 0 ms RTT (see figure ), the latency grows linearly as
+the RTT increases (see figure ) due to the aforementioned synchronous
+API socket and no way of pulling data in the background. While it has
+more predictable throughput and latency than the NBD-based solutions,
+for high RTT deployments, it becomes essentially unusable due to the low
+throughput. In summary, while this approach is interesting and idiomatic
+to Go and Linux, for most data, esp. larger datasets and high-RTT
+networks like a WAN, one of the alternative solutions is a better
+choice.
 
 File-Based Synchronization
 
@@ -4096,14 +4097,15 @@ FUSE not the optimal technology to implement memory synchronization.
 Direct Mounts
 
 Direct mounts have a high spread when it comes to first chunk latency at
-0 ms RTT, but are more predictable when it comes to their throughput.
-Similarly to the drawbacks of userfaultfd, it’s first chunk latency
-grows linearly as the RTT increases, due to the lack of pre-emptive
-pulls. Despite this, it has the highest throughput at 0 ms RTT, even
-higher than managed mounts due to it having less expensive internal I/O
-operations because of the lack of this pull system. While compared to
-userfaultfd, it’s read throughput doesn’t drop as rapidly as RTT
-increases, it’s write speed is heavily influenced by RTT since writes
+0 ms RTT(see figure ), but are more predictable when it comes to their
+throughput (see figure ). Similarly to the drawbacks of userfaultfd,
+it’s first chunk latency grows linearly as the RTT increases (see figure
+), due to the lack of pre-emptive pulls. Despite this, it has the
+highest throughput at 0 ms RTT, even higher than managed mounts (see
+figure ) due to it having less expensive internal I/O operations because
+of the lack of this pull system. While compared to userfaultfd, it’s
+read throughput doesn’t drop as rapidly as RTT increases (see figure ).
+It’s write speed is heavily influenced by RTT (see figure ) since writes
 need to be written to the remote as they happen, as there is no
 background push system either. These characteristics make direct mounts
 a good access method to choose if the internal overhead of using managed
@@ -4114,112 +4116,118 @@ Managed Mounts
 
 Managed mounts have a internal overhead to due to the duplicate I/O
 operations required for background pull, resulting in a worse throughput
-for low RTT scenarios (esp. for 0 ms RTT), as well as higher first chunk
-latencies. As soon as the RTT reaches levels more typical for a WAN
-enviornmnet however, this overhead becomes negligible compared to the
-benefits gained over the other access methods thanks to the background
-push and pull systems.
+for low RTT scenarios compared to direct mounts (esp. for 0 ms RTT; see
+figure ), as well as higher first chunk latencies (see figure ). As soon
+as the RTT reaches levels more typical for a WAN environment however,
+this overhead becomes negligible compared to the benefits gained over
+the other access methods thanks to the background push and pull systems
+(see figure and ).
 
 Tuning the background workers to the specific environment can
-substantially increase a managed mount’s performance, since data can be
-fetched in parallel. The pull priority function can allow for even more
-optimized pulls, and pre-emptive pulls can significantly reduce initial
-chunk latency since data can be pulled asynchronously before the device
-is even available. Higher worker counts to increase the amount of data
-that is being pulled preemptively, as well as preferring polling over
-the udev-based method for detecting device readiness, both can reduce
-the overall device Open() time and thus reduce the initial overhead of
-using this access method for a remote resource. Write throughput for
-managed mounts is also significantly higher than for direct mounts,
-which is the case due the background push system; writes are first
-written to the faster local backend, and are then asynchronously written
-to the remote, resulting in much faster write speeds. These
-characteristics make managed mounts the perferred access method for WAN
-environments, where the RTT usually is high enough to balance out the
-internal overhead caused by the background push and pull system’s I/O
-operations.
+substantially increase a managed mount’s performance (see figure and ),
+since data can be fetched in parallel. The pull priority function can
+allow for even more optimized pulls, and pre-emptive pulls can
+significantly reduce initial chunk latency since data can be pulled
+asynchronously before the device is even available. Higher worker counts
+to increase the amount of data that is being pulled preemptively (see
+figure ), as well as preferring polling over the udev-based method for
+detecting device readiness (see figure ), both can reduce the overall
+device Open() time and thus reduce the initial overhead of using this
+access method for a remote resource. Write throughput for managed mounts
+is also significantly higher than for direct mounts (see figure ), which
+is the case due the background push system; writes are first written to
+the faster local backend, and are then asynchronously written to the
+remote, resulting in much faster write speeds. These characteristics
+make managed mounts the perferred access method for WAN environments,
+where the RTT usually is high enough to balance out the internal
+overhead caused by the background push and pull system’s I/O operations.
 
 Chunking
 
 In general, server-side chunking should almost always be the preferred
 technology due to the much better throughput compared to client-side
-chunking. For direct mounts, due to their linear/synchronous access
-pattern, the throughput is low for both server- and client-side chunking
-as RTT increases, but even with linear access server-side chunking still
-outperforms the alternative. For managed mounts, client-side chunking
-can still halve the throughput of a mount compared to server-side
-chunking. If the data chunks are smaller than the NBD block size, it
-reduces the number of chunks that can be fetched if the number of
-workers remains the same. This isn’t the case with server-side chunking
-because it doesn’t need an extra worker on the client side for each
-additional chunk that needs to be fetched. This allows the background
-pull system to fetch more, thus increasing throughput.
+chunking (see figure ). For direct mounts, due to their
+linear/synchronous access pattern, the throughput is low for both
+server- and client-side chunking as RTT increases, but even with linear
+access server-side chunking still outperforms the alternative (see
+figure ). For managed mounts, client-side chunking can still halve the
+throughput of a mount compared to server-side chunking (see figure ). If
+the data chunks are smaller than the NBD block size, it reduces the
+number of chunks that can be fetched if the number of workers remains
+the same. This isn’t the case with server-side chunking because it
+doesn’t need an extra worker on the client side for each additional
+chunk that needs to be fetched. This allows the background pull system
+to fetch more, thus increasing throughput.
 
 RPC Frameworks
 
 Out of the frameworks tested, Dudirekta consistently has lower
-throughput than the alternatives. It performs better for managed mounts
-than direct mounts thanks to it’s support for concurrent RPCs and is
-less sensitive to RTT compared to gRPC and fRPC for managed mounts, but
-even for the latter, it’s throughput is much lower compared to both
-alternatives due to it’s lack of connecting pooling. Despite these
-drawbacks however, Dudirekta remains an interesting option for
-prototyping due to the decreased friction in developer overhead,
-bi-directional PC support and transport layer independence.
+throughput than the alternatives (see figure ). It performs better for
+managed mounts than direct mounts thanks to it’s support for concurrent
+RPCs and is less sensitive to RTT compared to gRPC and fRPC for managed
+mounts, but even for the latter, it’s throughput is much lower compared
+to both alternatives (see figure ) due to it’s lack of connecting
+pooling. Despite these drawbacks however, Dudirekta remains an
+interesting option for prototyping due to the decreased friction in
+developer overhead, bi-directional PC support and transport layer
+independence.
 
 gRPC offers considerably faster throughput compared to Dudirekta for
-both managed and direct mounts. It has support for connection pooling,
-giving it a significant performance benefit over Dudirekta for managed
-mounts, do to it being able to more efficiently pull chunks in the
-background concurrently. It also has good throughput for 0 ms RTT
-scenarios, and is essentially an industry standard, resulting in good
-tooling as well as known scalability characterstics.
+both managed and direct mounts (see figure ). It has support for
+connection pooling, giving it a significant performance benefit over
+Dudirekta for managed mounts (see figure ), do to it being able to more
+efficiently pull chunks in the background concurrently. It also has good
+throughput for 0 ms RTT scenarios, and is essentially an industry
+standard, resulting in good tooling as well as known scalability
+characterstics.
 
 While gRPC offers a throughput improvement compared to Dudirekta, fRPC
 is able to improve on gRPC even further due to it’s internal
 optimizations. It is also faster than Dudirekta in both direct and
-managed mounts due to it’s support for connection pooling, and compared
-to gRPC, is a more lean stack than gRPC and Protocol Buffers, making it
-more simple and maintainable. As a less commonly used solutionn however
-it also has less enterprise testing and tooling available, which means
-that is a more performant, but also less proven solution.
+managed mounts (see figure ) due to it’s support for connection pooling,
+and compared to gRPC, is a more lean stack than gRPC and Protocol
+Buffers, making it more simple and maintainable. As a less commonly used
+solutionn however it also has less enterprise testing and tooling
+available, which means that is a more performant, but also less proven
+solution.
 
 Backends
 
-Redis is the backend with the smallest amount of spread and the lowest
-amount of initial chunk latency at a 0 ms RTT. When used for direct
-mounts, it has a ower throughput compared to managed mounts, showing
-good support for concurrent chunk access; it also has the highest
-thoughput for direct mounts by a significant margin due to it’s
-optimized wire protocol and fast key lookups. It also has good
-throughput in managed mounts due to these optimizations, making it a
-good choice for ephemeral data like caches, where quick access times are
-necessary or the direct mount API provides benefits, i.e. in LAN
-deployments.
+Redis is the backend with the smallest amount of spread (see figure )
+and the lowest amount of initial chunk latency at a 0 ms RTT (see figure
+). When used for direct mounts, it has a lower throughput compared to
+managed mounts (see figure ), showing good support for concurrent chunk
+access; it also has the highest thoughput for direct mounts by a
+significant margin (see figure ) due to it’s optimized wire protocol and
+fast key lookups. It also has good throughput in managed mounts due to
+these optimizations (see figure ), making it a good choice for ephemeral
+data like caches, where quick access times are necessary or the direct
+mount API provides benefits, i.e. in LAN deployments.
 
-Cassandra has the highest throughput for 0 ms RTT deployments for direct
-mounts, showing a very good concurrent access performance. It does
-howwever fall short when it comes to usage in direct mounts, where the
-performance is worse than any other backend, showing the databases high
-read latency overhead for looking up individual chunks. For managed
-mounts however, as the RTT increases, it shows only slightly lower
-performance compared to Redis; as a result, it is a good choice of
-backend if most data will be accessed by the managed mount’s background
-pull system, but a bad choice if chunks will be accessed outside of this
-due to the low direct mount throughput. Another use case where Cassandra
-can potentially be beneficial due to it’s configurable consistency is
-storing persistent data in a way that is more dependable than Redis or
-S3.
+Cassandra has the highest throughput for 0 ms RTT deployments for
+managed mounts, showing a very good concurrent access performance (see
+figure ). It does however fall short when it comes to usage in direct
+mounts, where the performance is worse than any other backend (see
+figure ), showing the database’s high read latency overhead for looking
+up individual chunks. For managed mounts however, as the RTT increases,
+it shows only slightly lower performance compared to Redis (see figure
+); as a result, it is a good choice of backend if most data will be
+accessed by the managed mount’s background pull system, but a bad choice
+if chunks will be accessed outside of this due to the low direct mount
+throughput. Another use case where Cassandra can potentially be
+beneficial due to it’s configurable consistency is storing persistent
+data in a way that is more dependable than Redis or S3.
 
-S3 has the lowestperformance of all network-capable backends that were
-implemented for managed mounts. It’s performance is consistently low
-even as RTT increases, presumably due to the high overhead of having to
-make multiple HTTP requests to retrieve individual chunks, despite
-performing better than Cassandra for a direct mount scenario. S3 remains
-a good choice of backends if it’s use is required due to architectural
-constraints, or if the chance of persistently stored chunks being read
-outside of the managed mount’s background pull system is high, where
-Casssandra has considerably worse throughput.
+S3 has the lowest throughput of all network-capable backends that were
+implemented for managed mounts (see figure ). It’s performance is
+consistently low even as RTT increases (see figure ), presumably due to
+the high overhead of having to make multiple HTTP requests to retrieve
+individual chunks, despite performing better than Cassandra for a direct
+mount scenario (see figure ). S3 remains a good choice of backends if
+it’s use is required due to architectural constraints, or if the chance
+of persistently stored chunks being read outside of the managed mount’s
+background pull system is high, where Casssandra has considerably worse
+throughput.
 
 Limitations
 
@@ -4232,7 +4240,7 @@ to manage an object with a reference to the exposed slice, or tries to
 release memory as data is being copied from the NBD device. If the
 garbage collector then tries to access the slice, it can stop the
 goroutine providing the slice in the form of the NBD server, causing the
-deadlock. One workaroudn for this is to lock the mmaped region into
+deadlock. One workaround for this is to lock the mmaped region into
 memory, but this will also cause all chunks to be fetched from the
 remote into memory, which leads to a high Open() latency; as a result,
 the current workaround for this is to simply start the NBD server in a
