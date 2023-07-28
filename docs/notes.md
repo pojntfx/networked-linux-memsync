@@ -408,7 +408,7 @@ csl: static/ieee.csl
 - fRPC
   - Is an Open-Source RPC framework released by Loophole Labs in 2022
   - proto3-compatible, meaning that it can be used as a drop-in replacement for gRPC that promises better performance characteristics
-  - Has the ability to stop the RPC system and retrieve an underlying connection, making it possible to re-use connections for different purposes (https://frpc.io/getting-started/overview)
+  - Has the ability to stop the RPC system and retrieve an underlying connection, making it possible to re-use connections for different purposes [@loopholelabs2023frpc]
   - Uses frisbee, a messaging framework to implement the request-response semantics [@loopholelabs2022frisbee]
 - Polyglot
   - Is the high-performance serialization framework used by fRPC

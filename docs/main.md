@@ -32,9 +32,15 @@ TODO: Add introduction
 
 ## Technology
 
+### User Space and Kernel Space
+
+The kernel represents the code of an operating system. It directly interacts with hardware, manages system resources such as CPU time, memory and others, and enforces security policies. In addition to this, it is also responsible for progress scheduling, memory managements, divers and many more resposibilities depending on the implementation. Kernel space refers to the memory region that this system is stored and executes in.
+
+User space on the other hand is the portion of system memory where user applications execute. Applications can't directly access hardware or kernel memory; instead they use APIs to access these them[@tanenbaum2006operating]. This API is provided in the form of syscalls, which serve as a bridge between user and kernel space. Well-known syscalls are `open()`, `read()`, `write()`, `close()` and `ioctl()`. While most syscalss have a specific purpose, `ioctl` serves as a more generic, universal syscall based on file descriptors. Using it, it is possible to implement device-specific actions that can't be expressed with regular system calls, but they can be an implementation hurdle for language development due to their use of numerical constants and other typing issues[@devault2022hareioctl].
+
 ### The Linux Kernel
 
-The open-source Linux kernel, was created by Linus Torvalds in 1991. Developed primarily in the C programming language, it has recently seen the addition of Rust as an approved language for further expansion and development, esp. of drivers[@linux2023docs]. The powers millions of devices across the globe, including servers, desktop computers, mobile phones, and embedded devices. It serves as an intermediary between hardware and applications, as an abstraction layer that simplifies the interaction between them. It is engineered for compatibility with a wide array of architectures, such as ARM, x86, RISC-V, and others.
+The open-source Linux kernel was created by Linus Torvalds in 1991. Developed primarily in the C programming language, it has recently seen the addition of Rust as an approved language for further expansion and development, esp. of drivers[@linux2023docs]. The powers millions of devices across the globe, including servers, desktop computers, mobile phones, and embedded devices. It serves as an intermediary between hardware and applications, as an abstraction layer that simplifies the interaction between them. It is engineered for compatibility with a wide array of architectures, such as ARM, x86, RISC-V, and others.
 
 The kernel does not function as a standalone operating system. This role is fulfilled by distributions, which build upon the Linux kernel to create fully-fledged operating systems[@love2010linux]. Distributions supplement the kernel with additional userspace tools, examples being GNU coreutils or BusyBox. Depending on their target audience, they further enhance functionality by integrating desktop environments and other software.
 
@@ -61,6 +67,12 @@ Aside from this notification role, signals also serve as an asynchronous communi
 To customize how a process should react upon receiving a specific signal, handlers can be utilized. Handlers dictate the course of action a process should take when a signal is received. Using the `sigaction()` function, a handler can be installed for a specific signal, enabling a custom response to that signal such as reloading configuration, cleaning up ressources before exiting or enabling verbose logging [@robbins2003unix].
 
 It is however important to note that signals are not typically utilized as a primary inter-process communication (IPC) mechanism. This is primarily due to their limitation in carrying additional data. While signals effectively alert a process of an event, they are not designed to convey forther information related to that event; consequently, they are best used in scenarios where simple event-based notifications are sufficient, rather than for more complex data exchange requirements.
+
+### UNIX Sockets
+
+Sockets allow processes within the same host system to communicate with each other[@stevens2003unixnet]. Unlike UNIX signals, much like TCP sockets, they can be used for IPC by allowing not only to submit additional data for an even, and are particularly popular on Linux.
+
+Stream sockets use TCP to provide reliable, two-way, connection-based byte streams, making them optimal for use in applications which require srong consistency guarantees. Datagram sockets on the other hand use UDP, which allows for fast, connection-less communication with less guarantees. In addition to these two different types of sockets, sockets can also be either named or unnamed. Named sockets are represented by a special file type on the file system and can be identified as a path, which allows for easy communication between unrelated processes. Unnamed sockets exist only in memory and disappear after the creating process terminates, making them a better choice for subsystems of applications to communicate with each other. In addition to this, UNIX sockets are also unique because they can pass a file descriptor between processes, which allows for interesting approaches to sharing ressources with technologies such as `userfaultfd`.
 
 ### Principle of Locality
 
@@ -161,6 +173,12 @@ Linux also caches file system metadata in specialized structures known as the `d
 While such caching mechanisms can improve performance, they also introduce complexities. One such complexity involves maintaining data consistency between the disk and cache through the process known as writebacks; aggressive writebacks, where data is copied back to disk frequently, can lead to reduced performance, while excessive delays may risk data loss if the system crashes before data has been saved.
 
 Another complexity arises from the necessity to release cached data under memory pressure, known as cache eviction. This requires sophisticated algorithms, such as LRU, to ensure effective utilization of available cache space[@maurer2008professional]. Prioritizing what to keep in cache when memory pressure builds does directly impact the overall system performance.
+
+### RTT, LAN and WAN
+
+Round-trip time (RTT) represents the time data takes to travel from a source to a destination and back. It provides a valuable insight into application latency, and can varying according to many factors such as network type, system load and physical distance. Local area networks (LAN) are geographically small networks that are typically characterised by having a low RTT, resulting in a low latency due to the small distance (typically no more than across an office or data center) that data needs to travel[@tanenbaum2003net]. As a result of their small geographical size, perimeter security is often applied to such networks, meaning that the LAN is viewed as a trusted network that doesn't necessarily require authentication or encryption between internal systems, resulting in a potentially smaller overhead.
+
+Wide area networks (WAN) on the other hand typically span a large geographical area, with the internet for example operating on a planetary scale. Due to the physical distance between source and destination, as well as the number of hops required for data to reach the destination, these networks typically have higher RTT and thus latency, and are also vulnerable to wire tapping and packet inspection, meaning that in order to securely transmit data on them, encryption and authentication is required.
 
 ### TCP, UDP, TLS and QUIC
 
@@ -293,15 +311,23 @@ One of the classic examples of pipelines is the instruction pipeline in CPUs, wh
 
 Another familiar implementation is observed in UNIX pipes, a fundamental part of shells such as GNU Bash or POSIX `sh`. Here, the output of a command can be "piped" into another for further processing; for instance, the results from a `curl` command fetching data from an API could be piped into the `jq` tool for JSON manipulation[@peek1994unix].
 
+### Go
+
+Go is a statically typed, compiled open-source programming language released by Google in 2009[@donovan2015go]. It is typically known for its simplicity, and was developed to address the unsuitability of many traditional languages for modern distrbuted systems development. Thanks to it's input from many people affiliated with UNIX, such as Rob Pike and Ken Thomposon, as well as good support for concurrency, Go is particulary popular for the development of cloud services and other types of network programming. The headline feature of Go is "Goroutines", a lightweight feature that allows for concurrent function execution that is similar to Threads, but more scalable at support for millions of Goroutines per program. Synchronization between different Goroutines is provided done by using channels, which are type- and concurrency-safe conduits for data.
+
 ### gRPC and Protocol Buffers
 
 gRPC is an open-source, high-performance remote procedure call (RPC) framework developed by Google in 2015. It is recognized for its cross-platform compatibility, supporting a variety of languages including Go, Rust, JavaScript and more. gRPC is being maintained by the Cloud Native Computing Foundation (CNCF), which ensures vendor neutrality.
 
-One of the notable features of the gRPC is its usage of HTTP/2 as the transport protocol. This allows it to exploit features of HTTP/2 such as header compression, which minimizes bandwidth usage, and request multiplexing, enabling multiple requests to be sent concurrently over a single connection. In addition to HTTP/2, gRPC utilizes Protocol Buffers (protobuf) as the Interface Definition Language (IDL) and wire format. Protobuf is a compact, high-performance, and language-neutral mechanism for data serialization. This makes it preferable over the more dynamic, but more verbose and slower JSON format often used in REST APIs.
+One of the notable features of the gRPC is its usage of HTTP/2 as the transport protocol. This allows it to exploit features of HTTP/2 such as header compression, which minimizes bandwidth usage, and request multiplexing, enabling multiple requests to be sent concurrently over a single connection. In addition to HTTP/2, gRPC utilizes Protocol Buffers (Protobuf), more specifically proto3, as the Interface Definition Language (IDL) and wire format. Protobuf is a compact, high-performance, and language-neutral mechanism for data serialization. This makes it preferable over the more dynamic, but more verbose and slower JSON format often used in REST APIs.
 
 One of the strengths of the gRPC framework is its support for various types of RPCs. Not only does it support unary RPCs where the client sends a single request to the server and receives a single response in return, mirroring the functionality of a traditional function call, but also server-streaming RPCs, wherein the client sends a request, and the server responds with a stream of messages. Conversely, in client-streaming RPCs, the client sends a stream of messages to a server in response to a request. It also supports bidirectional RPCs, wherein both client and server can send messages to each other.
 
 What distinguishes gRPC is its pluggable structure that allows for added functionalities such as load balancing, tracing, health checking, and authentication, which make it a comprehensive solution for developing distributed systems[@google2023grpc].
+
+### fRPC and Polyglot
+
+fRPC is an open-source RPC framework released by Loophole labs in 2022. It is proto3-compatible, meaning that it can be used as a drop-in replacement for gRPC, promising better performance characteristics. A unique feature is it's ability to stop the RPC system to rerieve and underlying connection, which makes it possible to re-use connections for different purposes[@loopholelabs2023frpc]. Internally, it uses Frisbee as it's messaging framework to implement the request-response semantics[@loopholelabs2022frisbee], and Polyglot, a high-performance serialization framework, as it's Protobuf equivalent. Polyglot achieves a similar goal as Protobuf, which is to encode data structures in a platform-independent way, but does so with less legacy code and a simpler wire format. It is also language-independent, with implementations for Go, Rust and TypeScript[@loopholelabs2023polyglot].
 
 ### Redis
 
