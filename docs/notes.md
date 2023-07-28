@@ -33,6 +33,27 @@ csl: static/ieee.csl
 
 ## Technology
 
+### User Space and Kernel Space
+
+- Kernel
+  - Core of the operating system
+  - Direct interacts with hardware
+  - Manages system ressources (CPU time, memory etc.)
+  - Enforces security policies
+  - Responsible for progress scheduling, memory management and drivers
+  - Kernel space is the memory region in which the kernel is stored and executes in
+- User space
+  - Portion of system memory where user mode applications execute
+  - Applications can't directly access hardware or kernel memory, will need to use an API to get access[@tanenbaum2006operating]
+- Syscalls
+  - Serve as the API between user space and kernel space
+  - Makes it possible for applications in user space to access low-level OS services
+  - Common examples are `open()`, `read()`, `write()` and `close()`
+- `ioctl`
+  - Is a fairly generic syscall
+  - Allows for device-specific actions that can't be done with or expressed by regular system calls, providing a universal I/O model[@kerrisk2010linuxapi]
+  - Can be an implementation hurdle for languages because they are defined by using numeric constants and arbitrary pointers, making type safety an issue [@devault2022hareioctl]
+
 ### The Linux Kernel
 
 - Open-Source kernel created by Linus Torvals in 1991
@@ -69,6 +90,20 @@ csl: static/ieee.csl
   - Can be used to customize how a process should respond to a signal
   - Can be installed with `sigaction()`[@robbins2003unix]
 - Signals are not designed as an IPC mechanism, since they can only alert of an event, but not of any additional data for it
+
+### UNIX Sockets
+
+- Overview
+  - Allow processes on the same host system to communicate with each other[@stevens2003unixnet]
+  - Unlike UNIX signals, they can be used for IPC with addition data
+  - Are also available in Linux
+- Types
+  - Stream sockets use TCP to provide reliable, two-way, connection-based byte streams, making them optimal for applications that need strong consistency
+  - Datagram sockets use UDP, and thus allow for connection-less communication with less guarantees, prioritizing speed
+- Named and unnamed
+  - Named UNIX sockets are a special file type on the file system and can be identified as a path, and allow easy communication between unrelated processes
+  - Unnamed UNIX sockets exist only in memory and disappear after the creating process terminates
+- UNIX sockets allow file descriptor passing (see section on `userfaultfd`), which allows sharing a file descriptor between processes
 
 ### Memory Hierarchy
 
@@ -187,7 +222,24 @@ csl: static/ieee.csl
   - Data consistency: Between the disk and cache via writebacks. Aggressive writebacks lead to reduced performance, delays risk data loss
   - Release of cached data under memory pressure: Cache eviction requires intelligent algorithms, i.e. LRU[@maurer2008professional]
 
-### TCP, UDP and QUIC
+### LAN and WAN
+
+- RTT
+  - Round trip time (RTT) represents the time data takes to travel from a source to a destination and back
+  - Provides an insight into application latency
+  - Varies according to many factors such as network type, system load and physical distance
+- LAN
+  - Local area networks (LAN) is network infrastructure in geographically small areas[@tanenbaum2003net]
+  - Often the network of a single data center or office
+  - Typically have a low RTT and thus latency due to a short number of relays and the small distances that need to be travelled
+  - Perimeter security is often applied, where a LAN is seen as a trusted network that doesn't require authentication between internal systems
+- WAN
+  - Wide area networks (WAN) span large geographical areas
+  - Most famous example is the open internet
+  - Due to physical distance and number of hops, often higher RTT and latency
+  - Typically open to wiretapping and packet inspection, requiring encryption and authentication for services to operate
+
+### TCP, UDP, TLS and QUIC
 
 - TCP
   - Connection-oriented
@@ -200,6 +252,12 @@ csl: static/ieee.csl
   - No reliability or ordered packet delivery guarantees
   - Faster than TCP due to less guarantees
   - Suitable for applications that require speed over reliability (i.e. online gaming, video calls etc.)[@postel1980udp]
+- TLS
+  - Encryption protocol that intents to secure communication over a public network like the internet, has been updated many times to evolve with time
+  - Uses both symmetric and asymmetric encryption[@rescorla2018tls]
+  - Is used for most internet communication, esp. in combination with HTTP in the form of HTTPS
+  - Consists of a handshake phase, in which the parameters necessary to establish a secure connection are exchanged, as well as session keys and certificates, before continuing on to the data transfer phase using the encrypted connection
+  - Can also be used for authentication through the use of mutual TLS (mTLS), where the client is authenticated by the server
 - QUIC
   - Modern transport layer protocol developed by Google and standardized by the IETF in 2020
   - Intents to combine the best aspects of TCP and UDP
@@ -319,6 +377,20 @@ csl: static/ieee.csl
   - Example: Instruction pipeline in CPU, were the stages of instruction execution can be performend in parallel
   - Example: UNIX pipes, where the output of a command (e.g. `curl`) can be piped into another command (e.g. `jq`) to achieve a larger goal
 
+### Go
+
+- Overview
+  - Is a statically typed, compiled, open-source language by Google launched in 2009[@donovan2015go]
+  - Known for it's simplicity
+  - Developed to address the unsuitability of traditional languages for modern, distributed systems development
+  - Built with input from many original UNIX developers, like Rob Pike and Ken Thompson
+  - Popular particularly in cloud services and network programming
+- Goroutines
+  - Headline feature of Go
+  - Enables concurrent function execution
+  - Similar to threads conceptually, but much more scalable to millions of Goroutines per program
+  - Synchronization and data transfer between Goroutines is done by channels, typed, concurrency-safe conduits for data
+
 ### gRPC
 
 - Open-Source and high-performance RPC framework
@@ -330,6 +402,18 @@ csl: static/ieee.csl
   - Has pluggable support for load balancing, tracing, health checking and authentication[@google2023grpc]j
 - Supports many languages (Go, Rust, JS etc.)
 - Developed by the CNCF
+
+### fRPC and Polyglot
+
+- fRPC
+  - Is an Open-Source RPC framework released by Loophole Labs in 2022
+  - proto3-compatible, meaning that it can be used as a drop-in replacement for gRPC that promises better performance characteristics
+  - Has the ability to stop the RPC system and retrieve an underlying connection, making it possible to re-use connections for different purposes (https://frpc.io/getting-started/overview)
+  - Uses frisbee, a messaging framework to implement the request-response semantics [@loopholelabs2022frisbee]
+- Polyglot
+  - Is the high-performance serialization framework used by fRPC
+  - Works similarly to protocol buffers, but is much simpler and carries less legacy code
+  - Is also language independent, with current implementations for Go, Rust and TypeScript[@loopholelabs2023polyglot]
 
 ### Redis
 

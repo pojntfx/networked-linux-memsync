@@ -162,7 +162,7 @@ While such caching mechanisms can improve performance, they also introduce compl
 
 Another complexity arises from the necessity to release cached data under memory pressure, known as cache eviction. This requires sophisticated algorithms, such as LRU, to ensure effective utilization of available cache space[@maurer2008professional]. Prioritizing what to keep in cache when memory pressure builds does directly impact the overall system performance.
 
-### TCP, UDP and QUIC
+### TCP, UDP, TLS and QUIC
 
 TCP (Transmission Control Protocol), UDP (User Datagram Protocol), and QUIC (Quick UDP Internet Connections) are three key communication protocols utilized in the internet today.
 
@@ -170,7 +170,9 @@ TCP has long been the reliable backbone for internet communication due to its co
 
 UDP is a connectionless protocol that does not make the same guarantees about the reliability or ordered delivery of data packets [@postel1980udp]. This lends UDP a speed advantage over TCP, resulting in less communication overhead. Although it lacks TCP's robustness in handling errors and maintaining data order, UDP finds use in applications where speed and latency take precedence over reliability. This includes online gaming, video calls, and other real-time communication modes where quick data transmission is crucial even if temporary packet loss occurs.
 
-QUIC, a modern UDP-base transport layer protocol, was originally created by Google and standardized by the IETF in 2021[@rfc2021quic]. It aspires to combine the best qualities of TCP and UDP [@langley2017quic]. Unlike raw UDP, QUIC ensures the reliability of data transmission and guarantees the ordered delivery of data packets similarly to TCP, while intending to keep UDP's speed advantages. One of QUIC's standout features is its ability to reduce connection establishment times, which effectively lowers initial latency. It achieves this by merging the typically separate connection and security handshakes, reducing the time taken for a connection to be established. Additionally, QUIC is designed to prevent the issue of "head-of-line blocking", allowing for the independent delivery of separate data streams. This means it can handle the delivery of separate data streams without one stream blocking another, resulting in smoother and more efficient transmission, a feature which is especially important for applications with lots of concurrent transmissions.
+TLS is an encryption protocol that intents to secure communication over a public network over the internet [@rescorla2018tls]. It uses both symmetric and asymmetric encryption, and is used for most internet communication, esp. in combination with HTTP in the form of HTTPS. It consists of a handshake phase, in which the parameters necessary to establish a secure connection, as well as session keys and certificates are exchanged, before continuing on to the encrypted data transfer phase. Besides this use as a server authentication (through certificate authorities) and encryption method, it is also able to authenticate clients through the use of mutual TLS, where both the client and the server submit a certificate.
+
+QUIC, a modern UDP-base transport layer protocol, was originally created by Google and standardized by the IETF in 2021[@rfc2021quic]. It aspires to combine the best qualities of TCP and UDP [@langley2017quic]. Unlike raw UDP, QUIC ensures the reliability of data transmission and guarantees the ordered delivery of data packets similarly to TCP, while intending to keep UDP's speed advantages. One of QUIC's standout features is its ability to reduce connection establishment times, which effectively lowers initial latency. It achieves this by merging the typically separate connection and security (TLS) handshakes, reducing the time taken for a connection to be established. Additionally, QUIC is designed to prevent the issue of "head-of-line blocking", allowing for the independent delivery of separate data streams. This means it can handle the delivery of separate data streams without one stream blocking another, resulting in smoother and more efficient transmission, a feature which is especially important for applications with lots of concurrent transmissions.
 
 ### Delta Synchronization
 
@@ -291,7 +293,7 @@ One of the classic examples of pipelines is the instruction pipeline in CPUs, wh
 
 Another familiar implementation is observed in UNIX pipes, a fundamental part of shells such as GNU Bash or POSIX `sh`. Here, the output of a command can be "piped" into another for further processing; for instance, the results from a `curl` command fetching data from an API could be piped into the `jq` tool for JSON manipulation[@peek1994unix].
 
-### gRPC
+### gRPC and Protocol Buffers
 
 gRPC is an open-source, high-performance remote procedure call (RPC) framework developed by Google in 2015. It is recognized for its cross-platform compatibility, supporting a variety of languages including Go, Rust, JavaScript and more. gRPC is being maintained by the Cloud Native Computing Foundation (CNCF), which ensures vendor neutrality.
 
@@ -534,7 +536,7 @@ Similarly to the registration API, this is also wrapped into a reusable `func Ha
 
 #### `userfaultfd` Backends
 
-Thanks to `userfaultfd` being mostly useful for post-copy migration, the backend can be simplifed to a simple pull-only reader interface (`ReadAt(p []byte, off int64) (n int, err error)`). This means that almost any `io.ReaderAt` can be used to provide chunks to a `userfaultfd`-registered memory region, and access to this reader is guaranteed to be aligned to system's page size, which is typically 4KB. By having this simple backend interface, and thus only requiring read-only access, it is possible to implement the migration backend in many different ways. A simple backend can for example return a pattern to the memory region:
+Thanks to `userfaultfd` being mostly useful for post-copy migration, the backend can be simplifed to a simple pull-only reader interface (`ReadAt(p []byte, off int64) (n int, err error)`). This means that almost any `io.ReaderAt` can be used to provide chunks to a `userfaultfd`-registered memory region, and access to this reader is guaranteed to be aligned to system's page size, which is typically 4 KB. By having this simple backend interface, and thus only requiring read-only access, it is possible to implement the migration backend in many different ways. A simple backend can for example return a pattern to the memory region:
 
 ```go
 func (a abcReader) ReadAt(p []byte, off int64) (n int, err error) {
@@ -584,7 +586,7 @@ To speed up the process of hashing, instead of hashing the entire file, we can i
 
 #### Synchronization Protocol
 
-The delta synchronization protocol for this approach is similar to the one used by `rsync`, but simplifie. It supports synchronizing multiple files at the same time by using the file names as IDs, and also supports a central forwarding hub instead of requiring peer-to-peer connectivity between all hosts, which also reduces network traffic since this central hub could also be used to forward one stream to all other peers instead of having to send it multiple times. The protocol defines three actors: The multiplexer, file advertiser and file receiver.
+The delta synchronization protocol for this approach is similar to the one used by `rsync`, but simplified. It supports synchronizing multiple files at the same time by using the file names as IDs, and also supports a central forwarding hub instead of requiring peer-to-peer connectivity between all hosts, which also reduces network traffic since this central hub could also be used to forward one stream to all other peers instead of having to send it multiple times. The protocol defines three actors: The multiplexer, file advertiser and file receiver.
 
 TODO: Add sequence diagram for the protocol
 
@@ -1190,7 +1192,7 @@ const (
 )
 ```
 
-The handshake for the NBD cleint is negotiated in userspace by Go. Similarly to the server, the client only supports the "fixed newstyle" negotiatiation and aborts otherwise. The negotiation is once again implemented as a simple loop similarly to the server with it switching on the type; on `NEGOTIATION_TYPE_REPLY_INFO`, the client receives the export size, and with `NEGOTIATION_TYPE_INFO_BLOCKSIZE` it receives the used block size, which it then valides to be within the specified bounds and as a valid power of two, falling back to the preffered block size supplied by the options if possible:
+The handshake for the NBD client is negotiated in userspace by Go. Similarly to the server, the client only supports the "fixed newstyle" negotiatiation and aborts otherwise. The negotiation is once again implemented as a simple loop similarly to the server with it switching on the type; on `NEGOTIATION_TYPE_REPLY_INFO`, the client receives the export size, and with `NEGOTIATION_TYPE_INFO_BLOCKSIZE` it receives the used block size, which it then valides to be within the specified bounds and as a valid power of two, falling back to the preffered block size supplied by the options if possible:
 
 ```go
 // Falling back to the client's prefered block size if none is provided, and checking if the server's advertised size is within the clients's bounds as supplied by the options
@@ -1949,7 +1951,7 @@ for _, peer := range registry.Peers() {
 
 #### Protocol
 
-The protocol used for dudirekta is simple and based on JSONL; a function call, i.e. to `Println` looks like this:
+The protocol used for dudirekta is simple and based on JSONL, a for exchanging newline-delimited JSON data[@ward2013jsonl]; a function call, i.e. to `Println` looks like this:
 
 ```json
 [true, "1", "Println", ["Hello, world!"]]
@@ -2165,7 +2167,7 @@ func (b *RPCBackend) ReadAt(p []byte, off int64) (n int, err error) {
 
 ### Connection Pooling with gRPC
 
-While the dudirekta RPC implementation serves as a good reference implementation of how RPC backends work, it has issues with scalability, as is evident from the results section. This is mostly the case because of it's JSONL-based wire format, which, while simply and easy to analyize, is quite slow to marshal and unmarshal. The bi-directional RPCs do also come at a cost, since they prevent an effective use of connection pooling; since a client `dial`ing the server multiple times would mean that server could not reference multiple client connections as one composite client, it would not be able to differentiate two client connections from two separate clients. While implementing a future pooling mechanism based on a client ID is possible in the future, bi-directional RPCs can also be completely avoided entirely by implementing the pull- instead of push-based pre-copy solution described earlier where the destination host keeps track of the pull progress, effectively making unary RPC support the only requirement for a RPC framework.
+While the dudirekta RPC implementation serves as a good reference implementation of how RPC backends work, it has issues with scalability (see figure \ref{rpc-rttvar-1}). This is mostly the case because of it's JSONL-based wire format, which, while simply and easy to analyize, is quite slow to marshal and unmarshal. The bi-directional RPCs do also come at a cost, since they prevent an effective use of connection pooling; since a client `dial`ing the server multiple times would mean that server could not reference multiple client connections as one composite client, it would not be able to differentiate two client connections from two separate clients. While implementing a future pooling mechanism based on a client ID is possible in the future, bi-directional RPCs can also be completely avoided entirely by implementing the pull- instead of push-based pre-copy solution described earlier where the destination host keeps track of the pull progress, effectively making unary RPC support the only requirement for a RPC framework.
 
 Thanks to this narrower scope of requirements, alternative RPC frameworks can be used that do not have this limitation to their scalability. One such popular framework is gRPC, a high-performance system based on protocol buffers which is based on code generation and protocol buffers instead of reflection and JSONL. Thanks to it's support for unary RPCs, this protocol also supports connection pooling (which removes Dudirekta's main bottleneck) and is available in more language ecosystems (whereas Dudirekta currently only supports Go and TypeScript), making it possible to port the mount and migration APIs to other languages with wire protocol compatibility in the future. In order to implement the backend and seeder APIs for gRPC, they are defined in the `proto3` DSL:
 
