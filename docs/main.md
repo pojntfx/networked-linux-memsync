@@ -2253,7 +2253,7 @@ All benchmarks were conducted on a test machine with the following specification
 | OS           | Fedora release 38 (Thirty Eight) x86_64 |
 | Kernel       | 6.3.11-200.fc38.x86_64                  |
 | CPU          | 12th Gen Intel i7-1280P (20) @ 4.700GHz |
-| Memory       | 31687MiB LPDDR5, 6000 MHz dual-channel  |
+| Memory       | 31687MiB LPDDR5, 6400 MT/s              |
 
 To make the results reproducible, the benchmark scripts and notebooks to plot the related visualizations can be found in the accompanying repository[@pojtinger2023memsync], and multiple runs have been conducted for each benchmark to ensure consistency.
 
@@ -2261,85 +2261,85 @@ To make the results reproducible, the benchmark scripts and notebooks to plot th
 
 #### Latency
 
-![Average first chunk latency for different direct memory access, disk, userfaultfd, direct mounts and managed mounts (0ms RTT)](./static/latency-first-chunk-rtt0-1.png)
+![Average first chunk latency for different direct memory access, disk, userfaultfd, direct mounts and managed mounts (0ms RTT)\label{latency-first-chunk-rtt0-1}](./static/latency-first-chunk-rtt0-1.png)
 
 Compared to disk and memory, all other network-capable access methods (`userfaultfd`, direct mounts and managed mounts) have significanty higher latencies when accessing the first chunk. The latency of `userfaultfd` is 15 times slower than the disk access time, while direct mounts and managed mounts are 28 and 40 times slower respectively. Its is however important to consider that even despite these differences, the overall latency is still below 200 µs for all access methods.
 
-![Box plot for the distribution of first chunk latency for userfaultfd, direct mounts and managed mounts (0ms RTT)](./static/latency-first-chunk-rtt0-2.png)
+![Box plot for the distribution of first chunk latency for userfaultfd, direct mounts and managed mounts (0ms RTT)\label{latency-first-chunk-rtt0-2}](./static/latency-first-chunk-rtt0-2.png)
 
 When looking at the latency distribution for the network-capable access methods, the spread for the managed mount is the smallest, but there are significant outliers until more than 1 ms; direct mounts have a significantly higher spread, but less outliers, while `userfaultfd`'s latency advantage is visible here too.
 
-![Average first chunk latency for userfaultfd, direct mounts and managed mounts by RTT](./static/latency-first-chunk-rttvar-1.png)
+![Average first chunk latency for userfaultfd, direct mounts and managed mounts by RTT\label{latency-first-chunk-rttvar-1}](./static/latency-first-chunk-rttvar-1.png)
 
 For the earlier measurements the backends were connected directly to the mount or `userfaultfd` handler respectively, resulting in an effictive 0ms RTT. If the RTT is increased, the backends behave differently; for `userfaultfd` and direct mounts, the first chunk latency grows linearly. For managed mounts however, the latency is higher than at a 0ms RTT, but even at this peak it is significantly lower than both `userfaultfd` and managed mounts; after the RTT reaches 25ms, the first chunk latency for managed mounts reach latency levels below the measured latency at 0ms RTT.
 
-![Average first chunk latency for managed workers with 0-512 workers by RTT](./static/latency-first-chunk-workervar-1.png)
+![Average first chunk latency for managed workers with 0-512 workers by RTT\label{latency-first-chunk-workervar-1}](./static/latency-first-chunk-workervar-1.png)
 
 A similar pattern can be seen when analysing how different worker counts for managed mounts influence latency; for zero workers, the latency grows almost linearly, while if more than 1 workers are used, the latency first has a peak, but then continues to drop until it reaches a level close to or lower than direct mounts.
 
 #### Read Throughput
 
-![Average throughput for memory, disk, userfaultfd, direct mounts and managed mounts (0ms RTT)](./static/throughput-rtt0-1.png)
+![Average throughput for memory, disk, userfaultfd, direct mounts and managed mounts (0ms RTT)\label{throughput-rtt0-1}](./static/throughput-rtt0-1.png)
 
 When looking at throughput compared to latency, the trends for memory, disk, `userfaultfd` and the two mount types are similar, but less drastic. Direct memory access still is the fastest option at a 20 GB/s throughput, but unlike with latency is followed not by the disk, but rather by direct mounts at 2.8 GB/s and managed mounts at 2.4 GB/s. The disk is slower than both of these methods at 2.3 GB/s, while `userfaultfd` has the lowest throughput at 450 MB/s.
 
-![Average throughput for userfaultfd, direct mounts and managed mounts (0ms RTT)](./static/throughput-rtt0-2.png)
+![Average throughput for userfaultfd, direct mounts and managed mounts (0ms RTT)\label{throughput-rtt0-2}](./static/throughput-rtt0-2.png)
 
 When looking at just the throughput for network-capable access methods, `userfaultfd` falls significantly behind both mount types, meaning that while at 0 RTT, `userfaultfd` has lower latency, but also much lower throughput.
 
-![Box plot for the throughput distribuion for userfaultfd, direct mounts and managed mounts (0ms RTT)](./static/throughput-rtt0-3.png)
+![Box plot for the throughput distribuion for userfaultfd, direct mounts and managed mounts (0ms RTT)\label{throughput-rtt0-3}](./static/throughput-rtt0-3.png)
 
 When it comes to throughput distribution, `userfaultfd` has the lowest spread while managed mounts has the highest, closely followed by direct mounts. Interestingly, the median throughput of direct mounts is especially high.
 
-![Average throughput for userfaultfd, direct mounts and managed mounts by RTT](./static/throughput-rttvar-1.png)
+![Average throughput for userfaultfd, direct mounts and managed mounts by RTT\label{throughput-rttvar-1}](./static/throughput-rttvar-1.png)
 
 As it is the case with latency, the access methods behave very differently as the RTT increases. Direct mounts and `userfaultfd` throughputs drop to below 10 MB/s and 1 MB/s as the RTT reaches 6 ms, and continue to drop as it increases further. The throughput for managed mounts also decreases as RTT increases, but much less drastically compared to the other methods; even at a RTT of 25ms, the throughput is still over 500 MB/s. If the RTT is lower than 10ms, a throughput of almost 1 GB/s can still be achieved with managed mounts.
 
-![Average throughput for managed mounts with 0-16384 workers by RTT](./static/throughput-workervar-1.png)
+![Average throughput for managed mounts with 0-16384 workers by RTT\label{throughput-workervar-1}](./static/throughput-workervar-1.png)
 
 Similar results the effects of worker counts on latency can be seen when measuing throughput with different configurations as RTT increases. While low worker counts result in good throughput at 0 ms RTT, generally, the higher the worker count, the higher the achievable throughput. For 16384 workers, throughput can be consistently kept at over 1 GB/s, even at a latency of 30 ms.
 
 #### Write Throughput
 
-![Average write throughput for direct and managed mounts by RTT](./static/throughput-write-rttvar-1.png)
+![Average write throughput for direct and managed mounts by RTT\label{throughput-write-rttvar-1}](./static/throughput-write-rttvar-1.png)
 
 While for a migration or mount scenario read throughput is a critical metric, it is also interesting to compare the write throughput of the different access methods. Note that for this benchmark, the underlying block device is opened with `O_DIRECT`, which causes additional overhead when writing due to it skipping the kernel buffer, but is useful for this benchmark specifically as it doesn't require a `sync`/`msync` step to flush data to the disk. As RTT increases, managed mounts show a much better write performance. Write speeds for direct mounts drop to below 1 MB/s as soon as the RTT increases to 4ms, while they are consistenly above 230 MB/s for managed mounts, independent of RTT. `userfaultfd` was not measured, as it does not allow for tracking changes to the memory regions handled by it.
 
 ### Initialization
 
-![Kernel density estimation for the distribution of direct mount initialization time with polling vs. udev](./static/latency-polling-udev-1.png)
+![Kernel density estimation for the distribution of direct mount initialization time with polling vs. udev\label{latency-polling-udev-1}](./static/latency-polling-udev-1.png)
 
 When it comes to initialization for direct and managed mounts, as introduced earlier, there are two methods of detecting that a NBD device is ready: Polling, or subscribing to `udev` events. While spread for both methods is similarly high, the average initialization time for `udev` is higher than the polling method.
 
-![Amount of pre-emptively pulled data for managed mounts with 0-4096 workers by RTT](./static/latency-preemptive-pull-1.png)
+![Amount of pre-emptively pulled data for managed mounts with 0-4096 workers by RTT\label{latency-preemptive-pull-1}](./static/latency-preemptive-pull-1.png)
 
 Another aspect of the device initialization proess is the amount of data that can be pulled pre-emptively; here again, the importance of the worker count becomes apparent. The higher the worker count is, the more data can be pulled; while for 4096 workers, almost 40 MB of data can be pulled before the device is opened at a RTT of 7 ms, this drops to 20 MB for 2048 workers, 5 MB for 512 and continues to drop as the worker count decreases. Even for a 0 ms RTT, more background pull workers result in more pre-emptively pulled data.
 
 ### Chunking
 
-![Average read throughput for server-side and client-side chunking, direct mounts and managed mounts by RTT](./static/chunking-local-remote-1.png)
+![Average read throughput for server-side and client-side chunking, direct mounts and managed mounts by RTT\label{chunking-local-remote-1}](./static/chunking-local-remote-1.png)
 
 Chunking can be done on either client- or server-side for both the direct and the managed mounts; looking at throughput for both options, it is clear that unless the RTT is 0 ms, managed mounts yield significantly higher throughput than direct mounts for both client- and server-side chunking.
 
-![Average read throughput for server-side and client-side chunking with direct mounts by RTT](./static/chunking-local-remote-2.png)
+![Average read throughput for server-side and client-side chunking with direct mounts by RTT\label{chunking-local-remote-2}](./static/chunking-local-remote-2.png)
 
 When looking at direct mounts specifically, server-side chunking is a very fast option for 0 ms RTT at almost 500 MB/s throughput, but drops to just 75 MB/s at a 1 ms RTT, 40 MB/s at 2 ms, and then continues to drop to just over 5 MB/s at 20 ms RTT. For client-side chunking, the throughput is much lower at just 30 MB/s even at 0 ms RTT, and it also continues to drop steadily until reaches just 4.5 MB/s at 20 ms RTT.
 
-![Average read throughput for server-side and client-side chunking with managed mounts by RTT](./static/chunking-local-remote-3.png)
+![Average read throughput for server-side and client-side chunking with managed mounts by RTT\label{chunking-local-remote-3}](./static/chunking-local-remote-3.png)
 
 For managed mounts, the measured throughput is different; throughput also decreases as RTT increases, but much less drastically. Server-side throughput also yields higher throughputs for this solution at 450 MB/s at 0 ms RTT vs. 230 MB/s at 0 ms for client-side chunking. As RTT increases, throughput for both direct and managed backends drop to 300 MB/s for managed mounts and 240 MB/s for direct mounts at a RTT of 20 ms.
 
 ### RPC Frameworks
 
-![Average throughput by RTT for Dudirekta, gRPC and fRPC frameworks for direct and managed mounts](./static/rpc-rttvar-1.png)
+![Average throughput by RTT for Dudirekta, gRPC and fRPC frameworks for direct and managed mounts\label{rpc-rttvar-1}](./static/rpc-rttvar-1.png)
 
 Looking at the performance for the Dudirekta, gRPC and fRPC frameworks for managed and direct mounts, throughput decreases as the RTT increases. While for 0 ms RTT, direct mounts provide the best throughput in line with the measurements for the different access technologies, it drops more drastically at RTT increases compared to managed mounts. Also apparent is that Dudirekta has a much lower throughput than both gRPC and fRPC.
 
-![Average throughput by RTT for Dudirekta, gRPC and fRPC frameworks for direct mounts](./static/rpc-rttvar-2.png)
+![Average throughput by RTT for Dudirekta, gRPC and fRPC frameworks for direct mounts\label{rpc-rttvar-2}](./static/rpc-rttvar-2.png)
 
 When looking at direct mounts specifically, the sharp difference between measured throughputs for Dudirekta and gRPC/fRPC is apparent again. While 0 ms RTT, fRPC reaches a throughput of 390 MB/s and gRPC of 500 MB/s, Dudirekta reaches just 50 MB/s. At 2 ms, throughput for all RPC frameworks drop drastically as the RTT increases, with fRPC and gRPC both dropping to 40 MB/s, and Dudirekta doropping to just 20 MB/s. All RPC frameworks ultimately reach a throughput of just 7 MB/s at a RTT of 14 ms, and then continue to decrease until they reach 3 MB/s at 40 ms.
 
-![Average throughput by RTT for Dudirekta, gRPC and fRPC frameworks for managed mounts](./static/rpc-rttvar-3.png)
+![Average throughput by RTT for Dudirekta, gRPC and fRPC frameworks for managed mounts\label{rpc-rttvar-3}](./static/rpc-rttvar-3.png)
 
 For managed mounts, Dudirekta stays consistently low compared to the other options at an average of 45 MB/s, but doesn't decrease in throughput as RTT increases. Like for direct mounts, gRPC manages to outperform fRPC at 0 ms RTT at 395 MB/s vs. 250 MB/s respectively, but fRPC gets consistently higher throughput values starting at a 2 ms RTT. fRPC manages to keep a throughput above 300 MB/s until a RTT of 25 ms, while gRPC drops below this after 14 ms. While the average throughput of fRPC is higher, as the RTT reaches 40 ms this difference becomes less pronounced at 50 MB/s after a 28 ms RTT is reached.
 
@@ -2347,49 +2347,49 @@ For managed mounts, Dudirekta stays consistently low compared to the other optio
 
 #### Latency
 
-![Average first chunk latency for memory, file, directory, Redis, S3 and Cassandra backends (0ms RTT)](./static/latency-first-chunk-backendvar-1.png)
+![Average first chunk latency for memory, file, directory, Redis, S3 and Cassandra backends (0ms RTT)\label{latency-first-chunk-backendvar-1}](./static/latency-first-chunk-backendvar-1.png)
 
 While the average first chunk latency for the memory, file, directory, Redis, S3 and Cassandra backends at 0 ms are all similar and all below 3.5 µs, Redis has lowest measured latency at just 2.5 µs.
 
-![Box plot of first chunk latency distribution for memory, file, directory, Redis, S3 and Cassandra (0ms RTT)](./static/latency-first-chunk-backendvar-2.png)
+![Box plot of first chunk latency distribution for memory, file, directory, Redis, S3 and Cassandra (0ms RTT)\label{latency-first-chunk-backendvar-2}](./static/latency-first-chunk-backendvar-2.png)
 
 Looking at the latency distribution, Redis once again is visible as having both the smallest amount of spread and also the lowest amount of latency, while the memory and S3 backends are noticable for having a low amount of outliers, compared to the directory backend which has a significant amount of spread.
 
 #### Throughput
 
-![Average throughput for memory, file, directory, Redis, S3 and Cassandra backends for direct and managed mounts (0ms RTT)](./static/throughput-backendvar-1.png)
+![Average throughput for memory, file, directory, Redis, S3 and Cassandra backends for direct and managed mounts (0ms RTT)\label{throughput-backendvar-1}](./static/throughput-backendvar-1.png)
 
 When looking at throughputs, the backends behave significantly more differently compared to latency. Both the file and memory backends consistently so have high throughputs; for direct mounts, file throughput is higher than memory throughput at 2081 MB/s vs. 1630 MB/s on average respectively; for managed mounts, this increases to 2372 MB/s vs. 2178 MB/s. When comparing the direct vs. managed mount measurement, Cassandra and the network-capable backends in general show vast differences in throughput; while Cassandra manages to reach almost 700 MB/s for a managed mount scnario, it falls to only 3 MB/s for a direct mount. Similarly so, for Redis and the directory backend, direct mounts are 3.5 times slower than the managed mounts, while for S3 it is 5.5. times slower.
 
-![Average throughput for Redis, S3 and Cassandra backends for direct mounts (0ms RTT)](./static/throughput-backendvar-2.png)
+![Average throughput for Redis, S3 and Cassandra backends for direct mounts (0ms RTT)\label{throughput-backendvar-2}](./static/throughput-backendvar-2.png)
 
 For the throughput of network-capable direct mounts, Redis has the highest average throughput at 114 MB/s compared to both Cassandra at 3 MB/s and S3 at 8 MB/s.
 
-![Kernel density estimation (with logarithmic Y axis) for the throughput distribution for Redis, S3 and Cassandra for direct mounts (0ms RTT)](./static/throughput-backendvar-5.png)
+![Kernel density estimation (with logarithmic Y axis) for the throughput distribution for Redis, S3 and Cassandra for direct mounts (0ms RTT)\label{throughput-backendvar-5}](./static/throughput-backendvar-5.png)
 
 The throughput distribution for the different backends with direct mounts shows a similarly drastic difference between Redis and the other options; a logarithmic Y axis is used to show the kernel density estimation, and while Redis does have a far larger spread compared to S3 and Cassandra, the throughput is also noticably higher.
 
-![Average throughput for Redis, S3 and Cassandra backends for managed mounts (0ms RTT)](./static/throughput-backendvar-3.png)
+![Average throughput for Redis, S3 and Cassandra backends for managed mounts (0ms RTT)\label{throughput-backendvar-3}](./static/throughput-backendvar-3.png)
 
 For managed mounts, Cassandra performs better than both S3 and Redis, managing 689 MB/s to 439 MB/s for Redis and 44 MB/s for S3.
 
-![Box plot for the throughput distribution for Redis, S3 and Cassandra for managed mounts (0ms RTT)](./static/throughput-backendvar-6.png)
+![Box plot for the throughput distribution for Redis, S3 and Cassandra for managed mounts (0ms RTT)\label{throughput-backendvar-6}](./static/throughput-backendvar-6.png)
 
 As for the distribution, Cassandra has a high spread but also the highest throughput, while Redis has the lowest spread. S3 is also noticably here with a consistently lower throughput compared to both alternatives, with an average spread.
 
-![Average throughput for memory, file, directory, Redis, S3 and Cassandra backends for direct mounts by RTT](./static/throughput-anyvar-1.png)
+![Average throughput for memory, file, directory, Redis, S3 and Cassandra backends for direct mounts by RTT\label{throughput-anyvar-1}](./static/throughput-anyvar-1.png)
 
 When looking at average throughput for direct mounts, all backends drop in throughput as RTT increases. Memory and file are very fast at above 1.4 GB/s at 0 ms RTT, while Redis achieves 140 MB/s as the closest network-capable alternative. The directory backend noticably has a lower throughput than Redis, despite not being network-capable. All other backeds are at below 15 MB/s for direct mounts, even at 0 ms RTT, and all backends trend towards below 3 MB/s at a RTT of 40 ms for direct mounts.
 
-![Average throughput for Redis, S3 and Cassandra backends for direct mounts by RTT](./static/throughput-anyvar-3.png)
+![Average throughput for Redis, S3 and Cassandra backends for direct mounts by RTT\label{throughput-anyvar-3}](./static/throughput-anyvar-3.png)
 
 The network-capable backends in isolation again show the sriking difference between Redis and the other backends' direct mount performance, but all generally trend towards low throughput performance as RTT increases.
 
-![Average throughput for memory, file, directory, Redis, S3 and Cassandra backends for managed mounts by RTT](./static/throughput-anyvar-2.png)
+![Average throughput for memory, file, directory, Redis, S3 and Cassandra backends for managed mounts by RTT\label{throughput-anyvar-2}](./static/throughput-anyvar-2.png)
 
 For managed mounts, the memory and file backends outperform all other options at over 2.5 GB/s, while the closest network-capable technology reaches 660 MB/s at 0 ms RTT. Similarly to the latency measurements, all technologies trend towards a similar throughput as RTT increases, with sharp drops for the memory and file backends after the RTT has reached 2 ms. Noticably, both the directory and S3 backends underperform even for managed mounts, with throughput reaching only 55 MB/s at 40 ms RTT.
 
-![Average throughput for Redis, S3 and Cassandra backends for managed mounts by RTT](./static/throughput-anyvar-4.png)
+![Average throughput for Redis, S3 and Cassandra backends for managed mounts by RTT\label{throughput-anyvar-4}](./static/throughput-anyvar-4.png)
 
 When looking at just the network-capable backends in isolation, S3's low throughput becomes apparent again. Both Redis and Cassandra start between 550-660 MB/s at 0 ms RTT, then begin to drop after 6 ms until they reach 170-180 MB/s at 40 ms, with Redis consistently having slightly higher throughputs compared to Cassandra.
 
@@ -2401,7 +2401,7 @@ When looking at just the network-capable backends in isolation, S3's low through
 
 Due to these limitations, `userfaultfd` is essentially limited to read-only mounts of remote ressources, not synchronization. While it could be a viable solution for post-copy migration, it also prevents pullling chunks from being pulled before they have been accesed without adding an additional layer of indirection. The `userfaultfd` API socket is also synchronous, meaning that each page fault for each chunk needs to be handled one after the other, making it very vulnerable to long RTT values. This also means that the initial latency will be at minimum the RTT to the backend.
 
-While it has a lower first chunk latency compared to direct mounts and managed mounts at 0 ms RTT, the latency grows linearly as the RTT increases due to the aforementioned synchronous API socket and no way of pulling data in the background. While it has more predictable throughput and latency than the NBD-based solutions, for high RTT deployments, it becomes essentially unusable due to the low throughput. In summary, while this approach is interesting and idiomatic to Go, for most data, esp. larger datasets and high-RTT networks like a WAN, one of the alternative solutions is a better choice.
+While it has a lower first chunk latency compared to direct mounts and managed mounts at 0 ms RTT (see figure \ref{latency-first-chunk-rtt0-1}), the latency grows linearly as the RTT increases (see figure \ref{latency-first-chunk-rttvar-1}) due to the aforementioned synchronous API socket and no way of pulling data in the background. While it has more predictable throughput and latency than the NBD-based solutions, for high RTT deployments, it becomes essentially unusable due to the low throughput. In summary, while this approach is interesting and idiomatic to Go and Linux, for most data, esp. larger datasets and high-RTT networks like a WAN, one of the alternative solutions is a better choice.
 
 ### File-Based Synchronization
 
@@ -2415,37 +2415,37 @@ File systems in user space provide a solution that allows for both pre- and post
 
 ### Direct Mounts
 
-Direct mounts have a high spread when it comes to first chunk latency at 0 ms RTT, but are more predictable when it comes to their throughput. Similarly to the drawbacks of `userfaultfd`, it's first chunk latency grows linearly as the RTT increases, due to the lack of pre-emptive pulls. Despite this, it has the highest throughput at 0 ms RTT, even higher than managed mounts due to it having less expensive internal I/O operations because of the lack of this pull system. While compared to `userfaultfd`, it's read throughput doesn't drop as rapidly as RTT increases, it's write speed is heavily influenced by RTT since writes need to be written to the remote as they happen, as there is no background push system either. These characteristics make direct mounts a good access method to choose if the internal overhead of using managed mounts is higher than the overhead caused for direct mounts by the RTT, which can be the case in LAN or other very low-latency networks.
+Direct mounts have a high spread when it comes to first chunk latency at 0 ms RTT(see figure \ref{latency-first-chunk-rtt0-2}), but are more predictable when it comes to their throughput (see figure \ref{throughput-rtt0-3}). Similarly to the drawbacks of `userfaultfd`, it's first chunk latency grows linearly as the RTT increases (see figure \ref{latency-first-chunk-rttvar-1}), due to the lack of pre-emptive pulls. Despite this, it has the highest throughput at 0 ms RTT, even higher than managed mounts (see figure \ref{throughput-rtt0-1}) due to it having less expensive internal I/O operations because of the lack of this pull system. While compared to `userfaultfd`, it's read throughput doesn't drop as rapidly as RTT increases (see figure \ref{throughput-rttvar-1}). It's write speed is heavily influenced by RTT (see figure \ref{throughput-write-rttvar-1}) since writes need to be written to the remote as they happen, as there is no background push system either. These characteristics make direct mounts a good access method to choose if the internal overhead of using managed mounts is higher than the overhead caused for direct mounts by the RTT, which can be the case in LAN or other very low-latency networks.
 
 ### Managed Mounts
 
-Managed mounts have a internal overhead to due to the duplicate I/O operations required for background pull, resulting in a worse throughput for low RTT scenarios (esp. for 0 ms RTT), as well as higher first chunk latencies. As soon as the RTT reaches levels more typical for a WAN enviornmnet however, this overhead becomes negligible compared to the benefits gained over the other access methods thanks to the background push and pull systems.
+Managed mounts have a internal overhead to due to the duplicate I/O operations required for background pull, resulting in a worse throughput for low RTT scenarios compared to direct mounts (esp. for 0 ms RTT; see figure \ref{throughput-rtt0-1}), as well as higher first chunk latencies (see figure \ref{latency-first-chunk-rtt0-1}). As soon as the RTT reaches levels more typical for a WAN environment however, this overhead becomes negligible compared to the benefits gained over the other access methods thanks to the background push and pull systems (see figure \ref{latency-first-chunk-rttvar-1} and \ref{throughput-rttvar-1}).
 
-Tuning the background workers to the specific environment can substantially increase a managed mount's performance, since data can be fetched in parallel. The pull priority function can allow for even more optimized pulls, and pre-emptive pulls can significantly reduce initial chunk latency since data can be pulled asynchronously before the device is even available. Higher worker counts to increase the amount of data that is being pulled preemptively, as well as preferring polling over the `udev`-based method for detecting device readiness, both can reduce the overall device `Open()` time and thus reduce the initial overhead of using this access method for a remote resource. Write throughput for managed mounts is also significantly higher than for direct mounts, which is the case due the background push system; writes are first written to the faster local backend, and are then asynchronously written to the remote, resulting in much faster write speeds. These characteristics make managed mounts the perferred access method for WAN environments, where the RTT usually is high enough to balance out the internal overhead caused by the background push and pull system's I/O operations.
+Tuning the background workers to the specific environment can substantially increase a managed mount's performance (see figure \ref{latency-first-chunk-workervar-1} and \ref{throughput-workervar-1}), since data can be fetched in parallel. The pull priority function can allow for even more optimized pulls, and pre-emptive pulls can significantly reduce initial chunk latency since data can be pulled asynchronously before the device is even available. Higher worker counts to increase the amount of data that is being pulled preemptively (see figure \ref{latency-preemptive-pull-1}), as well as preferring polling over the `udev`-based method for detecting device readiness (see figure \ref{latency-polling-udev-1}), both can reduce the overall device `Open()` time and thus reduce the initial overhead of using this access method for a remote resource. Write throughput for managed mounts is also significantly higher than for direct mounts (see figure \ref{throughput-write-rttvar-1}), which is the case due the background push system; writes are first written to the faster local backend, and are then asynchronously written to the remote, resulting in much faster write speeds. These characteristics make managed mounts the perferred access method for WAN environments, where the RTT usually is high enough to balance out the internal overhead caused by the background push and pull system's I/O operations.
 
 ### Chunking
 
-In general, server-side chunking should almost always be the preferred technology due to the much better throughput compared to client-side chunking. For direct mounts, due to their linear/synchronous access pattern, the throughput is low for both server- and client-side chunking as RTT increases, but even with linear access server-side chunking still outperforms the alternative. For managed mounts, client-side chunking can still halve the throughput of a mount compared to server-side chunking. If the data chunks are smaller than the NBD block size, it reduces the number of chunks that can be fetched if the number of workers remains the same. This isn't the case with server-side chunking because it doesn't need an extra worker on the client side for each additional chunk that needs to be fetched. This allows the background pull system to fetch more, thus increasing throughput.
+In general, server-side chunking should almost always be the preferred technology due to the much better throughput compared to client-side chunking (see figure \ref{chunking-local-remote-1}). For direct mounts, due to their linear/synchronous access pattern, the throughput is low for both server- and client-side chunking as RTT increases, but even with linear access server-side chunking still outperforms the alternative (see figure \ref{chunking-local-remote-2}). For managed mounts, client-side chunking can still halve the throughput of a mount compared to server-side chunking (see figure \ref{chunking-local-remote-3}). If the data chunks are smaller than the NBD block size, it reduces the number of chunks that can be fetched if the number of workers remains the same. This isn't the case with server-side chunking because it doesn't need an extra worker on the client side for each additional chunk that needs to be fetched. This allows the background pull system to fetch more, thus increasing throughput.
 
 ### RPC Frameworks
 
-Out of the frameworks tested, Dudirekta consistently has lower throughput than the alternatives. It performs better for managed mounts than direct mounts thanks to it's support for concurrent RPCs and is less sensitive to RTT compared to gRPC and fRPC for managed mounts, but even for the latter, it's throughput is much lower compared to both alternatives due to it's lack of connecting pooling. Despite these drawbacks however, Dudirekta remains an interesting option for prototyping due to the decreased friction in developer overhead, bi-directional PC support and transport layer independence.
+Out of the frameworks tested, Dudirekta consistently has lower throughput than the alternatives (see figure \ref{rpc-rttvar-1}). It performs better for managed mounts than direct mounts thanks to it's support for concurrent RPCs and is less sensitive to RTT compared to gRPC and fRPC for managed mounts, but even for the latter, it's throughput is much lower compared to both alternatives (see figure \ref{rpc-rttvar-3}) due to it's lack of connecting pooling. Despite these drawbacks however, Dudirekta remains an interesting option for prototyping due to the decreased friction in developer overhead, bi-directional PC support and transport layer independence.
 
-gRPC offers considerably faster throughput compared to Dudirekta for both managed and direct mounts. It has support for connection pooling, giving it a significant performance benefit over Dudirekta for managed mounts, do to it being able to more efficiently pull chunks in the background concurrently. It also has good throughput for 0 ms RTT scenarios, and is essentially an industry standard, resulting in good tooling as well as known scalability characterstics.
+gRPC offers considerably faster throughput compared to Dudirekta for both managed and direct mounts (see figure \ref{rpc-rttvar-1}). It has support for connection pooling, giving it a significant performance benefit over Dudirekta for managed mounts (see figure \ref{rpc-rttvar-3}), do to it being able to more efficiently pull chunks in the background concurrently. It also has good throughput for 0 ms RTT scenarios, and is essentially an industry standard, resulting in good tooling as well as known scalability characterstics.
 
-While gRPC offers a throughput improvement compared to Dudirekta, fRPC is able to improve on gRPC even further due to it's internal optimizations. It is also faster than Dudirekta in both direct and managed mounts due to it's support for connection pooling, and compared to gRPC, is a more lean stack than gRPC and Protocol Buffers, making it more simple and maintainable. As a less commonly used solutionn however it also has less enterprise testing and tooling available, which means that is a more performant, but also less proven solution.
+While gRPC offers a throughput improvement compared to Dudirekta, fRPC is able to improve on gRPC even further due to it's internal optimizations. It is also faster than Dudirekta in both direct and managed mounts (see figure \ref{rpc-rttvar-1}) due to it's support for connection pooling, and compared to gRPC, is a more lean stack than gRPC and Protocol Buffers, making it more simple and maintainable. As a less commonly used solutionn however it also has less enterprise testing and tooling available, which means that is a more performant, but also less proven solution.
 
 ### Backends
 
-Redis is the backend with the smallest amount of spread and the lowest amount of initial chunk latency at a 0 ms RTT. When used for direct mounts, it has a ower throughput compared to managed mounts, showing good support for concurrent chunk access; it also has the highest thoughput for direct mounts by a significant margin due to it's optimized wire protocol and fast key lookups. It also has good throughput in managed mounts due to these optimizations, making it a good choice for ephemeral data like caches, where quick access times are necessary or the direct mount API provides benefits, i.e. in LAN deployments.
+Redis is the backend with the smallest amount of spread (see figure \ref{latency-first-chunk-backendvar-2}) and the lowest amount of initial chunk latency at a 0 ms RTT (see figure \ref{latency-first-chunk-backendvar-1}). When used for direct mounts, it has a lower throughput compared to managed mounts (see figure \ref{throughput-backendvar-1}), showing good support for concurrent chunk access; it also has the highest thoughput for direct mounts by a significant margin (see figure \ref{throughput-backendvar-2}) due to it's optimized wire protocol and fast key lookups. It also has good throughput in managed mounts due to these optimizations (see figure \ref{throughput-backendvar-3}), making it a good choice for ephemeral data like caches, where quick access times are necessary or the direct mount API provides benefits, i.e. in LAN deployments.
 
-Cassandra has the highest throughput for 0 ms RTT deployments for direct mounts, showing a very good concurrent access performance. It does howwever fall short when it comes to usage in direct mounts, where the performance is worse than any other backend, showing the databases high read latency overhead for looking up individual chunks. For managed mounts however, as the RTT increases, it shows only slightly lower performance compared to Redis; as a result, it is a good choice of backend if most data will be accessed by the managed mount's background pull system, but a bad choice if chunks will be accessed outside of this due to the low direct mount throughput. Another use case where Cassandra can potentially be beneficial due to it's configurable consistency is storing persistent data in a way that is more dependable than Redis or S3.
+Cassandra has the highest throughput for 0 ms RTT deployments for managed mounts, showing a very good concurrent access performance (see figure \ref{throughput-backendvar-3}). It does however fall short when it comes to usage in direct mounts, where the performance is worse than any other backend (see figure \ref{throughput-backendvar-2}), showing the database's high read latency overhead for looking up individual chunks. For managed mounts however, as the RTT increases, it shows only slightly lower performance compared to Redis (see figure \ref{throughput-anyvar-2}); as a result, it is a good choice of backend if most data will be accessed by the managed mount's background pull system, but a bad choice if chunks will be accessed outside of this due to the low direct mount throughput. Another use case where Cassandra can potentially be beneficial due to it's configurable consistency is storing persistent data in a way that is more dependable than Redis or S3.
 
-S3 has the lowestperformance of all network-capable backends that were implemented for managed mounts. It's performance is consistently low even as RTT increases, presumably due to the high overhead of having to make multiple HTTP requests to retrieve individual chunks, despite performing better than Cassandra for a direct mount scenario. S3 remains a good choice of backends if it's use is required due to architectural constraints, or if the chance of persistently stored chunks being read outside of the managed mount's background pull system is high, where Casssandra has considerably worse throughput.
+S3 has the lowest throughput of all network-capable backends that were implemented for managed mounts (see figure \ref{throughput-backendvar-3}). It's performance is consistently low even as RTT increases (see figure \ref{throughput-anyvar-2}), presumably due to the high overhead of having to make multiple HTTP requests to retrieve individual chunks, despite performing better than Cassandra for a direct mount scenario (see figure \ref{throughput-backendvar-2}). S3 remains a good choice of backends if it's use is required due to architectural constraints, or if the chance of persistently stored chunks being read outside of the managed mount's background pull system is high, where Casssandra has considerably worse throughput.
 
 ### Limitations
 
-While the mount APIs are functional for most usecases, there are performance and usability issues due it being implemented in Go. Go is a garbage collected language, and if the garbage collector is active, it has to stop goroutines. If the `mmap` API is used to access a managed mount or a direct mount, it is possible that the garbage collector tries to manage an object with a reference to the exposed slice, or tries to release memory as data is being copied from the NBD device. If the garbage collector then tries to access the slice, it can stop the goroutine providing the slice in the form of the NBD server, causing the deadlock. One workaroudn for this is to lock the `mmap`ed region into memory, but this will also cause all chunks to be fetched from the remote into memory, which leads to a high `Open()` latency; as a result, the current workaround for this is to simply start the NBD server in a separate process, so as to prevent the garbage collector from stopping the NBD server and trying to access the slice at the same time. Another workaround for this issue could be to instead use a language without a garbage collector such as Rust, which doesn't allow for the deadlock to occur in the first place.
+While the mount APIs are functional for most usecases, there are performance and usability issues due it being implemented in Go. Go is a garbage collected language, and if the garbage collector is active, it has to stop goroutines. If the `mmap` API is used to access a managed mount or a direct mount, it is possible that the garbage collector tries to manage an object with a reference to the exposed slice, or tries to release memory as data is being copied from the NBD device. If the garbage collector then tries to access the slice, it can stop the goroutine providing the slice in the form of the NBD server, causing the deadlock. One workaround for this is to lock the `mmap`ed region into memory, but this will also cause all chunks to be fetched from the remote into memory, which leads to a high `Open()` latency; as a result, the current workaround for this is to simply start the NBD server in a separate process, so as to prevent the garbage collector from stopping the NBD server and trying to access the slice at the same time. Another workaround for this issue could be to instead use a language without a garbage collector such as Rust, which doesn't allow for the deadlock to occur in the first place.
 
 NBD, the underlying technology and protocol for the mount API, has proven to be fairly performant, but it still could be improved upon to get closer to the performance of other access methods, like raw memory access. One such option is `ublk`[@linux2023ublk], which has the potential to significantly improve concurrent access speeds over the socket-based connection between the client and server that NBD uses. It is similar in architecture to NBD, where a user space server provides the block device backend, and a kernel `ublk` driver creates `/dev/ublkb*` block devices not unlike the `/dev/nbd*` devices created by NBD. At the point of this thesis being written however, documentation on this emerging kernel technology is still lacking, and NBD continues to be the standard way of creating block devices in user space.
 
