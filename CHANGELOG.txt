@@ -1,3 +1,9 @@
+commit 87e097c8237dd925b48a51c5ae5c1e118218f73e
+Author: Felicitas Pojtinger <felicitas@pojtinger.com>
+Date:   Fri Jul 28 21:35:20 2023 +0200
+
+    feat: Add notes on technology sections for user space and kernel space, UNIX sockets, LAN and WAN, TLS, Go and fRPC/Polyglot
+
 commit 4c432fea12d6ff25ad4c490b75cb3399b7dd7803
 Author: Felicitas Pojtinger <felicitas@pojtinger.com>
 Date:   Fri Jul 28 17:18:52 2023 +0200
