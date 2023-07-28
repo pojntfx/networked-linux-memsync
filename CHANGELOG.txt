@@ -1,3 +1,9 @@
+commit 100e647efaeb21be59fb71f7916b05aa1bf69ae8
+Author: Felicitas Pojtinger <felicitas@pojtinger.com>
+Date:   Fri Jul 28 22:57:34 2023 +0200
+
+    feat: Implement paragraphs foruser space and kernel space, UNIX sockets, LAN and WAN, Go and fRPC/Polyglot
+
 commit 87e097c8237dd925b48a51c5ae5c1e118218f73e
 Author: Felicitas Pojtinger <felicitas@pojtinger.com>
 Date:   Fri Jul 28 21:35:20 2023 +0200

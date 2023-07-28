@@ -676,16 +676,15 @@ fRPC and Polyglot
         characteristics
     -   Has the ability to stop the RPC system and retrieve an
         underlying connection, making it possible to re-use connections
-        for different purposes
-        (https://frpc.io/getting-started/overview)
+        for different purposes [31]
     -   Uses frisbee, a messaging framework to implement the
-        request-response semantics [31]
+        request-response semantics [32]
 -   Polyglot
     -   Is the high-performance serialization framework used by fRPC
     -   Works similarly to protocol buffers, but is much simpler and
         carries less legacy code
     -   Is also language independent, with current implementations for
-        Go, Rust and TypeScript[32]
+        Go, Rust and TypeScript[33]
 
 Redis
 
@@ -694,14 +693,14 @@ Redis
 -   Created by S. Sanfilippo in 2009
 -   Different from other NoSQL databases by supporting various data
     structures like lists, sets, hashes or bitmaps
--   Uses in-memory data storage for maximum speed and efficiency[33]
+-   Uses in-memory data storage for maximum speed and efficiency[34]
 -   Allows for low-latency reads/writes
 -   While not intended for persistance, it is possible to store data on
     disk
 -   Has a non-blocking I/O model and offers near real-time data
     processing capabilities
 -   Includes a pub-sub system to be able to function as a message
-    broker[34]
+    broker[35]
 
 S3 and Minio
 
@@ -712,13 +711,13 @@ S3 and Minio
         anywhere on the globe
     -   Range of storage classes with different requirements
     -   Includes authentication and authorization
-    -   Exposes HTTP API for accessing the stored folders and files[35]
+    -   Exposes HTTP API for accessing the stored folders and files[36]
 -   Minio
     -   Open-source storage server compatible wiht S3
     -   Lightweight and simple, written in Go
     -   Can be hosted on-prem and is open source
     -   Allows horizontal scalability to storage large amounts of data
-        across nodes[36]
+        across nodes[37]
 
 Cassandra and ScylllaDB
 
@@ -733,16 +732,16 @@ Cassandra and ScylllaDB
     -   Doesn’t use master nodes due to it’s use of a P2P protocol and
         distributed hash ring design
     -   Does have high latency under heavy load and requires fairly
-        complex configuration[37]
+        complex configuration[38]
 -   ScyllaDB
     -   Launched in 2015
     -   Written in C++ and has a shared-nothing architecture, unlike
         Cassandra which is written in Java
-    -   Compatible with Cassandra’s API and data model[38]
+    -   Compatible with Cassandra’s API and data model[39]
     -   Designed to overcome Cassandra’s limitations esp. around
         latency, esp. P99 latency
     -   Performance improvements were confirmed with various
-        benchmarking studies[39]
+        benchmarking studies[40]
 
 Planning
 
@@ -1282,8 +1281,8 @@ FUSE Implementation in Go
         from
         https://github.com/JakWai01/sile-fystem/blob/main/pkg/filesystem/fs.go)
 -   While this approach is interesting, the required overhead of
-    implementing it (which is known from prior projects like STFS[40]
-    and sile-fystem[41]) and other factors that will be touched upon
+    implementing it (which is known from prior projects like STFS[41]
+    and sile-fystem[42]) and other factors that will be touched upon
     later led to it not being pursued further
 
 NBD with go-nbd
@@ -3048,43 +3047,47 @@ Addison-Wesley Professional, 2015.
 [30] gRPC Authors, “Introduction to gRPC.” 2023.Available:
 https://grpc.io/docs/what-is-grpc/introduction/
 
-[31] S. Vij, A. Sørlie, F. Pojtinger, and J. Sun, “Frisbee-go:
+[31] L. Labs, “fRPC: A modern RPC framework designed for high
+performance and stability.” https://frpc.io/getting-started/overview,
+2022.
+
+[32] S. Vij, A. Sørlie, F. Pojtinger, and J. Sun, “Frisbee-go:
 Bring-your-own protocol messaging framework designed for performance and
 stability.” 2022.Available: https://github.com/loopholelabs/frisbee-go
 
-[32] S. Shivansh Vij, “Polyglot: A high-performance serialization
+[33] S. Shivansh Vij, “Polyglot: A high-performance serialization
 framework used for encoding and decoding arbitrary data structures
 across languages.” https://github.com/loopholelabs/polyglot, 2022.
 
-[33] Redis Ltd, “Introduction to redis.” https://redis.io/docs/about/,
+[34] Redis Ltd, “Introduction to redis.” https://redis.io/docs/about/,
 2023.
 
-[34] Redis Ltd, “Redis pub/sub.” https://redis.io/docs/interact/pubsub/,
+[35] Redis Ltd, “Redis pub/sub.” https://redis.io/docs/interact/pubsub/,
 2023.
 
-[35] Amazon Web Services, Inc, “What is amazon S3?”
+[36] Amazon Web Services, Inc, “What is amazon S3?”
 https://docs.aws.amazon.com/AmazonS3/latest/userguide/Welcome.html,
 2023.
 
-[36] MinIO, Inc, “Core administration concepts.”
+[37] MinIO, Inc, “Core administration concepts.”
 https://min.io/docs/minio/kubernetes/upstream/administration/concepts.html,
 2023.
 
-[37] A. Lakshman and P. Malik, “Cassandra: A decentralized structured
+[38] A. Lakshman and P. Malik, “Cassandra: A decentralized structured
 storage system,” SIGOPS Oper. Syst. Rev., vol. 44, no. 2, pp. 35–40,
 Apr. 2010, doi: 10.1145/1773912.1773922.
 
-[38] Inc. ScyllaDB, “ScyllaDB ring architecture - overview.”
+[39] Inc. ScyllaDB, “ScyllaDB ring architecture - overview.”
 https://opensource.docs.scylladb.com/stable/architecture/ringarchitecture/index.html,
 2023.
 
-[39] P. Grabowski, J. Stasiewicz, and K. Baryla, “Apache cassandra 4.0
+[40] P. Grabowski, J. Stasiewicz, and K. Baryla, “Apache cassandra 4.0
 performance benchmark: Comparing cassandra 4.0, cassandra 3.11 and
 scylla open source 4.4,” ScyllaDB Inc, 2021.Available:
 https://www.scylladb.com/wp-content/uploads/wp-apache-cassandra-4-performance-benchmark-3.pdf
 
-[40] F. Pojtinger, “STFS: Simple Tape File System, a file system for
+[41] F. Pojtinger, “STFS: Simple Tape File System, a file system for
 tapes and tar files.” https://github.com/pojntfx/stfs, 2022.
 
-[41] J. Waibel and F. Pojtinger, “sile-fystem: A generic FUSE
+[42] J. Waibel and F. Pojtinger, “sile-fystem: A generic FUSE
 implementation.” https://github.com/jakWai01/sile-fystem, 2022.

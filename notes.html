@@ -1097,9 +1097,9 @@ replacement for gRPC that promises better performance
 characteristics</li>
 <li>Has the ability to stop the RPC system and retrieve an underlying
 connection, making it possible to re-use connections for different
-purposes (https://frpc.io/getting-started/overview)</li>
+purposes <span class="citation" data-cites="loopholelabs2023frpc">[31]</span></li>
 <li>Uses frisbee, a messaging framework to implement the
-request-response semantics <span class="citation" data-cites="loopholelabs2022frisbee">[31]</span></li>
+request-response semantics <span class="citation" data-cites="loopholelabs2022frisbee">[32]</span></li>
 </ul></li>
 <li>Polyglot
 <ul>
@@ -1107,7 +1107,7 @@ request-response semantics <span class="citation" data-cites="loopholelabs2022fr
 <li>Works similarly to protocol buffers, but is much simpler and carries
 less legacy code</li>
 <li>Is also language independent, with current implementations for Go,
-Rust and TypeScript<span class="citation" data-cites="loopholelabs2023polyglot">[32]</span></li>
+Rust and TypeScript<span class="citation" data-cites="loopholelabs2023polyglot">[33]</span></li>
 </ul></li>
 </ul>
 </section>
@@ -1119,14 +1119,14 @@ Rust and TypeScript<span class="citation" data-cites="loopholelabs2023polyglot">
 <li>Created by S. Sanfilippo in 2009</li>
 <li>Different from other NoSQL databases by supporting various data
 structures like lists, sets, hashes or bitmaps</li>
-<li>Uses in-memory data storage for maximum speed and efficiency<span class="citation" data-cites="redis2023introduction">[33]</span></li>
+<li>Uses in-memory data storage for maximum speed and efficiency<span class="citation" data-cites="redis2023introduction">[34]</span></li>
 <li>Allows for low-latency reads/writes</li>
 <li>While not intended for persistance, it is possible to store data on
 disk</li>
 <li>Has a non-blocking I/O model and offers near real-time data
 processing capabilities</li>
 <li>Includes a pub-sub system to be able to function as a message
-broker<span class="citation" data-cites="redis2023pubsub">[34]</span></li>
+broker<span class="citation" data-cites="redis2023pubsub">[35]</span></li>
 </ul>
 </section>
 <section id="s3-and-minio" data-number="0.2.24">
@@ -1140,7 +1140,7 @@ broker<span class="citation" data-cites="redis2023pubsub">[34]</span></li>
 anywhere on the globe</li>
 <li>Range of storage classes with different requirements</li>
 <li>Includes authentication and authorization</li>
-<li>Exposes HTTP API for accessing the stored folders and files<span class="citation" data-cites="aws2023s3">[35]</span></li>
+<li>Exposes HTTP API for accessing the stored folders and files<span class="citation" data-cites="aws2023s3">[36]</span></li>
 </ul></li>
 <li>Minio
 <ul>
@@ -1148,7 +1148,7 @@ anywhere on the globe</li>
 <li>Lightweight and simple, written in Go</li>
 <li>Can be hosted on-prem and is open source</li>
 <li>Allows horizontal scalability to storage large amounts of data
-across nodes<span class="citation" data-cites="minio2023coreadmin">[36]</span></li>
+across nodes<span class="citation" data-cites="minio2023coreadmin">[37]</span></li>
 </ul></li>
 </ul>
 </section>
@@ -1168,18 +1168,18 @@ strong)</li>
 <li>Doesn’t use master nodes due to it’s use of a P2P protocol and
 distributed hash ring design</li>
 <li>Does have high latency under heavy load and requires fairly complex
-configuration<span class="citation" data-cites="lakshman2010cassandra">[37]</span></li>
+configuration<span class="citation" data-cites="lakshman2010cassandra">[38]</span></li>
 </ul></li>
 <li>ScyllaDB
 <ul>
 <li>Launched in 2015</li>
 <li>Written in C++ and has a shared-nothing architecture, unlike
 Cassandra which is written in Java</li>
-<li>Compatible with Cassandra’s API and data model<span class="citation" data-cites="scylladb2023ring">[38]</span></li>
+<li>Compatible with Cassandra’s API and data model<span class="citation" data-cites="scylladb2023ring">[39]</span></li>
 <li>Designed to overcome Cassandra’s limitations esp. around latency,
 esp. P99 latency</li>
 <li>Performance improvements were confirmed with various benchmarking
-studies<span class="citation" data-cites="grabowski2021scylladb">[39]</span></li>
+studies<span class="citation" data-cites="grabowski2021scylladb">[40]</span></li>
 </ul></li>
 </ul>
 </section>
@@ -1810,8 +1810,8 @@ without having to write FUSE-specific (code snippet from
 https://github.com/JakWai01/sile-fystem/blob/main/pkg/filesystem/fs.go)</li>
 </ul></li>
 <li>While this approach is interesting, the required overhead of
-implementing it (which is known from prior projects like STFS<span class="citation" data-cites="pojtinger2022stfs">[40]</span> and
-sile-fystem<span class="citation" data-cites="waibel2022silefystem">[41]</span>) and other factors that
+implementing it (which is known from prior projects like STFS<span class="citation" data-cites="pojtinger2022stfs">[41]</span> and
+sile-fystem<span class="citation" data-cites="waibel2022silefystem">[42]</span>) and other factors that
 will be touched upon later led to it not being pursued further</li>
 </ul>
 </section>
@@ -3845,59 +3845,64 @@ Addison-Wesley Professional, 2015.</div>
 <div class="csl-left-margin">[30] </div><div class="csl-right-inline">gRPC Authors, <span>“Introduction to
 gRPC.”</span> 2023.Available: <a href="https://grpc.io/docs/what-is-grpc/introduction/">https://grpc.io/docs/what-is-grpc/introduction/</a></div>
 </div>
+<div id="ref-loopholelabs2023frpc" class="csl-entry" role="doc-biblioentry">
+<div class="csl-left-margin">[31] </div><div class="csl-right-inline">L.
+Labs, <span>“fRPC: A modern RPC framework designed for high performance
+and stability.”</span> <a href="https://frpc.io/getting-started/overview" class="uri">https://frpc.io/getting-started/overview</a>, 2022.</div>
+</div>
 <div id="ref-loopholelabs2022frisbee" class="csl-entry" role="doc-biblioentry">
-<div class="csl-left-margin">[31] </div><div class="csl-right-inline">S.
+<div class="csl-left-margin">[32] </div><div class="csl-right-inline">S.
 Vij, A. Sørlie, F. Pojtinger, and J. Sun, <span>“Frisbee-go:
 Bring-your-own protocol messaging framework designed for performance and
 stability.”</span> 2022.Available: <a href="https://github.com/loopholelabs/frisbee-go">https://github.com/loopholelabs/frisbee-go</a></div>
 </div>
 <div id="ref-loopholelabs2023polyglot" class="csl-entry" role="doc-biblioentry">
-<div class="csl-left-margin">[32] </div><div class="csl-right-inline">S.
+<div class="csl-left-margin">[33] </div><div class="csl-right-inline">S.
 Shivansh Vij, <span>“Polyglot: A high-performance serialization
 framework used for encoding and decoding arbitrary data structures
 across languages.”</span> <a href="https://github.com/loopholelabs/polyglot" class="uri">https://github.com/loopholelabs/polyglot</a>, 2022.</div>
 </div>
 <div id="ref-redis2023introduction" class="csl-entry" role="doc-biblioentry">
-<div class="csl-left-margin">[33] </div><div class="csl-right-inline">Redis Ltd, <span>“Introduction to
+<div class="csl-left-margin">[34] </div><div class="csl-right-inline">Redis Ltd, <span>“Introduction to
 redis.”</span> <a href="https://redis.io/docs/about/" class="uri">https://redis.io/docs/about/</a>, 2023.</div>
 </div>
 <div id="ref-redis2023pubsub" class="csl-entry" role="doc-biblioentry">
-<div class="csl-left-margin">[34] </div><div class="csl-right-inline">Redis Ltd, <span>“Redis pub/sub.”</span> <a href="https://redis.io/docs/interact/pubsub/" class="uri">https://redis.io/docs/interact/pubsub/</a>, 2023.</div>
+<div class="csl-left-margin">[35] </div><div class="csl-right-inline">Redis Ltd, <span>“Redis pub/sub.”</span> <a href="https://redis.io/docs/interact/pubsub/" class="uri">https://redis.io/docs/interact/pubsub/</a>, 2023.</div>
 </div>
 <div id="ref-aws2023s3" class="csl-entry" role="doc-biblioentry">
-<div class="csl-left-margin">[35] </div><div class="csl-right-inline">Amazon Web Services, Inc, <span>“What is amazon
+<div class="csl-left-margin">[36] </div><div class="csl-right-inline">Amazon Web Services, Inc, <span>“What is amazon
 S3?”</span> <a href="https://docs.aws.amazon.com/AmazonS3/latest/userguide/Welcome.html" class="uri">https://docs.aws.amazon.com/AmazonS3/latest/userguide/Welcome.html</a>,
 2023.</div>
 </div>
 <div id="ref-minio2023coreadmin" class="csl-entry" role="doc-biblioentry">
-<div class="csl-left-margin">[36] </div><div class="csl-right-inline">MinIO, Inc, <span>“Core administration
+<div class="csl-left-margin">[37] </div><div class="csl-right-inline">MinIO, Inc, <span>“Core administration
 concepts.”</span> <a href="https://min.io/docs/minio/kubernetes/upstream/administration/concepts.html" class="uri">https://min.io/docs/minio/kubernetes/upstream/administration/concepts.html</a>,
 2023.</div>
 </div>
 <div id="ref-lakshman2010cassandra" class="csl-entry" role="doc-biblioentry">
-<div class="csl-left-margin">[37] </div><div class="csl-right-inline">A.
+<div class="csl-left-margin">[38] </div><div class="csl-right-inline">A.
 Lakshman and P. Malik, <span>“Cassandra: A decentralized structured
 storage system,”</span> <em>SIGOPS Oper. Syst. Rev.</em>, vol. 44, no.
 2, pp. 35–40, Apr. 2010, doi: <a href="https://doi.org/10.1145/1773912.1773922">10.1145/1773912.1773922</a>.</div>
 </div>
 <div id="ref-scylladb2023ring" class="csl-entry" role="doc-biblioentry">
-<div class="csl-left-margin">[38] </div><div class="csl-right-inline">Inc. ScyllaDB, <span>“ScyllaDB ring
+<div class="csl-left-margin">[39] </div><div class="csl-right-inline">Inc. ScyllaDB, <span>“ScyllaDB ring
 architecture - overview.”</span> <a href="https://opensource.docs.scylladb.com/stable/architecture/ringarchitecture/index.html" class="uri">https://opensource.docs.scylladb.com/stable/architecture/ringarchitecture/index.html</a>,
 2023.</div>
 </div>
 <div id="ref-grabowski2021scylladb" class="csl-entry" role="doc-biblioentry">
-<div class="csl-left-margin">[39] </div><div class="csl-right-inline">P.
+<div class="csl-left-margin">[40] </div><div class="csl-right-inline">P.
 Grabowski, J. Stasiewicz, and K. Baryla, <span>“Apache cassandra 4.0
 performance benchmark: Comparing cassandra 4.0, cassandra 3.11 and
 scylla open source 4.4,”</span> ScyllaDB Inc, 2021.Available: <a href="https://www.scylladb.com/wp-content/uploads/wp-apache-cassandra-4-performance-benchmark-3.pdf">https://www.scylladb.com/wp-content/uploads/wp-apache-cassandra-4-performance-benchmark-3.pdf</a></div>
 </div>
 <div id="ref-pojtinger2022stfs" class="csl-entry" role="doc-biblioentry">
-<div class="csl-left-margin">[40] </div><div class="csl-right-inline">F.
+<div class="csl-left-margin">[41] </div><div class="csl-right-inline">F.
 Pojtinger, <span>“<span class="nocase">STFS: Simple Tape File System, a
 file system for tapes and tar files</span>.”</span> <a href="https://github.com/pojntfx/stfs" class="uri">https://github.com/pojntfx/stfs</a>, 2022.</div>
 </div>
 <div id="ref-waibel2022silefystem" class="csl-entry" role="doc-biblioentry">
-<div class="csl-left-margin">[41] </div><div class="csl-right-inline">J.
+<div class="csl-left-margin">[42] </div><div class="csl-right-inline">J.
 Waibel and F. Pojtinger, <span>“<span class="nocase">sile-fystem: A
 generic FUSE implementation</span>.”</span> <a href="https://github.com/jakWai01/sile-fystem" class="uri">https://github.com/jakWai01/sile-fystem</a>, 2022.</div>
 </div>
