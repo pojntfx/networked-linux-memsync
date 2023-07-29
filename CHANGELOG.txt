@@ -1,3 +1,9 @@
+commit e4f180ab50017ac3191f980b4d50bc4e3c26456a
+Author: Felicitas Pojtinger <felicitas@pojtinger.com>
+Date:   Sun Jul 30 01:05:06 2023 +0200
+
+    feat: Add formal requirements for the thesis
+
 commit 21555e64701b33cbb9c6f011464596bf6eab430e
 Author: Felicitas Pojtinger <felicitas@pojtinger.com>
 Date:   Sat Jul 29 22:19:40 2023 +0200
