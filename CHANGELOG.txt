@@ -1,3 +1,9 @@
+commit 2d68a23c29a7a21562f252f62cbb7d7738a04f36
+Author: Felicitas Pojtinger <felicitas@pojtinger.com>
+Date:   Sat Jul 29 21:02:42 2023 +0200
+
+    feat: Turn summary section into paragraphs
+
 commit a6ad093abaf8a6ea8a73e5d07ce61f71018ff2a6
 Author: Felicitas Pojtinger <felicitas@pojtinger.com>
 Date:   Sat Jul 29 20:31:09 2023 +0200

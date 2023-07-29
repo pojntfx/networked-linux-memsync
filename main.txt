@@ -4839,7 +4839,53 @@ to the applications themselves.
 
 Summary
 
-TODO: Add summary
+As is evident from the discussion, there are multiple ways and
+configurations for implementing a solution for universally accessing,
+synchronizing and migration memory regions efficiently, while each
+configuration has different strenghts and weaknesses as shown by the
+benchmarks, making them each suitable for different use cases.
+
+When it comes to access methods, userfaultfd is an interesting API that
+is idiomatic to both Linux in as a first-party solution and Go due to
+it’s fairly low implementation overhead. This approach however falls
+short when it comes to throughput, especially when used in WAN, where
+other options can provide better performance. The delta synchronization
+method for mmaped files provides a simple way of memory synchronization
+for specific scenarios, but does have a very significant I/O and compute
+overhead due to it’s polling and hashing requirements that make it
+unsuitable for most applications; similarly so, FUSE provides an
+extensive API for implementing a complete file system in user space, but
+has significant implementation overhead making it a suboptimal choice
+for memory synchronization. Direct mounts provide an access method for
+LAN deployment scenarios, where networks typically have low latency and
+the lack of I/O overhead compared to other methods makes it a compelling
+choice, while managed mounts are the preferred access method for WAN
+environments. This is due to their efficient use of background push and
+pull, making it possible for them to adapt to the high latencies typical
+for such deployments, despite having slightly higher internal I/O
+overhead compared to direct mounts.
+
+As for RPC framework and transport choice, most production environments
+are well-suited for both fRPC and gRPC as a high-performance offering,
+where fRPC can offer slightly better average throughput, compared to
+gRPC’s better developer tooling as a result of it’s longstanding legacy.
+For backend choice, the file backend provides a good option for memory
+migration and synchronizations, as it can provide a performant, reliable
+and persistent way of storing a memory region without using up too much
+host memory. For memory access use cases, Redis shows aconsistently
+strong throughput in both managed and direct mount scenarios due to it’s
+concurrency optimizations, especially if ephermeral data is accessed in
+LAN environments, while Cassandra (and ScyllaDB) provide a good option
+for applications using managed mounts that need strong concurrency
+guarantees.
+
+These different approaches show that is possible to adapt the necessary
+semantics for accessing, synchronizing and migrating resources backed by
+memory regions to a wide variety of backends, wire protocols and APIs.
+For most real-world applications, the proposed direct mount, managed
+mount and migration APIs as implemented by r3map provide a fast and
+reliable way of achieving a truly universal method of working with
+remote memory.
 
 Conclusion
 
