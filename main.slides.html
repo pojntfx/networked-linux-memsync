@@ -425,11 +425,6 @@ and related wire protocols. Furthermore, it assesses the performance of
 various configurations to determine the optimal use case for each
 approach, and their suitability for both WAN and LAN deployment
 contexts.</p>
-<p>Ultimately, it introduces a comprehensive, production-ready reference
-implementation of a solution to universally access, synchronize, and
-migrate memory regions in the form of the open-source library r3map
-(remote mmap), together with various use cases and benchmarking data
-proving that it can be used for real-world applications today.</p>
 </div>
 <div id="technology" class="slide section level1" number="3">
 <h1><span class="header-section-number">3</span> Technology</h1>
@@ -4808,8 +4803,10 @@ other methods makes it a compelling choice, while managed mounts are the
 preferred access method for WAN environments. This is due to their
 efficient use of background push and pull, making it possible for them
 to adapt to the high latencies typical for such deployments, despite
-having slightly higher internal I/O overhead compared to direct
-mounts.</p>
+having slightly higher internal I/O overhead compared to direct mounts.
+For most real-world applications, the mount and migration APIs provide a
+fast and reliable way of achieving a truly universal method of working
+with remote memory.</p>
 <p>As for RPC framework and transport choice, most production
 environments are well-suited for both fRPC and gRPC as a
 high-performance offering, where fRPC can offer slightly better average
@@ -4822,18 +4819,50 @@ cases, Redis shows aconsistently strong throughput in both managed and
 direct mount scenarios due to it’s concurrency optimizations, especially
 if ephermeral data is accessed in LAN environments, while Cassandra (and
 ScyllaDB) provide a good option for applications using managed mounts
-that need strong concurrency guarantees.</p>
-<p>These different approaches show that is possible to adapt the
-necessary semantics for accessing, synchronizing and migrating resources
-backed by memory regions to a wide variety of backends, wire protocols
-and APIs. For most real-world applications, the proposed direct mount,
-managed mount and migration APIs as implemented by r3map provide a fast
-and reliable way of achieving a truly universal method of working with
-remote memory.</p>
+that need strong concurrency guarantees. These different approaches show
+that is possible to adapt the necessary semantics for accessing,
+synchronizing and migrating resources backed by memory regions to a wide
+variety of backends, wire protocols and APIs.</p>
 </div>
 <div id="conclusion" class="slide section level1" number="9">
 <h1><span class="header-section-number">9</span> Conclusion</h1>
-<p>TODO: Add conclusion</p>
+<p>The proposed solution consisting of the direct mount, managed mount
+and migration APIs as implemented in the form of the r3map library
+present a efficient method of accessing, synchronizing and migrating
+remote memory regions over a network, with example use cases and
+benchmarks showing that r3map is able to provide both throughput and
+latency characteristics that make it possible to use as part of
+applications today.</p>
+<p>ram-dl demonstrates how minimal the implementation overhead is by
+implementing a system to share and mount a remote system’s memory in
+under 300 source lines of code, while tapisk shows that the APIs can be
+used to efficiently map almost any resource, including a linear-access
+tape drive, to the concepts provided. Aside from these examples, the
+solution also makes many entirely new use cases that were previously
+thought of as extraodinarly hard to achieve possible, such as file
+synchronization that can combine the benefits of NBD with those of
+existing cloud storage clients, allowing to stream remote databases
+without requiring changes to their architecture, making arbitrary file
+formats streamable and optimizing app and game asset downloading
+processes.</p>
+<p>While there are limitations with the proposed solution’s underlying
+technologies, these do provide future research opportunities. For
+example, the use of Rust as a language that is garbage collection-free
+could be studied as an option to further increase throughput, fix
+encountered deadlock issues and reduce overall resource usage, and
+exploring emerging alternatives for creating block devices to NBD in
+userspace such as ublk could help further improve the implementation
+presented.</p>
+<p>Despite these limitations, the promise of providing a truly universal
+way of working with remote memory, without having to signficantly change
+existing applications or hypervisors, is provided in the form of the
+reference implementation. It is also able to provide multiple
+specialized configurations for LAN and WAN environments, making it
+possible to use remote memory technology in completely different and
+much more dymanic environments than before. As a result, entirely new
+ways of thinking about application architecture and lifecycles become
+possible, which can help enable the applications of tomorrow to become
+both simpler to maintain and more scalable than those built today.</p>
 </div>
 <div id="references" class="slide section level1 unnumbered">
 <h1 class="unnumbered">References</h1>
