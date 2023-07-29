@@ -1,3 +1,9 @@
+commit 27c8835317976debc2f41e9a63435857e3a94e50
+Author: Felicitas Pojtinger <felicitas@pojtinger.com>
+Date:   Sat Jul 29 04:10:35 2023 +0200
+
+    feat: Add notes and paragraphs for abstract
+
 commit 8b6b82c34d13b098df933843093ae9cc266476d9
 Author: Felicitas Pojtinger <felicitas@pojtinger.com>
 Date:   Sat Jul 29 03:34:54 2023 +0200

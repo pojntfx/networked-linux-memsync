@@ -2979,7 +2979,7 @@ Summary
 Conclusion
 
 -   The proposed solution consisting of the direct mount, managed mount
-    and migration APIs implemented in the r3mapl library present a truly
+    and migration APIs implemented in the r3map library present a truly
     universal way of accessing, synchronizing and migrating memory
     regions between hosts
 -   It is not only a concept, but a ready-to-use library with good
