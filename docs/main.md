@@ -30,7 +30,13 @@ TODO: Add abbrevations table
 
 ## Introduction
 
-TODO: Add introduction
+In today's technological landscape, numerous methods exist for accessing remote resources, such as via databases or custom APIs. The same applies to resource synchronization, which is typically addressed on a case-by-case basis via methods such as third-party databases, file synchronization services, or bespoke synchronization protocols. The migration of resources is also frequently a challenge, relying on APIs better suited for persistence, like storing the resource in a remote database. These solutions are generally custom-built for specific applications, despite the typical internal representation of the resource as a memory region or file.
+
+What if, instead of applying application-specific protocols and abstractions for accessing, synchronizing, and migrating resources, theses processes could be universally managed by directly operating on the memory region? Existing methodologies for interacting with remote memory primarily serve niche purposes, such as virtual machine live migration. They also suffer from the absence of a universal API, often due to their design for compatibility with a particular application's architecture, rather than for use as a reusable library.
+
+In light of these limitations, this thesis explores alternative strategies to create a more universal approach to remote memory management. It details the implementation of selected methodologies using APIs like `userfaultfd` and NBD, discusses challenges and potential optimizations, and provides an outline for a universal API and related wire protocols. Furthermore, it assesses the performance of various configurations to determine the optimal use case for each approach, and their suitability for both WAN and LAN deployment contexts.
+
+Ultimately, it introduces a comprehensive, production-ready reference implementation of a solution to universally access, synchronize, and migrate memory regions in the form of the open-source library r3map (remote mmap), together with various use cases and benchmarking data proving that it can be used for real-world applications today.
 
 ## Technology
 
