@@ -213,13 +213,52 @@ Structure</a></li>
 <div id="introduction" class="slide section level1" number="1">
 <h1><span class="header-section-number">1</span> Introduction</h1>
 <ul>
-<li>Research question: Could memory be the universal way to access and
-migrate state?</li>
-<li>Why efficient memory synchronization is the missing key component
-for it to be that universal way</li>
-<li>High-level use cases for memory synchronization in the industry
-today (VM live migration, accessing remote ressources
-transparently)</li>
+<li>Today, there are many ways of accessing a remote resource: File,
+database or custom API</li>
+<li>Similarly so, synchronizing a resource is a problem that is handled
+at a case-by-case basis
+<ul>
+<li>Using a 3rd party (database, OS service for file
+synchronization)</li>
+<li>Custom synchronization protocol</li>
+</ul></li>
+<li>Migration of a resource is also very complex task
+<ul>
+<li>Moving a resource between two hosts often uses APIs that are really
+meant for synchronization (i.e. databases)</li>
+<li>Slow and require internet access</li>
+<li>Almost always proprietary to an app</li>
+</ul></li>
+<li>This is despite a resource being almost always represented by a
+memory region or file</li>
+<li>What if instead of accessing, synchronizing and migrating a resource
+with application-specific protocols and abstraction, we could do it
+universally, for any memory region?</li>
+<li>Problems with the current state
+<ul>
+<li>While there are ways to access, synchronize and migrate memory
+regions today, they are niche solutions, confined to narrow use cases
+like virtual machine live migration</li>
+<li>These solutions are also hindered by a lack of a universal API for
+using them, being made for a specific application instead of a general
+memory synchronization use case</li>
+</ul></li>
+<li>Overview of the structure
+<ul>
+<li>This thesis explores different options of implementing such a
+universal way of accessing, synchronizing and migrating data</li>
+<li>It shows how to implement select approaches with APIs such as
+<code>userfaultfd</code> and NBD, which challenges exist, which
+optimizations can be done and how such a universal API and related wire
+protocols can look like</li>
+<li>It also compares the performance between different configurations to
+find the optimal use case for each approach, while not being limited to
+either WAN or LAN deployments</li>
+<li>Finally, it presents a comprehensive implementation of a universal
+way of accessing, synchronizing and migrating data with various use
+cases and benchmarking data which proves that it can be used for
+real-world applications</li>
+</ul></li>
 </ul>
 </div>
 <div id="technology" class="slide section level1" number="2">
@@ -3342,25 +3381,98 @@ state is (def. a process level or VM level etc.)</li>
 <div id="summary" class="slide section level1" number="7">
 <h1><span class="header-section-number">7</span> Summary</h1>
 <ul>
-<li>Due to the flexible nature of r3map, it is possible to bring the
-semantics of VM live migration and snapshots to anything that has
-state</li>
-<li>Looking back at all synchronization options and comparing ease of
-implementation, CPU load and network traffic between them</li>
-<li>Summary of the different approaches, and how the new solutions
-presented might make it finally possible to use memory as the universal
-access format</li>
+<li>There are multiple ways and configurations for implementing a
+solution that allows for universally accessing, synchronizing and
+migrating memory regions efficiently</li>
+<li>Each configuration and API show different strengths and weaknesses
+in benchmarks</li>
+<li>Access methods
+<ul>
+<li><code>userfaultfd</code> is an interesting API and very idiomatic to
+both Linux as a first-party solution, and Go due to its fairly low
+implementation overhead, but does fall short in throughput, especially
+when used in WAN networks, where other options provide better
+performance</li>
+<li>The delta synchronization method for <code>mmap</code>ed files does
+provide a simple way of memory synchronization for specific scenarios,
+but does have a very significant I/O and compute overhead making it
+unsuitable for most applications</li>
+<li>FUSE provides an extensive API to implement a complete file system
+in user space, but has significant implementation overhead making it a
+suboptimal solution for memory synchronization</li>
+<li>Direct mounts provide a good access method for LAN deployment
+scenarios, where networks lave a low latency and the lack of I/O
+overhead compared to other methods make it a compelling choice</li>
+<li>Managed mounts are the preferred access methods for WAN environments
+due to their efficient use of background push and pull, making it
+possible for them to adapt to the high latencies typical for such
+deployments, despite having a slight internal I/O overhead compared to
+direct mounts</li>
+</ul></li>
+<li>When it comes to RPC framework choice, in most production
+environments either fRPC or gRPC represent a high-performance offering,
+where fRPC can offer slightly better average throughput, while gRPC can
+offer better tooling and developer experience guarantees due to its long
+legacy</li>
+<li>Backends
+<ul>
+<li>For memory migration and most synchronization use cases, the file
+backend can provide a reliable, persistent way of storing a memory
+region without using up too much host memory</li>
+<li>For memory access use cases, Redis has a consistently strong
+throughput in both managed and direct mount scenarios due to its
+concurrency optimizations, especially in LAN deployments with low
+latencies and when ephemeral data is being accessed</li>
+<li>Cassandra and ScyllaDB can provide a good backend choice for
+applications with requirements for strong concurrency guarantees if
+managed mounts are being used to access a remote resource</li>
+</ul></li>
+<li>These different approaches show that it is possible to adapt the
+necessary semantics for accessing, synchronizing and migrating memory
+regions to many backends, wire protocols and APIs</li>
+<li>For most real-world applications, the proposed direct mount, managed
+mount and migration APIs provide a fast and reliable way of achieving
+this universal method of accessing resources</li>
 </ul>
 </div>
 <div id="conclusion" class="slide section level1" number="8">
 <h1><span class="header-section-number">8</span> Conclusion</h1>
 <ul>
-<li>Answer to the research question (Could memory be the universal way
-to access and migrate state? - Yes!)</li>
-<li>What would be possible if memory became the universal way to access
-state (short recap of the ideas for use cases)</li>
-<li>Further research recommendations (e.g. using <code>ublk</code>
-instead of NBD)</li>
+<li>The proposed solution consisting of the direct mount, managed mount
+and migration APIs implemented in the r3mapl library present a truly
+universal way of accessing, synchronizing and migrating memory regions
+between hosts</li>
+<li>It is not only a concept, but a ready-to-use library with good
+enough throughput and latency for it to be used for real-world scenarios
+today</li>
+<li>Real-world use cases of the solution show this readiness today
+<ul>
+<li>ram-dl shows how easy the proposed API is, making it possible to
+share and mount a remote system’s memory in under 300 source lines of
+code</li>
+<li>tapisk shows that the API can be used to make almost any resource,
+including a tape drive with linear reads and writes, accessible with the
+proposed system</li>
+</ul></li>
+<li>Aside from these implemented use cases, the underlying technology
+makes many other configurations previously thought of as impossible
+viable
+<ul>
+<li>File synchronization</li>
+<li>Streaming remote databases and arbitrary formats</li>
+<li>Streaming remote game and application assets</li>
+</ul></li>
+<li>The biggest promise of the solution proposed by the thesis however
+is to provide a universal way to access, synchronize and migrate generic
+applications and virtual machines without requiring significant changes
+to apps or hypervisors respectively</li>
+<li>It is also able to provide configurations for both LAN and WAN
+deployments, making it possible to use memory synchronization technology
+in completely different, dynamic environments than before</li>
+<li>As a result, entirely new ways of thinking about application
+architecture and lifecycles become possible, which can enable
+applications to become much simpler to maintain and scale than they are
+today</li>
 </ul>
 </div>
 <div id="references" class="slide section level1" number="9">

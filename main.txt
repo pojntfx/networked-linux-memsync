@@ -1265,9 +1265,10 @@ RTT. In order to work around this issue, instead of directly connecting
 a NBD client to a remote NBD server, a layer of indirection (called
 “Mount”) is created. This component consists of both a client and a
 server, both of which are running on the local system instead of being
-split into a separate remote and local component.
+split into a separate remote and local component, referred to as a
+“mount”, and is implemented as part of the r3map library (“remote mmap).
 
-By combining the NBD server and client into this reusabable uit, we can
+By combining the NBD server and client into this reusabable unit, we can
 connect the server to a new backend component with a protocol which is
 better suited for WAN usage than NBD. This also allows the
 implementation of smart, asynchronous background push/pull strategies

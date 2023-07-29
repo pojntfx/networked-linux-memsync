@@ -1,3 +1,9 @@
+commit 8b6b82c34d13b098df933843093ae9cc266476d9
+Author: Felicitas Pojtinger <felicitas@pojtinger.com>
+Date:   Sat Jul 29 03:34:54 2023 +0200
+
+    feat: Add detailed notes for introduction, summary and conclusion
+
 commit 100e647efaeb21be59fb71f7916b05aa1bf69ae8
 Author: Felicitas Pojtinger <felicitas@pojtinger.com>
 Date:   Fri Jul 28 22:57:34 2023 +0200
