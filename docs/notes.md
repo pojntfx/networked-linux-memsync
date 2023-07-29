@@ -18,7 +18,10 @@ lang: en-US
 abstract: |
   ## \abstractname{} {.unnumbered .unlisted}
 
-  This study presents a comprehensive comparison and implementation of various methods for synchronizing memory regions in Linux systems over a network. Four approaches are evaluated: (1) handling page faults in userspace with `userfaultfd`, (2) utilizing `mmap` for change notifications, (3) hash-based change detection, and (4) custom filesystem implementation. Each option is thoroughly examined in terms of implementation, performance, and associated trade-offs. The study culminates in a summary that compares the options based on ease of implementation, CPU load, and network traffic, and offers recommendations for the optimal solution depending on the specific use case, such as data change frequency and kernel/OS compatibility.
+  - This thesis introduces a novel, universal approach for memory region access, synchronization and migration over a network with block devices
+  - It compares different methods of achieving this under different aspects such as implementation overhead, initialization time, latency and throughput, and provides an overview of the architecture and optimizations required to implement select approaches
+  - The proposed solution is applicable for usage in both LAN and WAN deployments, and provides a unified API for mounting and migrating almost any application state over a network with minimal or no modifications being required for use in existing applications
+  - It also provides example implementations of real-world use cases, configurations and backends as well as a reference implementation of the complete mount and migration APIs in the form of the production-ready, open-source r3map (remote mmap) library
 bibliography: static/references.bib
 csl: static/ieee.csl
 ---
@@ -1515,7 +1518,7 @@ csl: static/ieee.csl
 
 ## Conclusion
 
-- The proposed solution consisting of the direct mount, managed mount and migration APIs implemented in the r3mapl library present a truly universal way of accessing, synchronizing and migrating memory regions between hosts
+- The proposed solution consisting of the direct mount, managed mount and migration APIs implemented in the r3map library present a truly universal way of accessing, synchronizing and migrating memory regions between hosts
 - It is not only a concept, but a ready-to-use library with good enough throughput and latency for it to be used for real-world scenarios today
 - Real-world use cases of the solution show this readiness today
   - ram-dl shows how easy the proposed API is, making it possible to share and mount a remote system's memory in under 300 source lines of code

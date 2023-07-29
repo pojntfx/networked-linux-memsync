@@ -9,7 +9,9 @@ lang: en-US
 abstract: |
   ## \abstractname{} {.unnumbered .unlisted}
 
-  TODO: Add abstract
+  This thesis presents a novel, universal approach for memory region access, synchronization, and migration over a network. Various methods for achieving this are evaluated on parameters such as implementation overhead, initialization time, latency, and throughput, with an outline of the necessary architecture and optimizations. The proposed solution, compatible for both LAN and WAN environments, offers a unified API enabling mounting and migration of nearly any state over a network with minimal changes to existing applications. Illustrations of real-world applications, configurations and backends are provided, together with a reference implementation of the full mount and migration APIs via the open-source, production-ready r3map (remote mmap) library.
+
+  Diese Bachelor-Thesis präsentiert einen neuen, universellen Ansatz für den Zugriff auf Speicherbereiche sowie deren Synchronisation und Migration über ein Netzwerk. Verschiedene Methoden zur Erreichung dieses Ziels werden hinsichtlich Faktoren wie Implementierungsaufwand, Initialisierungszeit, Latenz und Durchsatz bewertet, zusammen mit einer Übersicht über die notwendige Architektur und Optimierungen. Die vorgeschlagene Lösung, kompatibel für LAN- und WAN-Umgebungen, bietet eine einheitliche Schnittstelle, die das Einbinden und die Migration nahezu jeden Zustands über ein Netzwerk mit minimalen Änderungen an bestehenden Anwendungen ermöglicht. Es werden Beispiele für Anwendungsfälle, Konfigurationen und Backends aus der Praxis bereitgestellt, zusammen mit einer Referenzimplementierung der vollständigen Schnittstelle über die dafür entwickelte Open-Source-Bibliothek r3map (remote mmap).
 bibliography: static/references.bib
 csl: static/ieee.csl
 ---
