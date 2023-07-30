@@ -1,3 +1,9 @@
+commit e9cb1c466c7ea400f33f2da99726d062f8b618f1
+Author: Felicitas Pojtinger <felicitas@pojtinger.com>
+Date:   Mon Jul 31 01:44:10 2023 +0200
+
+    refactor: Restructure technology section, standardize style across earlier and later sections
+
 commit de864b1ef063d28cf22c4b054841e238121b933a
 Author: Felicitas Pojtinger <felicitas@pojtinger.com>
 Date:   Mon Jul 31 00:43:12 2023 +0200

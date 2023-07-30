@@ -3095,7 +3095,8 @@ https://www.kernel.org/doc/html/next/rust/quick-start.html
 IN: Wiley Publishing, Inc., 2008, pp. 474–487, 1026–1027.
 
 [7] W. R. Stevens, Advanced programming in the UNIX environment. Delhi:
-Addison Wesley Logman (Singapore) Pte Ltd., Indian Branch, 2000, p. 19.
+Addison Wesley Logman (Singapore) Pte Ltd., Indian Branch, 2000, pp. 19,
+407–411.
 
 [8] K. A. Robbins and S. Robbins, Unix™ systems programming:
 Communication, concurrency, and threads. Prentice Hall PTR, 2003, p.

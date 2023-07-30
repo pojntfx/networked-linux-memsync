@@ -5,34 +5,37 @@ Felicitas Pojtinger
 -   1 Introduction
 -   2 Technology
     -   2.1 User Space and Kernel Space
-    -   2.2 The Linux Kernel
-    -   2.3 Linux Kernel Modules
-    -   2.4 UNIX Signals and Handlers
-    -   2.5 UNIX Sockets
-    -   2.6 Principle of Locality
-    -   2.7 Memory Hierarchy
-    -   2.8 Memory Management in Linux
-    -   2.9 Swap Space
-    -   2.10 Page Faults
-    -   2.11 mmap
-    -   2.12 inotify
-    -   2.13 Linux Kernel Caching
-    -   2.14 RTT, LAN and WAN
-    -   2.15 TCP, UDP, TLS and QUIC
-    -   2.16 Delta Synchronization
-    -   2.17 File Systems In Userspace (FUSE)
-    -   2.18 Network Block Device (NBD)
-    -   2.19 Virtual Machine Live Migration
-        -   2.19.1 Pre-Copy
-        -   2.19.2 Post-Copy
-        -   2.19.3 Workload Analysis
-    -   2.20 Streams and Pipelines
-    -   2.21 Go
-    -   2.22 gRPC and Protocol Buffers
-    -   2.23 fRPC and Polyglot
-    -   2.24 Redis
-    -   2.25 S3 and Minio
-    -   2.26 Cassandra and ScylllaDB
+    -   2.2 Linux Kernel
+    -   2.3 UNIX Signals and Sockets
+    -   2.4 Memory Optimization
+        -   2.4.1 Principle of Locality
+        -   2.4.2 Memory Hierarchy
+    -   2.5 Memory in Linux
+        -   2.5.1 Memory Management
+        -   2.5.2 Swap Space
+    -   2.6 Page Faults
+    -   2.7 mmap
+    -   2.8 inotify
+    -   2.9 Linux Kernel Caching
+    -   2.10 Networking
+        -   2.10.1 RTT, LAN and WAN
+        -   2.10.2 TCP, UDP, TLS and QUIC
+    -   2.11 Delta Synchronization
+    -   2.12 File Systems In Userspace (FUSE)
+    -   2.13 Network Block Device (NBD)
+    -   2.14 Virtual Machine Live Migration
+        -   2.14.1 Pre-Copy
+        -   2.14.2 Post-Copy
+        -   2.14.3 Workload Analysis
+    -   2.15 Streams and Pipelines
+    -   2.16 Go
+    -   2.17 RPC Frameworks
+        -   2.17.1 gRPC and Protocol Buffers
+        -   2.17.2 fRPC and Polyglot
+    -   2.18 Data Stores
+        -   2.18.1 Redis
+        -   2.18.2 S3 and Minio
+        -   2.18.3 Cassandra and ScylllaDB
 -   3 Planning
     -   3.1 Pull-Based Synchronization With userfaultfd
     -   3.2 Push-Based Synchronization With mmap and Hashing
@@ -195,7 +198,7 @@ actions that can’t be expressed with regular system calls. Despite their
 utility, they can be an implementation hurdle for language development
 due to their use of numerical constants and other typing issues[2].
 
-The Linux Kernel
+Linux Kernel
 
 The Linux kernel was released by Linus Torvalds in 1991. Developed
 primarily in the C language, it has recently seen the addition of Rust
@@ -204,7 +207,12 @@ drivers[3]. The kernel powers millions of devices across the globe,
 including servers, desktop computers, mobile phones, and embedded
 devices. As a kernel, it serves as an intermediary between hardware and
 applications. It is engineered for compatibility with a wide array of
-architectures, such as ARM, x86, RISC-V, and others.
+architectures, such as ARM, x86, RISC-V, and others. The open-source
+nature of the Linux kernel makes it especially interesting for academic
+exploration and usage. It offers transparency, allowing anyone to
+inspect the source code in depth. Furthermore, it encourages
+collaboration by enabling anyone to modify and contribute to the source
+code.
 
 The kernel does not function as a standalone operating system in itself;
 rather, this role is fulfilled by distributions, which build upon the
@@ -214,43 +222,32 @@ GNU coreutils or BusyBox. Depending on their target audience, they
 further enhance functionality by integrating desktop environments and
 other software.
 
-The open-source nature of the Linux kernel makes it especially
-interesting for academic exploration and usage. It offers transparency,
-allowing anyone to inspect the source code in depth. Furthermore, it
-encourages collaboration by enabling anyone to modify and contribute to
-the source code.
-
-Linux Kernel Modules
-
-Linux is extensible, but not a microkernel. Despite this monolithic
-nature, it allows for the integration of kernel modules[4]. These
-modules are small pieces of kernel-level code that can be dynamically
+Linux is extensible, but not a microkernel. Despite it’s monolithic
+nature, it allows for the integration of kernel modules. These modules
+are small pieces of kernel-level code that can be dynamically
 incorporated into the kernel, presenting the advantage of extending
-kernel functionality without necessitating system reboots. This
-functionality also helps to keep the kernel size both manageable and
-maintainable, thereby promoting efficiency. Kernel modules are developed
-using the C or Rust programming languages, like the kernel itself,
-ensuring compatibility and consistent performance.
-
-Kernel modules interact with the kernel via APIs (Application
-Programming Interfaces). Despite their utility, since they run in kernel
-space, modules do carry a potential risk. If not written with careful
-attention to detail, they can introduce significant instability into the
-kernel, negatively affecting the overall system performance and
-reliability.
+kernel functionality without necessitating system reboot, helping to
+keep the kernel size both manageable and maintainable. Kernel modules
+are developed using the C or Rust programming languages, like the kernel
+itself, ensuring compatibility and consistent performance. They interact
+with the kernel via APIs (Application Programming Interfaces). Despite
+their utility, since they run in kernel space, modules do carry a
+potential risk. If not written with careful attention to detail, they
+can introduce significant instability into the kernel, negatively
+affecting the overall system performance and reliability[4].
 
 Modules can be managed and controlled at different stages, starting from
 boot time, and be manipulated dynamically when the system is already
-running. This is facilitated by utilities like modprobe and rmmod[5]. In
+running. This is facilitated by utilities like modprobe and rmmod. In
 the lifecycle of a kernel module, two key functions are of significance:
 initialization and cleanup. The initialization function is responsible
 for setting up the module when it’s loaded into the kernel. Conversely,
 the cleanup function is used to safely remove the module from the
 kernel, freeing up any resources it previously consumed. These lifecycle
 functions, along with other such hooks, provide a more structured
-approach to module development.
+approach to module development[5].
 
-UNIX Signals and Handlers
+UNIX Signals and Sockets
 
 UNIX signals are an integral component of UNIX-like systems, including
 Linux. They function as software interrupts, notifying a process of
@@ -279,14 +276,11 @@ their limitation in carrying additional data; while signals effectively
 alert a process of an event, they are not designed to convey forther
 information related to that event, and as result they are best used in
 scenarios where simple event-based notifications are sufficient, rather
-than for more complex data exchange requirements.
-
-UNIX Sockets
-
-Sockets allow processes within the same host system to communicate with
-each other. Unlike UNIX signals, much like TCP sockets, they can be used
-for IPC by allowing not only to submit additional data for an event, and
-are particularly popular on Linux.
+than for more complex data exchange requirements. To work around this,
+sockets allow processes within the same host system to communicate with
+each other. Unlike UNIX signals, much like TCP sockets, they can easily
+be used for IPC by allowing not only to submit additional data for an
+event, and are particularly popular on Linux.
 
 Stream sockets use TCP to provide reliable, two-way, connection-based
 byte streams, making them optimal for use in applications which require
@@ -303,6 +297,8 @@ pass a file descriptor between processes, which allows for interesting
 approaches to sharing resources with technologies such as
 userfaultfd[8].
 
+Memory Optimization
+
 Principle of Locality
 
 The principle of locality, or locality of reference, refers to the
@@ -310,7 +306,7 @@ tendency of a processor in a computer system to recurrently access the
 same set of memory locations within a brief span of time. This principle
 forms the basis of a predictable pattern of behavior that is evident
 across computer systems, and can be divided into two distinct types:
-temporal locality and spatial locality[9].
+temporal locality and spatial locality.
 
 Temporal locality revolves around the frequent use of particular data
 within a limited time period. Essentially, if a memory location is
@@ -327,20 +323,7 @@ also likely to be accessed shortly. Therefore, to optimize performance,
 the system tries to anticipate these subsequent accesses by preparing
 for faster access to these nearby memory locations. Temporal locality is
 considered a unique instance of spatial locality, demonstrating how the
-two types are closely interlinked.
-
-A specific instance of spatial locality, sequential locality, occurs
-when the data elements are organized and accessed in a linear sequence.
-An example of this is when elements in a one-dimensional array are
-traversed systematically, accessing the elements one by one in their
-sequential order.
-
-Locality of reference can be instrumental in improving the overall
-performance of a system. To achieve this, a variety of optimization
-techniques are deployed, such as caching, which stores copies of
-frequently accessed data in low-latency memory, and prefetching for
-memory, which involves loading potential future data into cache before
-it’s actually needed.
+two types are closely interlinked[9].
 
 Memory Hierarchy
 
@@ -372,7 +355,7 @@ Below main memory, we find secondary storage devices such as Solid State
 Drives (SSD) or Hard Disk Drives (HDD). Although slower than RAM, these
 devices can store larger amounts of data and typically contain the
 operating system and application binary fies. Importantly, they are
-persistent, meaning they retain data even after power is cut.
+persistent, meaning they retain data even after power is cut[9].
 
 Tertiary storage, including optical disks and tape, is slow but very
 cost-effective. Tape storage can store very large amounts of data for
@@ -387,14 +370,16 @@ nanosecond for registers to multiple milliseconds for a HDD:
 [Latency profile of different memory technologies[12]]
 
 The memory hierarchy is not static but evolves with technological
-advancements, leading to some blurring of these distinct layers[12]. For
+advancements, leading to some blurring of these distinct layers. For
 instance, Non-Volatile Memory Express (NVMe) storage technologies can
-rival the speed of RAM while offering greater storage capacities.
+rival the speed of RAM while offering greater storage capacities[12].
 Similarly, some research, such as the work presented in this thesis,
 further challenges traditional hierarchies by exposing tertiary or
 secondary storage with the same interface as main memory.
 
-Memory Management in Linux
+Memory in Linux
+
+Memory Management
 
 Memory management forms a cornerstone of any kernel, serving as a
 critical buffer between applications and physical memory; it can be
@@ -410,22 +395,21 @@ allocation is a technique employed in managing this segment; the
 technique groups objects of the same size into caches, enhancing memory
 allocation speed and reducing fragmentation of memory[13]. User space is
 the memory segment where applications and certain drivers store their
-memory in Linux[14]. User space memory management involves a paging
-system, offering each application its unique private virtual address
-space.
+memory in Linux. User space memory management involves a paging system,
+offering each application its unique private virtual address space.
 
 This virtual address space is divided into units known as pages, each
 typically 4 KB in size. Pages can be mapped to any location in physical
 memory, providing flexibility and optimizing memory utilization. The use
 of this virtual address space further adds a layer of abstraction
 between the application and physical memory, enhancing the security and
-isolation of processes.
+isolation of processes[14].
 
 Swap Space
 
 Swap space refers to a designated portion of the secondary storage
-utilized as virtual memory in a computer system[14]. This feature plays
-a crucial role in systems that run multiple applications simultaneously;
+utilized as virtual memory in a computer system. This feature plays a
+crucial role in systems that run multiple applications simultaneously;
 when memory resources are strained, swap space comes into play,
 relocating inactive parts of the RAM to secondary storage. This action
 frees up space in primary memory for other processes, enabling smoother
@@ -437,11 +421,10 @@ The swap space in Linux can be a swap partition, which is a distinct
 area within secondary storage, or it can take the form of a swap file,
 which is a standard file that can be expanded or truncated based on
 need. The usage of swap partitions and files is transparent to the user.
-
 The Linux kernel employs a Least Recently Used (LRU) algorithm to
 determine which memory pages should be moved to swap space. This
 algorithm effectively prioritizes pages based on their usage,
-transferring those that have not been recently used to swap space.
+transferring those that have not been recently used to swap space[14].
 
 Swap space also plays a significant role in system hibernation. Before
 the system enters hibernation, the content of RAM is stored in the swap
@@ -455,7 +438,7 @@ on swap space can cause significant system slowdowns. To mitigate this,
 Linux allows for the adjustment of “swappiness”, a parameter that
 controls the system’s propensity to swap memory pages. Adjusting this
 setting can balance the use of swap space to maintain system performance
-while still preserving the benefits of virtual memory management.
+while still preserving the benefits of virtual memory management[14].
 
 Page Faults
 
@@ -473,32 +456,25 @@ fault takes place when the page has to be loaded from secondary storage,
 a process that typically takes more time and resources.
 
 To minimize the occurrence of page faults, memory management algorithms
-such as the afore-mentioned Least Recently Used (LRU) and the more
-straightforward clock algorithm are often employed. These algorithms
-effectively manage the order and priority of memory pages, helping to
-ensure that frequently used pages are readily available in primary
-memory[5].
+such as the afore-mentioned LRU and the more straightforward clock
+algorithm are often used. These algorithms effectively manage the order
+and priority of memory pages, helping to ensure that frequently used
+pages are readily available in primary memory[5].
 
 Handling page faults involves certain techniques to ensure smooth
 operation. One such technique is prefetching, which anticipates future
 page requests and proactively loads these pages into memory. Another
 approach involves page compression, where inactive pages are compressed
-and stored in memory preemptively[16]. This reduces the likelihood of
-major page faults by conserving memory space, allowing more pages to
-reside in primary memory.
-
-In general, handling page faults is a task delegated to the kernel. This
-critical balance between resource availability and system performance is
-part of the kernel’s memory management duties, ensuring that processes
-can access the pages they require while maintaining efficient use of
-system memory.
+and stored in memory preemptively. This reduces the likelihood of major
+page faults by conserving memory space, allowing more pages to reside in
+primary memory[16].
 
 mmap
 
-mmap is a versatile UNIX system call, used for mapping files or devices
-into memory, enabling a variety of core tasks like shared memory, file
-I/O, and fine-grained memory allocation. Due to its powerful nature, it
-is commonly used in applications like databases.
+mmap is a UNIX system call, used for mapping files or devices into
+memory, enabling a variety of core tasks like shared memory, file I/O,
+and fine-grained memory allocation. Due to its powerful nature, it is
+commonly used in applications like databases.
 
 One standout feature of mmap is its ability to create what is
 essentially a direct memory mapping between a file and a region of
@@ -514,19 +490,18 @@ need to copy it from the disk first. This direct memory access saves
 time and reduces processing requirements, offering substantial
 performance improvements.
 
-The potential speed improvement does however come with a notable
-drawback: It bypasses the file system cache, which can potentially
-result in stale data when multiple processes are reading and writing
-simultaneously. This bypass may lead to a scenario where one process
-modifies data in the mmap region, and another process that is not
-monitoring for changes might remain unaware and continue to work with
-outdated data.
+This speed improvement does however come with a notable drawback: It
+bypasses the file system cache, which can potentially result in stale
+data when multiple processes are reading and writing simultaneously.
+This bypass may lead to a scenario where one process modifies data in
+the mmap region, and another process that is not monitoring for changes
+might remain unaware and continue to work with outdated data[6].
 
 inotify
 
 inotify is an event-driven notification system of the Linux kernel,
 designed to monitor the file system for different events, such as
-modifications and accesses, among others[18]. Its particularly useful
+modifications and accesses, among others. Its particularly useful
 because it can be configured to watch only write operations on certain
 files, i.e. only write operations. This level of control can offer
 considerable benefits in cases where there is a need to focus system
@@ -552,7 +527,7 @@ on how many watches can be established; this limitation can pose
 challenges in intricate systems where there is a high quantity of files
 or directories to watch for changes in, and might warrant additional
 management or fallback to heavier polling mechanisms for some parts of
-the system.
+the system[18].
 
 Linux Kernel Caching
 
@@ -584,9 +559,11 @@ risk data loss if the system crashes before data has been saved.
 Another complexity arises from the necessity to release cached data
 under memory pressure, known as cache eviction. As mentioned before,
 this requires sophisticated algorithms, such as LRU, to ensure effective
-utilization of available cache space[5]. Prioritizing what to keep in
-cache when memory pressure builds does directly impact the overall
-system performance.
+utilization of available cache space. Prioritizing what to keep in cache
+when memory pressure builds does directly impact the overall system
+performance[5].
+
+Networking
 
 RTT, LAN and WAN
 
@@ -597,11 +574,11 @@ network type, system load and physical distance. Local area networks
 (LAN) are geographically small networks that are typically characterised
 by having a low RTT, resulting in a low latency due to the small
 distance (typically no more than across an office or data center) that
-data needs to travel[19]. As a result of their small geographical size
-and isolation, perimeter security is often applied to such networks,
-meaning that the LAN is viewed as a trusted network that doesn’t
-necessarily require authentication or encryption between internal
-systems, resulting in a potentially smaller overhead.
+data needs to travel. As a result of their small geographical size and
+isolation, perimeter security is often applied to such networks, meaning
+that the LAN is viewed as a trusted network that doesn’t necessarily
+require authentication or encryption between internal systems, resulting
+in a potentially smaller overhead.
 
 Wide area networks (WAN) on the other hand typically span a large
 geographical area, with the internet being an example that operates on a
@@ -610,7 +587,7 @@ destination, as well as the number of hops required for data to reach
 the destination, these networks typically have higher RTT and thus
 latency, and are also vulnerable to wire tapping and packet inspection,
 meaning that in order to securely transmit data on them, encryption and
-authentication is required.
+authentication is required[19].
 
 TCP, UDP, TLS and QUIC
 
@@ -619,27 +596,27 @@ QUIC (Quick UDP Internet Connections) are three key communication
 protocols utilized in the internet today.
 
 TCP has long been the reliable backbone for internet communication due
-to its connection-oriented nature [20]. It ensures the guaranteed
-delivery of data packets and their correct order, rendering it a highly
-dependable means for data transmission. Significantly, TCP incorporates
-error checking, allowing the detection and subsequent retransmission of
-lost packets. TCP also includes a congestion control mechanism to manage
-data transmission seamlessly during high traffic. Due to to these
-features and it’s long legacy, TCP is widely used to power the majority
-of the web where reliable, ordered, and error-checked data transmission
-is required.
+to its connection-oriented nature. It ensures the guaranteed delivery of
+data packets and their correct order, rendering it a highly dependable
+means for data transmission. Significantly, TCP incorporates error
+checking, allowing the detection and subsequent retransmission of lost
+packets. TCP also includes a congestion control mechanism to manage data
+transmission seamlessly during high traffic. Due to to these features
+and it’s long legacy, TCP is widely used to power the majority of the
+web where reliable, ordered, and error-checked data transmission is
+required[20].
 
 UDP is a connectionless protocol that does not make the same guarantees
-about the reliability or ordered delivery of data packets [21]. This
-lends UDP a speed advantage over TCP, resulting in less communication
+about the reliability or ordered delivery of data packets. This lends
+UDP a speed advantage over TCP, resulting in less communication
 overhead. Although it lacks TCP’s robustness in handling errors and
 maintaining data order, UDP finds use in applications where speed and
 latency take precedence over reliability. This includes online gaming,
 video calls, and other real-time communication modes where quick data
-transmission is crucial even if temporary packet loss occurs.
+transmission is crucial even if temporary packet loss occurs.[21]
 
 TLS is an encryption protocol that intents to secure communication over
-a public network over the internet [22]. It uses both symmetric and
+a public network over the internet. It uses both symmetric and
 asymmetric encryption, and is used for most internet communication,
 esp. in combination with HTTP in the form of HTTPS. It consists of a
 handshake phase, in which the parameters necessary to establish a secure
@@ -648,11 +625,11 @@ before continuing on to the encrypted data transfer phase. Besides this
 use as a server authentication (through certificate authorities) and
 encryption method, it is also able to authenticate clients through the
 use of mutual TLS, where both the client and the server submit a
-certificate.
+certificate[22].
 
 QUIC, a modern UDP-based transport layer protocol, was originally
 created by Google and standardized by the IETF in 2021[23]. It aspires
-to combine the best qualities of TCP and UDP [24]. Unlike raw UDP, QUIC
+to combine the best qualities of TCP and UDP; unlike raw UDP, QUIC
 ensures the reliability of data transmission and guarantees the ordered
 delivery of data packets similarly to TCP, while intending to keep UDP’s
 speed advantages. One of QUIC’s standout features is its ability to
@@ -664,7 +641,7 @@ of “head-of-line blocking”, allowing for the independent delivery of
 separate data streams. This means it can handle the delivery of separate
 data streams without one stream blocking another, resulting in smoother
 and more efficient transmission, a feature which is especially important
-for applications with lots of concurrent transmissions.
+for applications with lots of concurrent transmissions[24].
 
 Delta Synchronization
 
@@ -673,7 +650,7 @@ synchronization of files between hosts, aiming to transfer only those
 parts of the file that have undergone changes instead of the entire file
 in order to reduce network and I/O overhead. Perhaps the most recognized
 tool employing this method of synchronization is rsync, an open-source
-data synchronization utility in Unix-like operating systems[25].
+data synchronization utility in Unix-like operating systems.
 
 [Design flow chart of WebRsync[25]]
 
@@ -694,7 +671,7 @@ offset of each block alongside the data of the changed block to the
 destination. Upon receiving a block, the destination writes it to the
 specific offset in the file. This process results in the reconstruction
 of the file in accordance with the modifications undertaken at the
-source, after which the next synchronization cycle can start.
+source, after which the next synchronization cycle can start[25].
 
 File Systems In Userspace (FUSE)
 
@@ -767,10 +744,10 @@ noticeable performance overhead associated with it. This is largely due
 to the context switching between the kernel and the userspace that
 occurs during its operation[28].
 
-Today, FUSE is widely utilized to mount high-level external services as
-file systems. For instance, it can be used to mount remote AWS S3
-buckets with s3fs[29] or to mount a remote system’s disk via Secure
-Shell (SSH) with SSHFS [30].
+FUSE is widely utilized to mount high-level external services as file
+systems. For instance, it can be used to mount remote AWS S3 buckets
+with s3fs[29] or to mount a remote system’s disk via Secure Shell (SSH)
+with SSHFS [30].
 
 Network Block Device (NBD)
 
@@ -841,13 +818,11 @@ application or another data state is being updated.
 In the case of a VM, the pre-copy migration procedure starts with
 transfering the initial state of VM’s memory to the destination host.
 During this operation, if modifications occur to any chunks of data,
-they are flagged as “dirty”. These modified or “dirty” chunks of data
-are then transferred to the destination until only a small number
-remain - an amount small enough to stay within the allowable maximum
-downtime criteria.
-
-Following this, the VM is suspended at the source, enabling the
-synchronization of the remaining chunks of data to the destination
+they are flagged as dirty. These dirty chunks of data are then
+transferred to the destination until only a small number remain - an
+amount small enough to stay within the allowable maximum downtime
+criteria. Following this, the VM is suspended at the source, enabling
+the synchronization of the remaining chunks of data to the destination
 without having to continue tracking dirty chunks. Once this
 synchronization process is completed, the VM is resumed at the
 destination host.
@@ -875,8 +850,7 @@ chunk of data not initially transferred during the move, a page fault
 arises. A page fault, in this context, is a type of interrupt generated
 when the VM tries to read or write a chunk that is not currently present
 on the destination. This triggers the system to retrieve the missing
-chunk from the source host, enabling the VM to continue its
-operations[34].
+chunk from the source host, enabling the VM to continue its operations.
 
 The main advantage of post-copy migration centers around the fact that
 it eliminates the necessity of re-transmitting chunks of “dirty” or
@@ -891,7 +865,7 @@ model is highly sensitive to network latency and round-trip time (RTT).
 Unlike the pre-copy model, this also means that the VM is not available
 in full on either the source or the destination during migration,
 requiring potential recovery solutions if network connectivity is lost
-during the migration.
+during the migration[34].
 
 Workload Analysis
 
@@ -900,7 +874,7 @@ suitable timing for virtual machine migration. Even though these mostly
 focus on virtual machines, the methodologies proposed could be adapted
 for use with various other applications or migration circumstances, too.
 
-One method[35] proposed identifies cyclical workload patterns of VMs and
+One method proposed identifies cyclical workload patterns of VMs and
 leverages this knowledge to delay migration when it is beneficial. This
 is achieved by analyzing recurring patterns that may unnecessarily
 postpone VM migration, and then constructing a model of optimal cycles
@@ -908,7 +882,7 @@ within which VMs can be migrated. In the context of VM migration, such
 cycles could for example be triggered by a large application’s garbage
 collector that results in numerous changes to VM memory.
 
-When migration is proposed, the system verifies whether it is in an
+When a migration is proposed, the system verifies whether it is in an
 optimal cycle for migration. If it is, the migration proceeds; if not,
 the migration is postponed until the next cycle. The proposed process
 employs a Bayesian classifier to distinguish between favorable and
@@ -920,15 +894,15 @@ first, the proposed pattern recognition-based approach potentially
 offers substantial improvements. The study found that this method
 yielded an enhancement of up to 74% in terms of live migration
 time/downtime and a 43% reduction concerning the volume of data
-transferred over the network.
+transferred over the network[35].
 
 Streams and Pipelines
 
-Streams and pipelines are fundamental constructs in computer science,
-enabling efficient, sequential processing of large datasets without the
-need for loading an entire dataset into memory. They form the backbone
-of modular and efficient data processing techniques, with each concept
-having its unique characteristics and use cases.
+Streams and pipelines are fundamental constructs that enable efficient,
+sequential processing of large datasets without the need for loading an
+entire dataset into memory. They form the backbone of modular and
+efficient data processing techniques, with each concept having its
+unique characteristics and use cases.
 
 A stream represents a continuous sequence of data, serving as a
 connector between different points in a system. Streams can be either a
@@ -940,18 +914,15 @@ making streams particularly impactful for scenarios involving
 long-running processes where data is streamed over extended periods of
 time[36].
 
-Pipelines comprise a series of data processing stages, wherein the
-output of one stage directly serves as the input to the next. It’s this
-chain of processing stages that forms a pipeline. Often, these stages
+Pipelines are a series of data processing stages, where the output of
+one stage directly serves as the input to the next. Often, these stages
 can run concurrently; this parallel execution can result in a
 significant performance improvement due to a higher degree of
-concurrency.
-
-One of the classic examples of pipelines is the instruction pipeline in
-CPUs, where different stages of instruction execution - fetch, decode,
-execute, and writeback - are performed in parallel. This design
-increases the instruction throughput of the CPU, allowing it to process
-multiple instructions simultaneously at different stages of the
+concurrency. One of the classic examples of pipelines is the instruction
+pipeline in CPUs, where different stages of instruction execution -
+fetch, decode, execute, and writeback - are performed in parallel. This
+design increases the instruction throughput of the CPU, allowing it to
+process multiple instructions simultaneously at different stages of the
 pipeline.
 
 Another familiar implementation is observed in UNIX pipes, a fundamental
@@ -975,6 +946,8 @@ threads, but more scalable to support millions of Goroutines per
 program. Synchronization between different Goroutines is provided by
 using channels, which are type- and concurrency-safe conduits for
 data[38].
+
+RPC Frameworks
 
 gRPC and Protocol Buffers
 
@@ -1025,6 +998,8 @@ Polyglot achieves a similar goal as Protobuf, which is to encode data
 structures in a platform-independent way, but does so with less legacy
 code and a simpler wire format. It is also language-independent, with
 implementations for Go, Rust and TypeScript[42].
+
+Data Stores
 
 Redis
 
@@ -1081,8 +1056,8 @@ S3, which is only offered as a service, Minio’s open-source nature means
 that users have the ability to view, modify, and distribute Minio’s
 source code, allowing community-driven development and innovation.
 
-A critical distinction of Minio is its suitability for on-premises
-hosting, making it a good fit for organizations with specific security
+The main feature of Minio is its suitability for on-premises hosting,
+making it a good option for organizations with specific security
 regulations, those preferring to maintain direct control over their data
 and developers prefering to work on the local system. It also supports
 horizontal scalability, designed to distribute large quantities of data
@@ -1092,19 +1067,17 @@ deployments similarly to AWS S3[46].
 Cassandra and ScylllaDB
 
 Apache Cassandra is a wide-column NoSQL database tailored for
-large-scale, distributed data management tasks. It blends the
-distributed nature of Amazon’s Dynamo model with the structure of
-Google’s Bigtable model, leading to a highly available database system.
-It is known for its scalability, designed to handle vast amounts of data
-spread across numerous servers. Unique to Cassandra is the absence of a
-single point of failure, thus ensuring continuous availability and
-robustness, which is critical for systems requiring high uptime.
+large-scale, distributed data management tasks. It is known for its
+scalability, designed to handle vast amounts of data spread across
+numerous servers. Unique to Cassandra is the absence of a single point
+of failure, thus ensuring continuous availability and robustness, which
+is critical for systems requiring high uptime.
 
 Cassandra’s consistency model is tunable according to needs, ranging
-from eventual to strong consistency. It distinguishes itself by not
-employing master nodes due to its usage of a peer-to-peer protocol and a
-distributed hash ring design. These design choices eradicate the
-bottleneck and failure risks associated with master nodes[47].
+from eventual to strong consistency. It does not employing master nodes
+due to its usage of a peer-to-peer protocol and a distributed hash ring
+design; these design choices eradicate the bottleneck and failure risks
+associated with master nodes[47].
 
 Despite these robust capabilities, Cassandra does come with certain
 limitations. Under heavy load, it experiences high latency that can
@@ -1112,7 +1085,7 @@ negatively affect system performance. Besides this, it also demands
 complex configuration and fine-tuning to peform optimally.
 
 In response to the perceived shortcomings of Cassandra, ScyllaDB was
-launched in 2015. It shares design principles with Cassandra, such as
+released in 2015. It shares design principles with Cassandra, such as
 compatibility with Cassandra’s API and data model, but has architectural
 differences intended to overcome Cassandra’s limitations. It’s primarily
 written in C++, contrary to Cassandra’s Java-based code. This
@@ -1256,7 +1229,8 @@ a NBD client to a remote NBD server, a layer of indirection (called
 “Mount”) is created. This component consists of both a client and a
 server, both of which are running on the local system instead of being
 split into a separate remote and local component, referred to as a
-“mount”, and is implemented as part of the r3map library (“remote mmap).
+“mount”, and is implemented as part of the r3map library (“remote
+mmap)[49].
 
 By combining the NBD server and client into this reusabable unit, we can
 connect the server to a new backend component with a protocol which is
@@ -1317,7 +1291,7 @@ Background Pull and Push
 
 A pre-copy migration system for the managed API is realized in the form
 of pre-emptive pulls that run asynchronously in the background. In order
-to optimize for sequential locality, a pull priority heuristic was
+to optimize for spatial locality, a pull priority heuristic was
 introduced; this is used to determine the order in which chunks should
 be pulled. Many applications and other migratable resources commonly
 access certain parts of their memory first, so if a resources should be
@@ -1446,7 +1420,7 @@ before, we can use this event to then fetch this chunk of memory from
 the remote, mapping it to the offset on which the page fault occured,
 thus effectively only fetching data when it is required. Instead of
 registering signal handlers, we can use the userfaultfd system
-introduced with Linux 4.3[49] to handle these faults in userspace in a
+introduced with Linux 4.3[50] to handle these faults in userspace in a
 more idiomatic way.
 
 In the Go implementation created for this thesis, userfaultfd-go,
@@ -2059,11 +2033,11 @@ Developing a backend for a file system abstraction API such as afero.Fs
 instead of implementing it to work with FUSE bindings directly offers
 several advantages. This layer of indirection allows splitting the FUSE
 implementation from the actual inode structure of the system, which
-makes it unit testable[50]. This is a high priority due to the
+makes it unit testable[51]. This is a high priority due to the
 complexities and edge cases involved with creating a file system. A
 standard API also offers the ability to implement things such as caching
 by simply nesting multiple afero.Fs interfaces, and the required
-interface is rather minimal[51]:
+interface is rather minimal[52]:
 
     type Fs interface {
         Create(name string) (File, error)
@@ -2081,7 +2055,7 @@ interface is rather minimal[51]:
         Chtimes(name string, atime time.Time, mtime time.Time) error
     }
 
-The STFS project[52] has shown that by using this abstraction layer,
+The STFS project[53] has shown that by using this abstraction layer,
 seemingly incompatible, non-linear backends can still be mapped to a
 file system. The project is backend by a tape drive, which is inherently
 append-only and optimized for linear access. Thanks to the inclusion of
@@ -2090,7 +2064,7 @@ system was still performant enough for standard use, while also
 supporting most of the features required by the average user such as
 symlinks, file updates and more.
 
-By using a project like sile-fystem[53], it is also possible to use any
+By using a project like sile-fystem[54], it is also possible to use any
 afero.Fs filesystem as a FUSE backend; this can signficantly reduce the
 required implementation overhead, as it doesn’t require writing a custom
 adapter:
@@ -2123,7 +2097,7 @@ the NBD-based migration approach to work. By not having to rely on CGo
 or a pre-existing NBD library like nbdkit, this custom library can also
 skip a significant amount of the overhead that is typically associated
 with C interoperability, particularly in the context of concurrency in
-Go with CGo [54].
+Go with CGo [55].
 
 Server
 
@@ -2173,7 +2147,7 @@ depending on a generic net.Conn, it is possible to easily integrate
 go-nbd in existing client/server systems or to switch out the typical
 TCP transport layer with i.e. QUIC. By not requiring dial/accept
 semantics it is also possible to use a P2P communication layer for
-peer-to-peer NBD such as WebRTC with weron[55], which also provides the
+peer-to-peer NBD such as WebRTC with weron[56], which also provides the
 necessary net.Conn interface.
 
 In addition to this net.Conn, options can be provided to the server;
@@ -2314,7 +2288,7 @@ Unlike the server, the client is implemented by using both the kernel’s
 NBD client and a userspace component. In order to use the kernel NBD
 client, it is necessary to first find a free NBD device (/dev/nbd*);
 these devices are allocated by the kernel NBD module and can be
-specified with the nbds_max parameter[56]. In order to find a free
+specified with the nbds_max parameter[57]. In order to find a free
 device, we can either specify it manually, or check sysfs for a NBD
 device that reports a zero size:
 
@@ -3287,7 +3261,7 @@ Another aspect that plays an important role in performance for real-life
 deployments is the choice of RPC framework and transport protocol. As
 mentioned before, both the mount and migration APIs are
 transport-independent, and as a result almost any RPC framework can be
-used. A RPC framework developed as part of r3map is Dudireka[57]. As
+used. A RPC framework developed as part of r3map is Dudireka[58]. As
 such, it was designed specifically with the hybrid pre-and post-copy
 scenario in mind. To optimize for this, it has support for concurrent
 RPCs, which allows for efficient background pulls as multiple chunks can
@@ -3309,7 +3283,7 @@ transport protocols like QUIC in WAN deployments, which can reduce the
 initial latency by using the 0-RTT handshake and thus makes calling an
 RPC less expensive. By not requiring TCP-style client-server semantics,
 Dudirekta can also be used to allow for P2P migrations over a protocol
-such as WebRTC[58].
+such as WebRTC[59].
 
 Usage
 
@@ -3435,7 +3409,7 @@ which also works on both the client and the server side:
 Protocol
 
 The protocol used for dudirekta is simple and based on JSONL, a for
-exchanging newline-delimited JSON data[59]; a function call, i.e. to
+exchanging newline-delimited JSON data[60]; a function call, i.e. to
 Println looks like this:
 
     [true, "1", "Println", ["Hello, world!"]]
@@ -3754,7 +3728,7 @@ be improved upon. This is particularly true for protocol buffers, which,
 while being faster than JSON, have issues with encoding large chunks of
 data, and can become a real bottleneck with large chunk sizes:
 
-[RPCs/second per client for 1 MB messages, repeated 10 times[60]]
+[RPCs/second per client for 1 MB messages, repeated 10 times[61]]
 
 fRPC[40], a drop-in replacement for gRPC, can improve upon this by
 switching out the serialization layer with the faster Polyglot[42]
@@ -3798,7 +3772,7 @@ specifications:
 
 To make the results reproducible, the benchmark scripts and notebooks to
 plot the related visualizations can be found in the accompanying
-repository[61], and multiple runs have been conducted for each benchmark
+repository[62], and multiple runs have been conducted for each benchmark
 to ensure consistency.
 
 Access Methods
@@ -4356,7 +4330,7 @@ occur in the first place.
 NBD, the underlying technology and protocol for the mount API, has
 proven to be fairly performant, but it still could be improved upon to
 get closer to the performance of other access methods, like raw memory
-access. One such option is ublk[62], which has the potential to
+access. One such option is ublk[63], which has the potential to
 significantly improve concurrent access speeds over the socket-based
 connection between the client and server that NBD uses. It is similar in
 architecture to NBD, where a user space server provides the block device
@@ -4368,7 +4342,7 @@ block devices in user space.
 
 Using Mounts for Remote Swap with ram-dl
 
-ram-dl[63] is an experimental tech demo built to demonstrate how the
+ram-dl[64] is an experimental tech demo built to demonstrate how the
 mount API can be used. It uses the fRPC mount backend to expand local
 system memory, enabling a variety of usecases such as mounting a remote
 system’s RAM locally or easily inspecting a remote system’s memory
@@ -4400,7 +4374,7 @@ Mapping Tape Into Memory With tapisk
 
 Overview
 
-tapisk[64] is a tool that exposes a tape drive as a block device. While
+tapisk[65] is a tool that exposes a tape drive as a block device. While
 seemingly unrelated to memory synchronization, it does serve as an
 interesting usecase due to the similarities to STFS (mentioned earlier
 in the FUSE section), which exposed a tape drive as a file system, and
@@ -4523,7 +4497,7 @@ a remote tape library robot’s drive to a system over the network.
 
 Being able to map a tape into memory without having to read the entire
 contents first can have a variety of usecases. Tapes can store a large
-amount of data, in the case of LTO-9, up to 18TB on a single tape[65];
+amount of data, in the case of LTO-9, up to 18TB on a single tape[66];
 being able to access such a large amount of data directly in memory,
 instead of having to work with tooling like tar, can significantly
 improve developer experience. In addition to making it much easier to
@@ -4641,7 +4615,7 @@ from the first to the last offset, the client needs to wait for the file
 to be completely accessible locally before playing it. While MP4 and
 other formats supports ways to encode such metadata in the beginning or
 once every few chunks in order to make them streamable, this is not the
-case for many already existing files and comes with other tradeoffs[66].
+case for many already existing files and comes with other tradeoffs[67].
 
 By using r3map however, the pull heuristic function can be used to
 immediately pre-fetch the metadata, independently of where it is placed;
@@ -4762,7 +4736,7 @@ be done using a higher-level protocol; moreover, this assumes that the
 in-memory representation of the data structure is consistent across all,
 something which is not necessarily the case with programming languages
 such as Go with multiple processor architectures being involved. While
-projects such as Apache Arrow[67] allow for application state to
+projects such as Apache Arrow[68] allow for application state to
 represented in a language- and CPU architecture-independent way, this
 comes with some of the same restrictions on which state can be
 synchronized as with other solutions such as Firebase.
@@ -4899,7 +4873,8 @@ https://www.kernel.org/doc/html/next/rust/quick-start.html
 IN: Wiley Publishing, Inc., 2008, pp. 474–487, 1026–1027.
 
 [6] W. R. Stevens, Advanced programming in the UNIX environment. Delhi:
-Addison Wesley Logman (Singapore) Pte Ltd., Indian Branch, 2000, p. 19.
+Addison Wesley Logman (Singapore) Pte Ltd., Indian Branch, 2000, pp. 19,
+407–411.
 
 [7] K. A. Robbins and S. Robbins, Unix™ systems programming:
 Communication, concurrency, and threads. Prentice Hall PTR, 2003, p.
@@ -4911,7 +4886,7 @@ Wesley, 2003, pp. 507–531.
 
 [9] W. Stallings, Computer organization and architecture: Designing for
 performance. Upper Saddle River, New Jersey, 07458: Pearson Education,
-Inc., 2010, p. 153.
+Inc., 2010, pp. 153, 114–116.
 
 [10] A. J. Smith, “Cache memories,” ACM Comput. Surv., vol. 14, no. 3,
 p. 474, Sep. 1982, doi: 10.1145/356887.356892.
@@ -5071,77 +5046,81 @@ performance benchmark: Comparing cassandra 4.0, cassandra 3.11 and
 scylla open source 4.4,” ScyllaDB Inc, 2021.Available:
 https://www.scylladb.com/wp-content/uploads/wp-apache-cassandra-4-performance-benchmark-3.pdf
 
-[49] J. Corbet, “4.3 merge window, part 2.” 2015. Accessed: Jul. 20,
+[49] F. Pojtinger, “r3map: Efficient remote memory region mounting and
+migration.” 2023. Accessed: Jul. 31, 2023. [Online]. Available:
+https://github.com/pojntfx/r3map
+
+[50] J. Corbet, “4.3 merge window, part 2.” 2015. Accessed: Jul. 20,
 2023. [Online]. Available: https://lwn.net/Articles/656731/
 
-[50] F. Pojtinger, “STFS file system unit tests.” 2022. Accessed: Jul.
+[51] F. Pojtinger, “STFS file system unit tests.” 2022. Accessed: Jul.
 20, 2023. [Online]. Available:
 https://github.com/pojntfx/stfs/blob/main/pkg/fs/filesystem_test.go
 
-[51] S. Francia, “Fs interface - afero: A FileSystem abstraction system
+[52] S. Francia, “Fs interface - afero: A FileSystem abstraction system
 for go.” 2023. Accessed: Jul. 20, 2023. [Online]. Available:
 https://pkg.go.dev/github.com/spf13/afero#Fs
 
-[52] F. Pojtinger, “STFS: Simple Tape File System, a file system for
+[53] F. Pojtinger, “STFS: Simple Tape File System, a file system for
 tapes and tar files.” 2022. Accessed: Jul. 20, 2023. [Online].
 Available: https://github.com/pojntfx/stfs
 
-[53] J. Waibel and F. Pojtinger, “sile-fystem: A generic FUSE
+[54] J. Waibel and F. Pojtinger, “sile-fystem: A generic FUSE
 implementation.” 2022. Accessed: Jul. 20, 2023. [Online]. Available:
 https://github.com/jakWai01/sile-fystem
 
-[54] T. Grieger, “The cost and complexity of cgo.” Dec. 2015. Accessed:
+[55] T. Grieger, “The cost and complexity of cgo.” Dec. 2015. Accessed:
 Jul. 21, 2023. [Online]. Available:
 https://www.cockroachlabs.com/blog/the-cost-and-complexity-of-cgo/
 
-[55] F. Pojtinger, “Weron: Overlay networks based on WebRTC.” 2023.
+[56] F. Pojtinger, “Weron: Overlay networks based on WebRTC.” 2023.
 Accessed: Jul. 21, 2023. [Online]. Available:
 https://github.com/pojntfx/weron
 
-[56] Linux Kernel Contributors, “NBD kernel module in the linux kernel
+[57] Linux Kernel Contributors, “NBD kernel module in the linux kernel
 source tree.” 2023. Accessed: Jul. 21, 2023. [Online]. Available:
 https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/drivers/block/nbd.c#n2592
 
-[57] F. Pojtinger, “Dudirekta: Transport-agnostic framework that allows
+[58] F. Pojtinger, “Dudirekta: Transport-agnostic framework that allows
 exposing and calling functions on both clients and servers.” 2023.
 Accessed: Jul. 22, 2023. [Online]. Available:
 https://github.com/pojntfx/dudirekta
 
-[58] F. Pojtinger, “Dudirekta: WebRTC transport layer example.” 2023.
+[59] F. Pojtinger, “Dudirekta: WebRTC transport layer example.” 2023.
 Accessed: Jul. 22, 2023. [Online]. Available:
 https://github.com/pojntfx/dudirekta/blob/main/cmd/dudirekta-example-webrtc-peer/main.go
 
-[59] I. Ward, “Documentation for the JSON lines text file format.” 2013.
+[60] I. Ward, “Documentation for the JSON lines text file format.” 2013.
 Accessed: Jul. 28, 2023. [Online]. Available: https://jsonlines.org/
 
-[60] Loophole Labs, Inc, “fRPC: gRPC benchmarks.” 2022. Accessed: Jul.
+[61] Loophole Labs, Inc, “fRPC: gRPC benchmarks.” 2022. Accessed: Jul.
 30, 2023. [Online]. Available:
 https://frpc.io/performance/grpc-benchmarks
 
-[61] F. Pojtinger, GitHub Repository for Efficient Synchronization of
+[62] F. Pojtinger, GitHub Repository for Efficient Synchronization of
 Linux Memory Regions over a Network: A Comparative Study and
 Implementation. 2023.Available:
 https://github.com/pojntfx/networked-linux-memsync
 
-[62] Kernel Development Community, “Userspace block device driver (ublk
+[63] Kernel Development Community, “Userspace block device driver (ublk
 driver),” 2023. https://docs.kernel.org/block/ublk.html (accessed Jul.
 28, 2023).
 
-[63] F. Pojtinger, “Ram-dl: A tool to download more RAM (yes,
+[64] F. Pojtinger, “Ram-dl: A tool to download more RAM (yes,
 seriously!).” 2023. Accessed: Jul. 23, 2023. [Online]. Available:
 https://github.com/pojntfx/ram-dl
 
-[64] F. Pojtinger, “Tapisk: Expose a tape drive as a block device.”
+[65] F. Pojtinger, “Tapisk: Expose a tape drive as a block device.”
 2023. Accessed: Jul. 23, 2023. [Online]. Available:
 https://github.com/pojntfx/tapisk
 
-[65] LTO Program, “The LTO program releases specifications for upcoming
+[66] LTO Program, “The LTO program releases specifications for upcoming
 generation 9.” 2020. Accessed: Jul. 23, 2023. [Online]. Available:
 https://www.lto.org/2020/09/the-lto-program-releases-specifications-for-upcoming-generation-9/
 
-[66] M. Levkov, “Understanding the MPEG-4 movie atom.” Adobe Developer
+[67] M. Levkov, “Understanding the MPEG-4 movie atom.” Adobe Developer
 Network, 2020. Accessed: Jul. 30, 2023. [Online]. Available:
 https://web.archive.org/web/20210130152901/https://www.adobe.com/devnet/video/articles/mp4_movie_atom.html
 
-[67] Apache Software Foundation, “Apache arrow website.” 2023. Accessed:
+[68] Apache Software Foundation, “Apache arrow website.” 2023. Accessed:
 Jul. 23, 2023. [Online]. Available: https://arrow.apache.org/
