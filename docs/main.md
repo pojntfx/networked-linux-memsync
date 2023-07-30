@@ -267,11 +267,11 @@ Today, FUSE is widely utilized to mount high-level external services as file sys
 
 ### Network Block Device (NBD)
 
-Network Block Device (NBD) is a protocol for connecting to a remote Linux block device. It typically works by communicating between a user space-provided server and a Kernel-provided client. Though potentially deployable over Wide Area Networks (WAN), it is primarily designed for Local Area Networks (LAN) or localhost usage. The protocol is divided into two phases: the handshake and the transmission[@blake2023nbd].
+Network Block Device (NBD) is a protocol for connecting to a remote Linux block device. It typically works by communicating between a user space-provided server and a Kernel-provided client. Though potentially deployable over Wide Area Networks (WAN), it is primarily designed for Local Area Networks (LAN) or localhost usage. The protocol is divided into two phases: the handshake and the transmission[@blake2023nbd]:
 
-TODO: Add sequence diagram of the NBD protocol
+![Sequence diagram of the baseline NBD protocol (simplified)\label{nbd-baseline-protocol-simplified-sequence}](./static/nbd-baseline-protocol-simplified-sequence.png)
 
-The NBD protocol involves multiple participants, notably one or several clients, a server, and the concept of an export. It starts with a client establishing a connection with the server. The server reciprocates by delivering a greeting message highlighting various server flags. The client responds by transmitting its own flags along with the name of an export to use; a single NBD server can expose multiple devices.
+The NBD protocol involves multiple participants, notably one or several clients, a server, and the concept of an export. It starts with a client establishing a connection with the server. The server responds by delivering a greeting message highlighting various server flags. The client responds by transmitting its own flags along with the name of an export to use; a single NBD server can expose multiple devices.
 
 After receiving this, the server sends the size of the export and other metadata. The client acknowledges this data, completing the handshake. Post handshake, the client and server exchange commands and replies. A command can correspond to any of the basic actions needed to access a block device, for instance read, write or flush. These commands might also contain data such as a chunk for writing, offsets, and lengths among other elements. Replies may contain error messages, success status, or data contingent on the reply type.
 
@@ -1108,7 +1108,7 @@ type NegotiationReplyHeader struct {
 // ...
 ```
 
-In order to keep the actual handshake as simple as possible, only the fixed newstyle handshake is implemented, which also makes the implementation compliant with the baseline specification as defined by the protocol[@blake2023nbd]. The negotiation starts by the server sending the negotiation header to the NBD client and ignoring the client's flags:
+In order to keep the actual handshake as simple as possible, only the fixed newstyle handshake is implemented, which also makes the implementation compliant with the baseline specification as defined by the protocol[@blake2023nbd] (see figure \ref{nbd-baseline-protocol-simplified-sequence}). The negotiation starts by the server sending the negotiation header to the NBD client and ignoring the client's flags:
 
 ```go
 // Sending the negotiation header
@@ -1145,7 +1145,7 @@ for {
 
 In this handshake, the `NEGOTIATION_ID_OPTION_INFO` and `NEGOTIATION_ID_OPTION_GO` options exchange information about the chosen export (i.e. block size, export size, name and description), and if `GO` is specified, immediately continue on to the transmission phase. If an export is not found, the server aborts the connection. In order to allow for enumeration of available exports, the `NEGOTIATION_ID_OPTION_LIST` allows for returning the list of exports to the client, and `NEGOTIATION_ID_OPTION_ABORT` allows aborting handshake, which can be necessary if i.e. the `NEGOTIATION_ID_OPTION_INFO` was chosen but the client can't handle the exposed export, i.e. due to it not supporting the advertised block size.
 
-The actual transmission phase is implemented in a similar way, by reading headers in a loop, switchin on the message type and handling it accordingly. `TRANSMISSION_TYPE_REQUEST_READ` forwards a read request to the selected export's backend and sends the relevant chunk to the client, `TRANSMISSION_TYPE_REQUEST_WRITE` reads the offset and chunk from the client, and writes it to the export's backend:
+The actual transmission phase is implemented in a similar way, by reading headers in a loop, switching on the message type and handling it accordingly. `TRANSMISSION_TYPE_REQUEST_READ` forwards a read request to the selected export's backend and sends the relevant chunk to the client, `TRANSMISSION_TYPE_REQUEST_WRITE` reads the offset and chunk from the client, and writes it to the export's backend:
 
 ```go
 // Reading the chunk to be written from the client's connection
@@ -1660,7 +1660,7 @@ type SeederRemote struct {
 
 Unlike the remote backend, the seeder also exposes a mount through the familiar path, file or slice APIs, meaning that even as the migration is in progress, the underlying resource can still be accessed by the application on the source host. This fixes the architectural constraint of the mount API when used for the migration, where only the destination is able to expose a mount, while the source simply serves data without accessing it.
 
-The tracking support is imlement in the same modular and composable way as the syncer, by providing a new pipeline stage, the `TrackingReadWriter`. Once activated by the `Track` RPC, the tracker intecepts all `WriteAt` calls and adds them to a local map before calling the next stage.:
+The tracking support is imlement in the same modular and composable way as the syncer, by providing a new pipeline stage, the `TrackingReadWriter`. Once activated by the `Track` RPC, the tracker intecepts all `WriteAt` calls and adds them to a local map before calling the next stage:
 
 ```go
 // If tracking is enabled, mark the chunk as dirty
@@ -1673,11 +1673,7 @@ if c.tracking {
 return c.backend.WriteAt(p, off)
 ```
 
-Once the `Sync` RPC is called by the destination host, these dirty offsets are returned and the map is cleared:
-
-TODO: Add graphic of the pipeline's design
-
-A benefit of the protocol being defined in such a way that only the client ever calls an RPC, thus making the protocol uni-directional, is that both the transport layer and RPC system are completely interchangeable. This works by returning a simple abstract `service` utility struct from `Open`, which can then be used as the implementation for any RPC framework, i.e. with the actual gRPC service simply functioning as an adapter:
+Once the `Sync` RPC is called by the destination host, these dirty offsets are returned and the map is cleared. A benefit of the protocol being defined in such a way that only the client ever calls an RPC, thus making the protocol uni-directional, is that both the transport layer and RPC system are completely interchangeable. This works by returning a simple abstract `service` utility struct from `Open`, which can then be used as the implementation for any RPC framework, i.e. with the actual gRPC service simply functioning as an adapter:
 
 ```go
 type SeederGrpc struct {
@@ -1701,11 +1697,7 @@ func (s *SeederGrpc) ReadAt(ctx context.Context, args *v1.ReadAtArgs) (*v1.ReadA
 
 #### Leecher
 
-The leecher then takes this abstract service struct provided by the seeder, which is implemented by a RPC framework. Using this, as soon as the leecher is opened, it calls `Track()` in the background and starts the NBD device in parallel to achieve a similar reduction in initial read latency as the mount API. The leecher introduces a new pipeline stage, the `LockableReadWriterAt`:
-
-TODO: Add graphic of pipeline design
-
-This component simply blocks all read and write operations to/from the NBD device until `Finalize` has been called by using a `sync.Cond`. This is required becaused otherwise, stale data (before `Finalize` marked the chunks as dirty) could have poisoned the kernel's file cache if the application read data before finalization:
+The leecher then takes this abstract service struct provided by the seeder, which is implemented by a RPC framework. Using this, as soon as the leecher is opened, it calls `Track()` in the background and starts the NBD device in parallel to achieve a similar reduction in initial read latency as the mount API. The leecher introduces a new pipeline stage, the `LockableReadWriterAt`. This component simply blocks all read and write operations to/from the NBD device until `Finalize` has been called by using a `sync.Cond`. This is required becaused otherwise, stale data (before `Finalize` marked the chunks as dirty) could have poisoned the kernel's file cache if the application read data before finalization:
 
 ```go
 // For `ReadAt/WriteAt`: Waits for finalization, then calls the actual read/write operation
@@ -2260,7 +2252,7 @@ func (s *SeederGrpc) ReadAt(ctx context.Context, args *v1.ReadAtArgs) (*v1.ReadA
 
 While gRPC tends to perform better than Dudirekta due to it's support for connection pooling and more efficient binary serialization, it can be improved upon. This is particularly true for protocol buffers, which, while being faster than JSON, have issues with encoding large chunks of data, and can become a real bottleneck with large chunk sizes:
 
-TODO: Add graphic from https://frpc.io/performance/grpc-benchmarks
+![RPCs/second per client for 1 MB messages, repeated 10 times[@loopholelabs2023benchmarks]](./static/grpc-frpc-benchmarks.png)
 
 fRPC[@loopholelabs2023frpc], a drop-in replacement for gRPC, can improve upon this by switching out the serialization layer with the faster Polyglot[@loopholelabs2023polyglot] library and a custom transport layer. It also uses the proto3 DSL and the same code generation framework as gRPC, which makes it easy to switch to by simply re-generating the code from the DSL. The implementation of the fRPC adapter functions in a very similar way as the gRPC adapter:
 
