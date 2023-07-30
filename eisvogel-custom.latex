@@ -987,7 +987,7 @@ $endif$
 \newline
 \noindent {\textsf{Course of Study: }\textbf{\textsf{Media Informatics}}}
 \newline
-\noindent {\textsf{Date: }\textbf{\textsf{04.08.2023}}}
+\noindent {\textsf{Date: }\textbf{\textsf{$date$}}}
 \newline
 \noindent {\textsf{Academic Degree: }\textbf{\textsf{Bachelor of Science}}}
 \newline

@@ -138,4 +138,4 @@ clean:
 
 # Dependencies
 depend:
-	pip install pillow qrcode md2gemini # --break-system-packages
+	pip install pillow qrcode md2gemini --break-system-packages
