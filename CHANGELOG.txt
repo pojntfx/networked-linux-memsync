@@ -1,3 +1,9 @@
+commit 93bc8fb00b236fb8436facd3b794d2547a26895f
+Author: Felicitas Pojtinger <felicitas@pojtinger.com>
+Date:   Sun Jul 30 22:51:12 2023 +0200
+
+    feat: Add external graphics, cite MP4 Adobe docs
+
 commit a34cef3629c75cca84f9508722ffa38422687f45
 Author: Felicitas Pojtinger <felicitas@pojtinger.com>
 Date:   Sun Jul 30 19:33:09 2023 +0200

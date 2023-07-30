@@ -353,8 +353,6 @@ primarily due to the limitations of “the speed of the cable”, where both
 throughput and latency decrease as distance increases due to factors
 like signal dampening and the finite speed of light.
 
-TODO: Add graphic of the memory hierarchy
-
 At the top of the hierarchy are registers, which are closest to the CPU.
 They offer very high speed, but provide limited storage space, typically
 accommodating 32-64 bits of data. These registers are used by the CPU to
@@ -381,6 +379,12 @@ cost-effective. Tape storage can store very large amounts of data for
 long periods of time. These types of storage are typically used for
 archiving or physically transporting data, such as importing data from
 personal infrastructure to a service like AWS[11].
+
+Depending on the technical choices for each of the hierarchy’s layers,
+these latency differences can be quite significant, ranging from below a
+nanosecond for registers to multiple milliseconds for a HDD:
+
+[Latency profile of different memory technologies[12]]
 
 The memory hierarchy is not static but evolves with technological
 advancements, leading to some blurring of these distinct layers[12]. For
@@ -671,8 +675,7 @@ in order to reduce network and I/O overhead. Perhaps the most recognized
 tool employing this method of synchronization is rsync, an open-source
 data synchronization utility in Unix-like operating systems[25].
 
-TODO: Add sequence diagram of the delta sync protocol from
-https://blog.acolyer.org/2018/03/02/towards-web-based-delta-synchronization-for-cloud-storage-systems/
+[Design flow chart of WebRsync[25]]
 
 While there are many applications of such an algorithm, it typically
 starts on file block division, dissecting the file on the destination
@@ -751,8 +754,7 @@ system implementation directly in the kernel. This approach enhances
 safety, preventing entire kernel crashes due to errors within the
 implementation being limited to user instead of kernel space.
 
-TODO: Add graphic from
-https://en.wikipedia.org/wiki/Filesystem_in_Userspace#/media/File:FUSE_structure.svg
+[Structural diagramm of Filesystem in Userspace[27]]
 
 Another benefit of a file system implemented as a FUSE is its inherent
 portability. Unlike a file system created as a kernel module, its
@@ -763,12 +765,12 @@ need to be built from source on the target machine unless they are
 vendored by a distribution. Despite these benefits of FUSE, there is a
 noticeable performance overhead associated with it. This is largely due
 to the context switching between the kernel and the userspace that
-occurs during its operation[27].
+occurs during its operation[28].
 
 Today, FUSE is widely utilized to mount high-level external services as
 file systems. For instance, it can be used to mount remote AWS S3
-buckets with s3fs[28] or to mount a remote system’s disk via Secure
-Shell (SSH) with SSHFS [29].
+buckets with s3fs[29] or to mount a remote system’s disk via Secure
+Shell (SSH) with SSHFS [30].
 
 Network Block Device (NBD)
 
@@ -777,7 +779,7 @@ Linux block device. It typically works by communicating between a user
 space-provided server and a Kernel-provided client. Though potentially
 deployable over Wide Area Networks (WAN), it is primarily designed for
 Local Area Networks (LAN) or localhost usage. The protocol is divided
-into two phases: the handshake and the transmission[30].
+into two phases: the handshake and the transmission[31].
 
 TODO: Add sequence diagram of the NBD protocol
 
@@ -798,8 +800,8 @@ among other elements. Replies may contain error messages, success
 status, or data contingent on the reply type.
 
 While powerful in many regards, NBD has some limitations. Its maximum
-message size is capped at 32 MB[31], and the maximum block or chunk size
-supported by the Kernel’s NBD client is a mere 4KB[32]. Thus, it might
+message size is capped at 32 MB[32], and the maximum block or chunk size
+supported by the Kernel’s NBD client is a mere 4KB[33]. Thus, it might
 not be the most optimal protocol for WAN usage, especially in scenarios
 with high latency.
 
@@ -858,7 +860,7 @@ limitation to the approach however is that, if the VM or application
 alters too many chunks on the source during migration, it may not be
 possible to meet the maximum acceptable downtime criteria. Maximum
 permissible downtime is also inherently restricted by the available
-round-trip time (RTT)[33].
+round-trip time (RTT)[34].
 
 Post-Copy
 
@@ -874,7 +876,7 @@ arises. A page fault, in this context, is a type of interrupt generated
 when the VM tries to read or write a chunk that is not currently present
 on the destination. This triggers the system to retrieve the missing
 chunk from the source host, enabling the VM to continue its
-operations[33].
+operations[34].
 
 The main advantage of post-copy migration centers around the fact that
 it eliminates the necessity of re-transmitting chunks of “dirty” or
@@ -898,7 +900,7 @@ suitable timing for virtual machine migration. Even though these mostly
 focus on virtual machines, the methodologies proposed could be adapted
 for use with various other applications or migration circumstances, too.
 
-One method[34] proposed identifies cyclical workload patterns of VMs and
+One method[35] proposed identifies cyclical workload patterns of VMs and
 leverages this knowledge to delay migration when it is beneficial. This
 is achieved by analyzing recurring patterns that may unnecessarily
 postpone VM migration, and then constructing a model of optimal cycles
@@ -936,7 +938,7 @@ power of streams comes from their ability to process data as it becomes
 available; this aspect allows for minimization of memory consumption,
 making streams particularly impactful for scenarios involving
 long-running processes where data is streamed over extended periods of
-time[35].
+time[36].
 
 Pipelines comprise a series of data processing stages, wherein the
 output of one stage directly serves as the input to the next. It’s this
@@ -954,7 +956,7 @@ pipeline.
 
 Another familiar implementation is observed in UNIX pipes, a fundamental
 part of shells such as GNU Bash or POSIX sh. Here, the output of a
-command can be piped into another for further processing[36]; for
+command can be piped into another for further processing[37]; for
 instance, the results from a curl command fetching data from an API
 could be piped into the jq tool for JSON manipulation.
 
@@ -972,7 +974,7 @@ feature that allows for concurrent function execution that is similar to
 threads, but more scalable to support millions of Goroutines per
 program. Synchronization between different Goroutines is provided by
 using channels, which are type- and concurrency-safe conduits for
-data[37].
+data[38].
 
 gRPC and Protocol Buffers
 
@@ -1007,7 +1009,7 @@ both client and server can send messages to each other.
 What distinguishes gRPC is its pluggable structure that allows for added
 functionalities such as load balancing, tracing, health checking, and
 authentication, which make it a comprehensive solution for developing
-distributed systems[38].
+distributed systems[39].
 
 fRPC and Polyglot
 
@@ -1016,13 +1018,13 @@ It is proto3-compatible, meaning that it can be used as a drop-in
 replacement for gRPC, promising better performance characteristics. A
 unique feature is it’s ability to stop the RPC system to rerieve an
 underlying connection, which makes it possible to re-use connections for
-different purposes[39]. Internally, it uses Frisbee as it’s messaging
-framework to implement the request-response semantics[40], and Polyglot,
+different purposes[40]. Internally, it uses Frisbee as it’s messaging
+framework to implement the request-response semantics[41], and Polyglot,
 a high-performance serialization framework, as it’s Protobuf equivalent.
 Polyglot achieves a similar goal as Protobuf, which is to encode data
 structures in a platform-independent way, but does so with less legacy
 code and a simpler wire format. It is also language-independent, with
-implementations for Go, Rust and TypeScript[41].
+implementations for Go, Rust and TypeScript[42].
 
 Redis
 
@@ -1032,7 +1034,7 @@ introduced by Salvatore Sanfilippo in 2009. Compared to other key-value
 stores and NoSQL databases, Redis supports a multitude of data
 structures, including lists, sets, hashes, and bitmaps, making it a good
 choice for caching or storing data that does not fit well into a
-traditional SQL architecture[42].
+traditional SQL architecture[43].
 
 One of the primary reasons for Redis’s speed is its reliance on
 in-memory data storage rather than on disk, enabling very low-latency
@@ -1050,7 +1052,7 @@ it to function as a message broker, where messages are published to
 channels and delivered to all the subscribers interested in those
 channels. This makes it a particularly compelling choice for systems
 that require both caching and a memory broker, such as queue
-systems[43].
+systems[44].
 
 S3 and Minio
 
@@ -1070,7 +1072,7 @@ array of demands through the same API. S3 also comes equipped with
 comprehensive security features, including authentication and
 authorization mechanisms. Communication with S3 is done through a HTTP
 API. Users and applications can interact with the stored data -
-including files and folders - via this API.[44].
+including files and folders - via this API.[45].
 
 Minio is an open-source storage server that is compatible Amazon S3’s
 API. Due to it being written in the Go programming language, Minio is
@@ -1085,7 +1087,7 @@ regulations, those preferring to maintain direct control over their data
 and developers prefering to work on the local system. It also supports
 horizontal scalability, designed to distribute large quantities of data
 across multiple nodes, meaning that it can be used in large-scale
-deployments similarly to AWS S3[45].
+deployments similarly to AWS S3[46].
 
 Cassandra and ScylllaDB
 
@@ -1102,7 +1104,7 @@ Cassandra’s consistency model is tunable according to needs, ranging
 from eventual to strong consistency. It distinguishes itself by not
 employing master nodes due to its usage of a peer-to-peer protocol and a
 distributed hash ring design. These design choices eradicate the
-bottleneck and failure risks associated with master nodes[46].
+bottleneck and failure risks associated with master nodes[47].
 
 Despite these robust capabilities, Cassandra does come with certain
 limitations. Under heavy load, it experiences high latency that can
@@ -1117,14 +1119,15 @@ written in C++, contrary to Cassandra’s Java-based code. This
 contributes to ScyllaDB’s shared-nothing architecture, a design that
 aims to minimize contention and enhance performance.
 
+[The 90- and 99-percentile latencies of UPDATE queries, as measured on
+three i3.4xlarge machines (48 vCPUs in total) in a range of load
+rates[48]]
+
 ScyllaDB was particularly engineered to address one shortcoming of
 Cassandra - issues around latency, specifically the 99th percentile
 latency that impacts system reliability and predictability. ScyllaDB’s
 design improvements and performance gains over Cassandra have been
-endorsed by various benchmarking studies[47].
-
-TODO: Add graph of the Cassandra vs. ScyllaDB benchmark from the
-benchmarking study
+endorsed by benchmarking studies[48].
 
 Planning
 
@@ -1445,7 +1448,7 @@ before, we can use this event to then fetch this chunk of memory from
 the remote, mapping it to the offset on which the page fault occured,
 thus effectively only fetching data when it is required. Instead of
 registering signal handlers, we can use the userfaultfd system
-introduced with Linux 4.3[48] to handle these faults in userspace in a
+introduced with Linux 4.3[49] to handle these faults in userspace in a
 more idiomatic way.
 
 In the Go implementation created for this thesis, userfaultfd-go,
@@ -2060,11 +2063,11 @@ Developing a backend for a file system abstraction API such as afero.Fs
 instead of implementing it to work with FUSE bindings directly offers
 several advantages. This layer of indirection allows splitting the FUSE
 implementation from the actual inode structure of the system, which
-makes it unit testable[49]. This is a high priority due to the
+makes it unit testable[50]. This is a high priority due to the
 complexities and edge cases involved with creating a file system. A
 standard API also offers the ability to implement things such as caching
 by simply nesting multiple afero.Fs interfaces, and the required
-interface is rather minimal[50]:
+interface is rather minimal[51]:
 
     type Fs interface {
         Create(name string) (File, error)
@@ -2082,7 +2085,7 @@ interface is rather minimal[50]:
         Chtimes(name string, atime time.Time, mtime time.Time) error
     }
 
-The STFS project[51] has shown that by using this abstraction layer,
+The STFS project[52] has shown that by using this abstraction layer,
 seemingly incompatible, non-linear backends can still be mapped to a
 file system. The project is backend by a tape drive, which is inherently
 append-only and optimized for linear access. Thanks to the inclusion of
@@ -2091,7 +2094,7 @@ system was still performant enough for standard use, while also
 supporting most of the features required by the average user such as
 symlinks, file updates and more.
 
-By using a project like sile-fystem[52], it is also possible to use any
+By using a project like sile-fystem[53], it is also possible to use any
 afero.Fs filesystem as a FUSE backend; this can signficantly reduce the
 required implementation overhead, as it doesn’t require writing a custom
 adapter:
@@ -2124,7 +2127,7 @@ the NBD-based migration approach to work. By not having to rely on CGo
 or a pre-existing NBD library like nbdkit, this custom library can also
 skip a significant amount of the overhead that is typically associated
 with C interoperability, particularly in the context of concurrency in
-Go with CGo [53].
+Go with CGo [54].
 
 Server
 
@@ -2174,7 +2177,7 @@ depending on a generic net.Conn, it is possible to easily integrate
 go-nbd in existing client/server systems or to switch out the typical
 TCP transport layer with i.e. QUIC. By not requiring dial/accept
 semantics it is also possible to use a P2P communication layer for
-peer-to-peer NBD such as WebRTC with weron[54], which also provides the
+peer-to-peer NBD such as WebRTC with weron[55], which also provides the
 necessary net.Conn interface.
 
 In addition to this net.Conn, options can be provided to the server;
@@ -2216,7 +2219,7 @@ using Go structs:
 In order to keep the actual handshake as simple as possible, only the
 fixed newstyle handshake is implemented, which also makes the
 implementation compliant with the baseline specification as defined by
-the protocol[30]. The negotiation starts by the server sending the
+the protocol[31]. The negotiation starts by the server sending the
 negotiation header to the NBD client and ignoring the client’s flags:
 
     // Sending the negotiation header
@@ -2314,7 +2317,7 @@ Unlike the server, the client is implemented by using both the kernel’s
 NBD client and a userspace component. In order to use the kernel NBD
 client, it is necessary to first find a free NBD device (/dev/nbd*);
 these devices are allocated by the kernel NBD module and can be
-specified with the nbds_max parameter[55]. In order to find a free
+specified with the nbds_max parameter[56]. In order to find a free
 device, we can either specify it manually, or check sysfs for a NBD
 device that reports a zero size:
 
@@ -3298,7 +3301,7 @@ Another aspect that plays an important role in performance for real-life
 deployments is the choice of RPC framework and transport protocol. As
 mentioned before, both the mount and migration APIs are
 transport-independent, and as a result almost any RPC framework can be
-used. A RPC framework developed as part of r3map is Dudireka[56]. As
+used. A RPC framework developed as part of r3map is Dudireka[57]. As
 such, it was designed specifically with the hybrid pre-and post-copy
 scenario in mind. To optimize for this, it has support for concurrent
 RPCs, which allows for efficient background pulls as multiple chunks can
@@ -3320,7 +3323,7 @@ transport protocols like QUIC in WAN deployments, which can reduce the
 initial latency by using the 0-RTT handshake and thus makes calling an
 RPC less expensive. By not requiring TCP-style client-server semantics,
 Dudirekta can also be used to allow for P2P migrations over a protocol
-such as WebRTC[57].
+such as WebRTC[58].
 
 Usage
 
@@ -3446,7 +3449,7 @@ which also works on both the client and the server side:
 Protocol
 
 The protocol used for dudirekta is simple and based on JSONL, a for
-exchanging newline-delimited JSON data[58]; a function call, i.e. to
+exchanging newline-delimited JSON data[59]; a function call, i.e. to
 Println looks like this:
 
     [true, "1", "Println", ["Hello, world!"]]
@@ -3767,8 +3770,8 @@ data, and can become a real bottleneck with large chunk sizes:
 
 TODO: Add graphic from https://frpc.io/performance/grpc-benchmarks
 
-fRPC[39], a drop-in replacement for gRPC, can improve upon this by
-switching out the serialization layer with the faster Polyglot[41]
+fRPC[40], a drop-in replacement for gRPC, can improve upon this by
+switching out the serialization layer with the faster Polyglot[42]
 library and a custom transport layer. It also uses the proto3 DSL and
 the same code generation framework as gRPC, which makes it easy to
 switch to by simply re-generating the code from the DSL. The
@@ -3809,7 +3812,7 @@ specifications:
 
 To make the results reproducible, the benchmark scripts and notebooks to
 plot the related visualizations can be found in the accompanying
-repository[59], and multiple runs have been conducted for each benchmark
+repository[60], and multiple runs have been conducted for each benchmark
 to ensure consistency.
 
 Access Methods
@@ -4367,7 +4370,7 @@ occur in the first place.
 NBD, the underlying technology and protocol for the mount API, has
 proven to be fairly performant, but it still could be improved upon to
 get closer to the performance of other access methods, like raw memory
-access. One such option is ublk[60], which has the potential to
+access. One such option is ublk[61], which has the potential to
 significantly improve concurrent access speeds over the socket-based
 connection between the client and server that NBD uses. It is similar in
 architecture to NBD, where a user space server provides the block device
@@ -4379,7 +4382,7 @@ block devices in user space.
 
 Using Mounts for Remote Swap with ram-dl
 
-ram-dl[61] is an experimental tech demo built to demonstrate how the
+ram-dl[62] is an experimental tech demo built to demonstrate how the
 mount API can be used. It uses the fRPC mount backend to expand local
 system memory, enabling a variety of usecases such as mounting a remote
 system’s RAM locally or easily inspecting a remote system’s memory
@@ -4411,7 +4414,7 @@ Mapping Tape Into Memory With tapisk
 
 Overview
 
-tapisk[62] is a tool that exposes a tape drive as a block device. While
+tapisk[63] is a tool that exposes a tape drive as a block device. While
 seemingly unrelated to memory synchronization, it does serve as an
 interesting usecase due to the similarities to STFS (mentioned earlier
 in the FUSE section), which exposed a tape drive as a file system, and
@@ -4534,7 +4537,7 @@ a remote tape library robot’s drive to a system over the network.
 
 Being able to map a tape into memory without having to read the entire
 contents first can have a variety of usecases. Tapes can store a large
-amount of data, in the case of LTO-9, up to 18TB on a single tape[63];
+amount of data, in the case of LTO-9, up to 18TB on a single tape[64];
 being able to access such a large amount of data directly in memory,
 instead of having to work with tooling like tar, can significantly
 improve developer experience. In addition to making it much easier to
@@ -4570,7 +4573,7 @@ synchronization client. This approach also makes offline availability
 easy, as files that have been synchronized to the local system stay
 available even if network connectivity has been lost.
 
-The other currently used option is to use a FUSE, i.e. s3fs[28], which
+The other currently used option is to use a FUSE, i.e. s3fs[29], which
 allows for files to be fetched on demand, but comes with a heavy
 performance penalty. This is the case because most implementations, if a
 write or read request is sent from the kernel to the FUSE, remote writes
@@ -4643,9 +4646,7 @@ access files in formats that usually don’t support being accessed before
 they are fully available locally possible. One such format is MP4;
 usually, if a user downloads a MP4 file, they can’t start playback
 before the file is available locally completely. This is because MP4
-typically stores metadata at the end of the file:
-
-TODO: Add graphic with MP4 metadata
+typically stores metadata at the end of the file.
 
 The reason for this being stored at the end is usually that the
 parameters required for this metadata requires encoding the video first.
@@ -4654,12 +4655,12 @@ from the first to the last offset, the client needs to wait for the file
 to be completely accessible locally before playing it. While MP4 and
 other formats supports ways to encode such metadata in the beginning or
 once every few chunks in order to make them streamable, this is not the
-case for already existing files and comes with other tradeoffs. By using
-r3map however, the pull heuristic function can be used to immediately
-pre-fetch the metadata; the rest of the chunks can then be fetched
-either by using the background pull system and/or ad-hoc as they are
-being accessed.
+case for many already existing files and comes with other tradeoffs[65].
 
+By using r3map however, the pull heuristic function can be used to
+immediately pre-fetch the metadata, independently of where it is placed;
+the rest of the chunks can then be fetched either by using the
+background pull system and/or ad-hoc as they are being accessed.
 Similarly to the approach used to stream in remote databases, this does
 not require any changes to the media player being used, since the block
 device providing the resource can simply be mounted as a file system and
@@ -4775,7 +4776,7 @@ be done using a higher-level protocol; moreover, this assumes that the
 in-memory representation of the data structure is consistent across all,
 something which is not necessarily the case with programming languages
 such as Go with multiple processor architectures being involved. While
-projects such as Apache Arrow[64] allow for application state to
+projects such as Apache Arrow[66] allow for application state to
 represented in a language- and CPU architecture-independent way, this
 comes with some of the same restrictions on which state can be
 synchronized as with other solutions such as Firebase.
@@ -4991,33 +4992,37 @@ https://www.usenix.org/conference/fast18/presentation/xiao
 high-level API.” 2020. Accessed: Jul. 19, 2023. [Online]. Available:
 https://github.com/libfuse/libfuse/blob/master/example/hello.c
 
-[27] B. K. R. Vangoor, V. Tarasov, and E. Zadok, “To FUSE or not to
+[27] W. Commons, “File:FUSE structure.svg - wikimedia commons, the free
+media repository.” 2023. Accessed: Jul. 30, 2023. [Online]. Available:
+https://commons.wikimedia.org/w/index.php?title=File:FUSE_structure.svg&oldid=762474154
+
+[28] B. K. R. Vangoor, V. Tarasov, and E. Zadok, “To FUSE or not to
 FUSE: Performance of User-Space file systems,” in 15th USENIX conference
 on file and storage technologies (FAST 17), Feb. 2017, pp.
 59–72.Available:
 https://www.usenix.org/conference/fast17/technical-sessions/presentation/vangoor
 
-[28] A. Gaul and T. Nakatani, “s3fs: FUSE-based file system backed by
+[29] A. Gaul and T. Nakatani, “s3fs: FUSE-based file system backed by
 amazon S3.” 2023. Accessed: Jul. 19, 2023. [Online]. Available:
 https://github.com/s3fs-fuse/s3fs-fuse
 
-[29] libfuse Contributors, “SSHFS: A network filesystem client to
+[30] libfuse Contributors, “SSHFS: A network filesystem client to
 connect to SSH servers.” 2022. Accessed: Jul. 19, 2023. [Online].
 Available: https://github.com/libfuse/sshfs
 
-[30] E. Blake, W. Verhelst, and other NBD maintainers, “The NBD
+[31] E. Blake, W. Verhelst, and other NBD maintainers, “The NBD
 protocol.” Apr. 2023. Accessed: Jul. 18, 2023. [Online]. Available:
 https://github.com/NetworkBlockDevice/nbd/blob/master/doc/proto.md
 
-[31] P. Clements, “[PATCH] nbd: Increase default and max request sizes.”
+[32] P. Clements, “[PATCH] nbd: Increase default and max request sizes.”
 Apr. 02, 2013. Accessed: Jul. 19, 2023. [Online]. Available:
 https://lore.kernel.org/lkml/20130402194120.54043222C0@clements/
 
-[32] W. Verhelst, Nbd-client man page. 2023. Accessed: Jul. 19, 2023.
+[33] W. Verhelst, Nbd-client man page. 2023. Accessed: Jul. 19, 2023.
 [Online]. Available:
 https://manpages.ubuntu.com/manpages/lunar/en/man8/nbd-client.8.html
 
-[33] S. He, C. Hu, B. Shi, T. Wo, and B. Li, “Optimizing virtual machine
+[34] S. He, C. Hu, B. Shi, T. Wo, and B. Li, “Optimizing virtual machine
 live migration without shared storage in hybrid clouds,” in 2016 IEEE
 18th international conference on high performance computing and
 communications; IEEE 14th international conference on smart city; IEEE
@@ -5025,124 +5030,128 @@ communications; IEEE 14th international conference on smart city; IEEE
 (HPCC/SmartCity/DSS), 2016, pp. 921–928. doi:
 10.1109/HPCC-SmartCity-DSS.2016.0132.
 
-[34] A. Baruchi, E. Toshimi Midorikawa, and L. Matsumoto Sato, “Reducing
+[35] A. Baruchi, E. Toshimi Midorikawa, and L. Matsumoto Sato, “Reducing
 virtual machine live migration overhead via workload analysis,” IEEE
 Latin America Transactions, vol. 13, no. 4, pp. 1178–1186, 2015, doi:
 10.1109/TLA.2015.7106373.
 
-[35] T. Akidau, S. Chernyak, and R. Lax, Streaming systems. Sebastopol,
+[36] T. Akidau, S. Chernyak, and R. Lax, Streaming systems. Sebastopol,
 CA: O’Reilly Media, Inc., 2018, pp. 23–25.
 
-[36] J. D. Peek, UNIX power tools. Sebastopol, CA; New York: O’Reilly
+[37] J. D. Peek, UNIX power tools. Sebastopol, CA; New York: O’Reilly
 Associates; Bantam Books, 1994, pp. 4–5.
 
-[37] A. A. A. Donovan and B. W. Kernighan, The go programming language.
+[38] A. A. A. Donovan and B. W. Kernighan, The go programming language.
 Addison-Wesley Professional, 2015, pp. 217–221, 255–227.
 
-[38] gRPC Contributors, “Introduction to gRPC.” 2023. Accessed: Jul. 18,
+[39] gRPC Contributors, “Introduction to gRPC.” 2023. Accessed: Jul. 18,
 2023. [Online]. Available:
 https://grpc.io/docs/what-is-grpc/introduction/
 
-[39] Loophole Labs, Inc, “fRPC: A modern RPC framework designed for high
+[40] Loophole Labs, Inc, “fRPC: A modern RPC framework designed for high
 performance and stability.” 2022. Accessed: Jul. 23, 2023. [Online].
 Available: https://frpc.io/getting-started/overview
 
-[40] S. Vij, A. Sørlie, F. Pojtinger, and J. Sun, “Frisbee-go:
+[41] S. Vij, A. Sørlie, F. Pojtinger, and J. Sun, “Frisbee-go:
 Bring-your-own protocol messaging framework designed for performance and
 stability.” 2022. Accessed: Jul. 28, 2023. [Online]. Available:
 https://github.com/loopholelabs/frisbee-go
 
-[41] S. Vij, A. Sørlie, and F. Pojtinger, “Polyglot: A high-performance
+[42] S. Vij, A. Sørlie, and F. Pojtinger, “Polyglot: A high-performance
 serialization framework used for encoding and decoding arbitrary data
 structures across languages.” 2022. Accessed: Jul. 23, 2023. [Online].
 Available: https://github.com/loopholelabs/polyglot
 
-[42] Redis Ltd, “Introduction to redis.” 2023. Accessed: Jul. 18, 2023.
+[43] Redis Ltd, “Introduction to redis.” 2023. Accessed: Jul. 18, 2023.
 [Online]. Available: https://redis.io/docs/about/
 
-[43] Redis Ltd, “Redis pub/sub.” 2023. Accessed: Jul. 18, 2023.
+[44] Redis Ltd, “Redis pub/sub.” 2023. Accessed: Jul. 18, 2023.
 [Online]. Available: https://redis.io/docs/interact/pubsub/
 
-[44] Amazon Web Services, Inc, “What is amazon S3?” 2023. Accessed: Jul.
+[45] Amazon Web Services, Inc, “What is amazon S3?” 2023. Accessed: Jul.
 18, 2023. [Online]. Available:
 https://docs.aws.amazon.com/AmazonS3/latest/userguide/Welcome.html
 
-[45] MinIO, Inc, “Core administration concepts.” 2023. Accessed: Jul.
+[46] MinIO, Inc, “Core administration concepts.” 2023. Accessed: Jul.
 18, 2023. [Online]. Available:
 https://min.io/docs/minio/kubernetes/upstream/administration/concepts.html
 
-[46] A. Lakshman and P. Malik, “Cassandra: A decentralized structured
+[47] A. Lakshman and P. Malik, “Cassandra: A decentralized structured
 storage system,” SIGOPS Oper. Syst. Rev., vol. 44, no. 2, pp. 35–40,
 Apr. 2010, doi: 10.1145/1773912.1773922.
 
-[47] P. Grabowski, J. Stasiewicz, and K. Baryla, “Apache cassandra 4.0
+[48] P. Grabowski, J. Stasiewicz, and K. Baryla, “Apache cassandra 4.0
 performance benchmark: Comparing cassandra 4.0, cassandra 3.11 and
 scylla open source 4.4,” ScyllaDB Inc, 2021.Available:
 https://www.scylladb.com/wp-content/uploads/wp-apache-cassandra-4-performance-benchmark-3.pdf
 
-[48] J. Corbet, “4.3 merge window, part 2.” 2015. Accessed: Jul. 20,
+[49] J. Corbet, “4.3 merge window, part 2.” 2015. Accessed: Jul. 20,
 2023. [Online]. Available: https://lwn.net/Articles/656731/
 
-[49] F. Pojtinger, “STFS file system unit tests.” 2022. Accessed: Jul.
+[50] F. Pojtinger, “STFS file system unit tests.” 2022. Accessed: Jul.
 20, 2023. [Online]. Available:
 https://github.com/pojntfx/stfs/blob/main/pkg/fs/filesystem_test.go
 
-[50] S. Francia, “Fs interface - afero: A FileSystem abstraction system
+[51] S. Francia, “Fs interface - afero: A FileSystem abstraction system
 for go.” 2023. Accessed: Jul. 20, 2023. [Online]. Available:
 https://pkg.go.dev/github.com/spf13/afero#Fs
 
-[51] F. Pojtinger, “STFS: Simple Tape File System, a file system for
+[52] F. Pojtinger, “STFS: Simple Tape File System, a file system for
 tapes and tar files.” 2022. Accessed: Jul. 20, 2023. [Online].
 Available: https://github.com/pojntfx/stfs
 
-[52] J. Waibel and F. Pojtinger, “sile-fystem: A generic FUSE
+[53] J. Waibel and F. Pojtinger, “sile-fystem: A generic FUSE
 implementation.” 2022. Accessed: Jul. 20, 2023. [Online]. Available:
 https://github.com/jakWai01/sile-fystem
 
-[53] T. Grieger, “The cost and complexity of cgo.” Dec. 2015. Accessed:
+[54] T. Grieger, “The cost and complexity of cgo.” Dec. 2015. Accessed:
 Jul. 21, 2023. [Online]. Available:
 https://www.cockroachlabs.com/blog/the-cost-and-complexity-of-cgo/
 
-[54] F. Pojtinger, “Weron: Overlay networks based on WebRTC.” 2023.
+[55] F. Pojtinger, “Weron: Overlay networks based on WebRTC.” 2023.
 Accessed: Jul. 21, 2023. [Online]. Available:
 https://github.com/pojntfx/weron
 
-[55] Linux Kernel Contributors, “NBD kernel module in the linux kernel
+[56] Linux Kernel Contributors, “NBD kernel module in the linux kernel
 source tree.” 2023. Accessed: Jul. 21, 2023. [Online]. Available:
 https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/drivers/block/nbd.c#n2592
 
-[56] F. Pojtinger, “Dudirekta: Transport-agnostic framework that allows
+[57] F. Pojtinger, “Dudirekta: Transport-agnostic framework that allows
 exposing and calling functions on both clients and servers.” 2023.
 Accessed: Jul. 22, 2023. [Online]. Available:
 https://github.com/pojntfx/dudirekta
 
-[57] F. Pojtinger, “Dudirekta: WebRTC transport layer example.” 2023.
+[58] F. Pojtinger, “Dudirekta: WebRTC transport layer example.” 2023.
 Accessed: Jul. 22, 2023. [Online]. Available:
 https://github.com/pojntfx/dudirekta/blob/main/cmd/dudirekta-example-webrtc-peer/main.go
 
-[58] I. Ward, “Documentation for the JSON lines text file format.” 2013.
+[59] I. Ward, “Documentation for the JSON lines text file format.” 2013.
 Accessed: Jul. 28, 2023. [Online]. Available: https://jsonlines.org/
 
-[59] F. Pojtinger, GitHub Repository for Efficient Synchronization of
+[60] F. Pojtinger, GitHub Repository for Efficient Synchronization of
 Linux Memory Regions over a Network: A Comparative Study and
 Implementation. 2023.Available:
 https://github.com/pojntfx/networked-linux-memsync
 
-[60] Kernel Development Community, “Userspace block device driver (ublk
+[61] Kernel Development Community, “Userspace block device driver (ublk
 driver),” 2023. https://docs.kernel.org/block/ublk.html (accessed Jul.
 28, 2023).
 
-[61] F. Pojtinger, “Ram-dl: A tool to download more RAM (yes,
+[62] F. Pojtinger, “Ram-dl: A tool to download more RAM (yes,
 seriously!).” 2023. Accessed: Jul. 23, 2023. [Online]. Available:
 https://github.com/pojntfx/ram-dl
 
-[62] F. Pojtinger, “Tapisk: Expose a tape drive as a block device.”
+[63] F. Pojtinger, “Tapisk: Expose a tape drive as a block device.”
 2023. Accessed: Jul. 23, 2023. [Online]. Available:
 https://github.com/pojntfx/tapisk
 
-[63] LTO Program, “The LTO program releases specifications for upcoming
+[64] LTO Program, “The LTO program releases specifications for upcoming
 generation 9.” 2020. Accessed: Jul. 23, 2023. [Online]. Available:
 https://www.lto.org/2020/09/the-lto-program-releases-specifications-for-upcoming-generation-9/
 
-[64] Apache Software Foundation, “Apache arrow website.” 2023. Accessed:
+[65] M. Levkov, “Understanding the MPEG-4 movie atom.” Adobe Developer
+Network, 2020. Accessed: Jul. 30, 2023. [Online]. Available:
+https://web.archive.org/web/20210130152901/https://www.adobe.com/devnet/video/articles/mp4_movie_atom.html
+
+[66] Apache Software Foundation, “Apache arrow website.” 2023. Accessed:
 Jul. 23, 2023. [Online]. Available: https://arrow.apache.org/
