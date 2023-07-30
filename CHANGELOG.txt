@@ -1,3 +1,9 @@
+commit 3de4bd20cb21bdd0a26e35d75b9c67804d9cb269
+Author: Felicitas Pojtinger <felicitas@pojtinger.com>
+Date:   Sun Jul 30 19:10:14 2023 +0200
+
+    feat: Add list of acronyms
+
 commit dc3c8dcacfb11a1e5cf0d1ec485c6dbc6f05b6a5
 Author: Felicitas Pojtinger <felicitas@pojtinger.com>
 Date:   Sun Jul 30 18:45:47 2023 +0200
