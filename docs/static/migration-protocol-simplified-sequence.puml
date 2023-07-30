@@ -1,0 +1,27 @@
+@startuml
+participant "Application" as App
+participant "Seeder" as S
+participant "Leecher" as L
+
+loop until application shuts down
+    L -> S : Establish connection
+    L -> S : Track()
+    note over S: Start tracking writes
+    note over L: Start pulling chunks in background
+
+    L -> S : Finalize()
+    S -> App : Suspend
+    note over S : Flush the mount (sync/msync)
+    S -> L : Send list of changed chunks
+
+    note over L: Mark received chunks as remote
+    note over L: Queue received chunks to be pulled
+    L -> App : Resume
+
+    L -> S: Close connection
+    note over S: Shutdown
+    note over L: Shutdown
+
+    note over L: Re-use mount & become seeder
+end
+@enduml

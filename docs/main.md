@@ -432,9 +432,6 @@ type BackendRemote struct {
 
 The protocol is stateless, as there is only a simple remote reader and writer interface; there are no distinct protocol phases, either.
 
-TODO: Add protocol sequence diagram
-TODO: Add state machine diagram
-
 #### Chunking
 
 And additional issue that was mentioned before that this approach can approve upon is better chunking support. While it is possible to specify the NBD protocol's chunk size by configuring the NBD client and server, this is limited to only 4KB in the case of Linux's implementation. If the RTT between the backend and the NBD server however is large, it might be preferable to use a much larger chunk size; this used to not be possible by using NBD directly, but thanks to this layer of indirection it can be implemented.
@@ -467,8 +464,7 @@ To improve on this the pull-based migration API, the migration process is split 
 
 The migration protocol that allows for this defines two new actors: The seeder and the leecher. A seeder represents a resource that can be migrated from or a host that exposes a migrabtable resource, while the leecher represents a client that intents to migrate a resource to itself. The protocol starts by running an application with the application's state on the region `mmap`ed to the seeder's block device, similarly to the managed mount API. Once a leecher connects to the seeder, the seeder starts tracking any writes to it's mount, effectively keeping a list of dirty chunks. Once tracking has started, the leecher starts pulling chunks from the seeder to it's local cache. Once it has received a satisfactory level of locally available chunks, it asks the seeder to finalize. This then causes the seeder to suspend the app accessing the memory region on it's block device, `msync`/flushes the it, and returns a list of chunks that were changed between the point where it started tracking and the flush has occured. Upon receiving this list, the leecher marks these chunks are remotes, immediately resumes the application (which is now accessing the leecher's block device), and queues the dirty chunks to be pulled in the background.
 
-TODO: Add protocol sequence diagram
-TODO: Add state machine diagram
+![Sequence diagram of the migration protocol (simplified)\label{migration-protocol-simplified-sequence}](./static/migration-protocol-simplified-sequence.png)
 
 By splitting the migration into these two distinct phases, the overhead of having to start the deivce can be skipped and additional app initialization that doesn't depend on the app's state (i.e. memory allocation, connecting to databases, loading models etc.) can be performed before the application needs to be suspended. This combines both the pre-copy algorithm (by pulling the chunks from the seeder ahead of time) and the post-copy algorithm (by resolving dirtyc chunsk from the seeder after the VM has been migrated) into one coherent protocol. As will be discussed further in the results section, the maximum tolerable downtime can be drastically reduced, and dirty chunks don't need to be re-transmitted multiple times. Effectively, it allows dropping this downtime to the time it takes to `msync` the seeder's app state, the RTT and, if they are being accessed immediately, how long it takes to fetch the chunks that were written in between the start of it tracking and finalizing. The migration API can use the same preemptive pull system as the managed mount API and benefit from it's optimizations, but does not use the background push system.
 
@@ -627,8 +623,6 @@ To speed up the process of hashing, instead of hashing the entire file, we can i
 #### Synchronization Protocol
 
 The delta synchronization protocol for this approach is similar to the one used by `rsync`, but simplified. It supports synchronizing multiple files at the same time by using the file names as IDs, and also supports a central forwarding hub instead of requiring peer-to-peer connectivity between all hosts, which also reduces network traffic since this central hub could also be used to forward one stream to all other peers instead of having to send it multiple times. The protocol defines three actors: The multiplexer, file advertiser and file receiver.
-
-TODO: Add sequence diagram for the protocol
 
 #### Multiplexer Hub
 
@@ -1610,9 +1604,7 @@ Unlike the puller component, the pusher also functions as a pipeline step, and a
 
 #### Pipeline
 
-For the direct mount system, the NBD server was connected directly to the remote; managed mounts on the other hand have an internal pipeline of pullers, pushers, a syncer, local and remote backends as well as a chunking system:
-
-TODO: Add graphic of the internal pipeline and how systems are connected to each other
+For the direct mount system, the NBD server was connected directly to the remote; managed mounts on the other hand have an internal pipeline of pullers, pushers, a syncer, local and remote backends as well as a chunking system.
 
 Using such a pipeline system of independent stages and other components also makes the system very testable. To do so, instead of providing a remote and local `ReadWriterAt` at the source and drain of the pipeline respectively, a simple in-memory or on-disk backend can be used in the unit tests. This makes the individual components unit-testable on their own, as well as making it possible to test and benchmark edge cases (such as reads that are smaller than a chunk size) and optimizations (like different pull heuristics) without complicated setup or teardown procedures, and without having to initialize the complete pipeline.
 
@@ -1642,7 +1634,7 @@ By using the pull-only, unidirectional API to emulate the pre-copy setup, the de
 
 #### Overview
 
-As mentioned in Pull-Based Synchronization with Migrations earlier, the mount API is not optimal for a migration scenario. Splitting the migration into two discrete phases can help fix the biggest problem, the maximum guaranteed downtime; thanks to the flexible pipeline system of `ReadWriterAt`s, a lot of the code from the mount API can be reused for the migration, even if the API and corresponding wire protocol are different.
+As mentioned in Pull-Based Synchronization with Migrations earlier, the mount API is not optimal for a migration scenario. Splitting the migration into two discrete phases (see figure \ref{migration-protocol-simplified-sequence}) can help fix the biggest problem, the maximum guaranteed downtime; thanks to the flexible pipeline system of `ReadWriterAt`s, a lot of the code from the mount API can be reused for the migration, even if the API and corresponding wire protocol are different.
 
 #### Seeder
 
@@ -1660,7 +1652,7 @@ type SeederRemote struct {
 
 Unlike the remote backend, the seeder also exposes a mount through the familiar path, file or slice APIs, meaning that even as the migration is in progress, the underlying resource can still be accessed by the application on the source host. This fixes the architectural constraint of the mount API when used for the migration, where only the destination is able to expose a mount, while the source simply serves data without accessing it.
 
-The tracking support is imlement in the same modular and composable way as the syncer, by providing a new pipeline stage, the `TrackingReadWriter`. Once activated by the `Track` RPC, the tracker intecepts all `WriteAt` calls and adds them to a local map before calling the next stage:
+The tracking support is implemented in the same modular and composable way as the syncer, by providing a new pipeline stage, the `TrackingReadWriter`. Once activated by the `Track` RPC, the tracker intecepts all `WriteAt` calls and adds them to a local map before calling the next stage:
 
 ```go
 // If tracking is enabled, mark the chunk as dirty

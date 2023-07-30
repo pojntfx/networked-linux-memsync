@@ -1,0 +1,30 @@
+@startuml
+participant Client
+participant Server
+participant "Export's Backend" as Backend
+
+note over Client, Server: Handshake
+Client -> Server: Establish connection
+Server -> Client: Greeting message (server flags)
+Client -> Server: Client flags
+Client -> Server: NEGOTIATION_ID_OPTION_INFO or NEGOTIATION_ID_OPTION_GO
+Server -> Client: Options, export size and other metadata
+
+note over Client, Server: Transmission
+loop until TRANSMISSION_TYPE_REQUEST_DISC
+    Client -> Server: Command (i.e. read, write)
+    alt if TRANSMISSION_TYPE_REQUEST_READ
+        Server -> Backend: Forward read request
+        Backend -> Server: Retrieve relevant chunk
+        Server -> Client: Send chunk
+    else if TRANSMISSION_TYPE_REQUEST_WRITE
+        Server -> Backend: Write chunk to backend
+    else
+        Server -> Client: Reply (error, success, data)
+    end
+end
+
+Client -> Server: TRANSMISSION_TYPE_REQUEST_DISC
+Server -> Backend: Sync
+Server -> Client: Close connection
+@enduml
