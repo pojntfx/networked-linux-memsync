@@ -1,3 +1,9 @@
+commit a34cef3629c75cca84f9508722ffa38422687f45
+Author: Felicitas Pojtinger <felicitas@pojtinger.com>
+Date:   Sun Jul 30 19:33:09 2023 +0200
+
+    feat: Use serif fonts in line with thesis guidelines
+
 commit 3de4bd20cb21bdd0a26e35d75b9c67804d9cb269
 Author: Felicitas Pojtinger <felicitas@pojtinger.com>
 Date:   Sun Jul 30 19:10:14 2023 +0200
