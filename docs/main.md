@@ -16,6 +16,20 @@ keywords:
   - live-migration
 lang: en-US
 abstract: |
+  ## Erklärung der Urheberschaft {.unnumbered .unlisted}
+
+  \noindent{Hiermit versichere ich, Felicitas Pojtinger, ehrenwörtlich, dass ich die vorliegende Bachelorarbeit mit dem Titel: "Efficient Synchronization of Linux Memory Regions over a Network: A Comparative Study and Implementation" selbstständig und ohne fremde Hilfe verfasst und keine anderen als die angegebenen Hilfsmittel benutzt habe. Die Stellen der Arbeit, die dem Wortlaut oder dem Sinn nach anderen Werken entnommen wurden, sind in jedem Fall unter Angabe der Quelle kenntlich gemacht. Ebenso sind alle Stellen, die mit Hilfe eines KI-basierten Schreibwerkzeugs erstellt oder überarbeitet wurden, kenntlich gemacht. Die Arbeit ist noch nicht veröffentlicht oder in anderer Form als Prüfungsleistung vorgelegt worden.}
+  \newline{}
+
+  \noindent{Ich habe die Bedeutung der ehrenwörtlichen Versicherung und die prüfungsrechtlichen Folgen (§ 24 Abs. 2 Bachelor-SPO, § 23 Abs. 2 Master-SPO (Vollzeit)) einer unrichtigen oder unvollständigen ehrenwörtlichen Versicherung zur Kenntnis genommen.}
+  \newline{}
+
+  ![](./static/signature.png){ width=125px }
+
+  \noindent{Stuttgart, 04.08.2023}
+
+  \newpage{}
+
   ## \abstractname{} {.unnumbered .unlisted}
 
   This thesis presents a novel, universal approach for memory region access, synchronization, and migration over a network. Various methods for achieving this are evaluated on parameters such as implementation overhead, initialization time, latency, and throughput, with an outline of the necessary architecture and optimizations. The proposed solution, based on block devices in user space backend by background push- and pull mechanisms, suit both LAN and WAN environments, and offers a unified API enabling mounting and migration of nearly any state over a network with minimal changes to existing applications. Illustrations of real-world use cases, configurations and backends are provided, together with a production-ready reference implementation of the full mount and migration APIs via the open-source r3map (remote mmap) library.
@@ -1578,7 +1592,7 @@ c.onChunkIsLocal(off)
 
 Note that since this is a pipeline stage, this behavior also applies to reads that happen aside from those initiated by the `Puller`, meaning that any chunks that haven't been fetched asynchronously before they are being accessed will be scheduled to be pulled immediately. The `WriteAt` implementation of this stage immediately marks and reports the chunk as available locally no matter whether it has been pulled before or not.
 
-The combination of the `SyncedReadWriterAt` stage and the `Puller` component implements a pre-copy migration system in an independently unit testable way, where the remote ressource is being pre-emptively copied to the destination system first. In addition to this however, since it can also schedule chunks to be available immediately, it has some of the characteristics of a post-copy migration system, too, where it is possible to fetch chunks as they become available, making it behave similarly to the `rr+` prefetching mechanism mentioned in "Remote Regions"[@aguilera2018remoteregions]. Using this combination, it is possible to implement the full read-only managed mount API.
+The combination of the `SyncedReadWriterAt` stage and the `Puller` component implements a pre-copy migration system in an independently unit testable way, where the remote ressource is being pre-emptively copied to the destination system first. In addition to this however, since it can also schedule chunks to be available immediately, it has some of the characteristics of a post-copy migration system, too, where it is possible to fetch chunks as they become available. Using this combination, it is possible to implement the full read-only managed mount API.
 
 #### Background Push
 
