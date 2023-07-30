@@ -1002,7 +1002,7 @@ type Fs interface {
 }
 ```
 
-The STFS project[@pojtinger2022stfs] has shown that by using this abstraction layer, seemingly incompatible, non-linear backends can still be maGpped to a file system. The project is backend by a tape drive, which is inherently append-only and optimized for linear access. Thanks to the inclusion of an on-disk index and various optimization methods, the resulting file system was still performant enough for standard use, while also supporting most of the features required by the average user such as symlinks, file updates and more.
+The STFS project[@pojtinger2022stfs] has shown that by using this abstraction layer, seemingly incompatible, non-linear backends can still be mapped to a file system. The project is backend by a tape drive, which is inherently append-only and optimized for linear access. Thanks to the inclusion of an on-disk index and various optimization methods, the resulting file system was still performant enough for standard use, while also supporting most of the features required by the average user such as symlinks, file updates and more.
 
 By using a project like sile-fystem[@waibel2022silefystem], it is also possible to use any `afero.Fs` filesystem as a FUSE backend; this can signficantly reduce the required implementation overhead, as it doesn't require writing a custom adapter:
 
@@ -1795,7 +1795,7 @@ RPC backends provide a dynamic way to access a remote backend. This is useful fo
 
 #### Key-Value Stores with Redis
 
-On such option is Redis, an in-memory key-value store with network access. To implement a mount backend, chunk offses can be mapped to keys, and since bytes are a valid key type, the chunk itself can be stored directly in the KV store; if keys don't exist, they are simply treated as empty chunks:
+On such option is Redis, an in-memory key-value (KV) store with network access. To implement a mount backend, chunk offses can be mapped to keys, and since bytes are a valid key type, the chunk itself can be stored directly in the KV store; if keys don't exist, they are simply treated as empty chunks:
 
 ```go
 func (b *RedisBackend) ReadAt(p []byte, off int64) (n int, err error) {
@@ -2623,7 +2623,7 @@ Similarly to the approach used to stream in remote databases, this does not requ
 
 #### Streaming App and Game Assets
 
-Another streaming usecase relates to the in-place streaming of assets. Usually, a game needs to be fully downloaded before it is playable; for many modern AAA titles, this can be hundreds of gigabytes of data, resulting in very long download times even on fast internet connections. Usually however, not all assets need to be downloaded before the game can be played; only some of them are, i.e. the launcher, UI libraries or the first level's assets. While theoritically it would be possible to design a game engine in such a way that assets are only fetched from a remote as they are being required, this would require extensive changes to most engine's architecture, and also be hard to port back to existing titles; furthermore, current transparent solutions that can fetch in assets (i.e. mounting a remote NBD drive or FUSE) are unlikely to be viable solutions considering their high sensitivity to network latency and the high network throughput required for streaming in these assets.
+Another streaming usecase relates to the in-place streaming of assets. Usually, a game needs to be fully downloaded before it is playable; for many modern high-budget titles, this can be hundreds of gigabytes of data, resulting in very long download times even on fast internet connections. Usually however, not all assets need to be downloaded before the game can be played; only some of them are, i.e. the launcher, UI libraries or the first level's assets. While theoritically it would be possible to design a game engine in such a way that assets are only fetched from a remote as they are being required, this would require extensive changes to most engine's architecture, and also be hard to port back to existing titles; furthermore, current transparent solutions that can fetch in assets (i.e. mounting a remote NBD drive or FUSE) are unlikely to be viable solutions considering their high sensitivity to network latency and the high network throughput required for streaming in these assets.
 
 By using the managed mount API to stream in the assets, the overhead of such a solution can be reduced, without requiring changes to the game or it's engine. By using the background pull system, reads from chunks that have already been pulled are almost as fast as native disk reads, and by analyzing the access pattern of an existing game, a pull heuristic function can be generated which preemptively pulls the game assets that are loaded first, keeping latency spikes as low as possible. By using the callbacks for monitoring the pull progress provided by the managed mounts, the game can also be paused until a certain local chunk availability is reached in order to prevent latency spikes from missing assets that would need to be fetched directly from the remote, while still allowing for faster startup times.
 
