@@ -245,7 +245,7 @@ static int example_read(const char *path, char *buf, size_t size, off_t offset, 
 
 These callbacks would then be added to the FUSE operations struct and passed to `fuse_main`, which takes care of registering the operations with the FUSE kernel module and mounts the FUSE to a directory. Similarly to this, callbacks for handling writes etc. can be provided to the operation struct for a read-write capable FUSE[@libfuse2020example].
 
-When a user then performs a file system operation on a mounted FUSE file system, the kernel module sends a request for executing that operation to the userspace program. This is followed by the userspace program returning a response, which the FUSE kernel module conveys back to the user. As such, FUSE circumvents the complexity of implementing the file system implementation directly in the kernel. This approach enhances safety, preventing entire kernel crashes due to errors within the implementation being limited to user instead of kernel space.
+When a user then performs a file system operation on a mounted FUSE file system, the kernel module sends a request for executing that operation to the userspace program. This is followed by the userspace program returning a response, which the FUSE kernel module conveys back to the user. As such, FUSE circumvents the complexity of implementing the file system implementation directly in the kernel. This architecture enhances safety, preventing entire kernel crashes due to errors within the implementation being limited to user instead of kernel space:
 
 ![Structural diagramm of Filesystem in Userspace[@commons2023fusestructure]](./static/fuse-structure.png)
 
@@ -466,7 +466,7 @@ An interesting question to ask with this two-step migration API is when to start
 
 By listening to page faults, we can know when a process wants to access a specific offset of memory that is not yet available. As mentioned before, we can use this event to then fetch this chunk of memory from the remote, mapping it to the offset on which the page fault occured, thus effectively only fetching data when it is required. Instead of registering signal handlers, we can use the `userfaultfd` system introduced with Linux 4.3[@corbet2015linux43] to handle these faults in userspace in a more idiomatic way.
 
-In the Go implementation created for this thesis, `userfaultfd-go`, `userfaultfd` works by first creating a region of memory, e.g. by using `mmap`, which is then registered with the `userfaultfd` API:
+In the Go implementation created for this thesis, `userfaultfd-go`[@loopholelabs2022userfaultfdgo], `userfaultfd` works by first creating a region of memory, e.g. by using `mmap`, which is then registered with the `userfaultfd` API:
 
 ```go
 // Creating the `userfaultfd` API
@@ -1013,7 +1013,7 @@ While the FUSE approach to synchronization is interesting, even with these avail
 
 #### Overview
 
-Due to a lack of existing, lean and maintained NBD libraries for Go, a custom pure Go NBD library was implemented. Most NBD libraries also only provide a server and no the client component, but both are needed for the NBD-based migration approach to work. By not having to rely on CGo or a pre-existing NBD library like `nbdkit`, this custom library can also skip a significant amount of the overhead that is typically associated with C interoperability, particularly in the context of concurrency in Go with CGo [@grieger2015cgo].
+Due to a lack of existing, lean and maintained NBD libraries for Go, a custom pure Go NBD library was implemented[@pojtinger2023gonbd]. Most NBD libraries also only provide a server and no the client component, but both are needed for the NBD-based migration approach to work. By not having to rely on CGo or a pre-existing NBD library like `nbdkit`, this custom library can also skip a significant amount of the overhead that is typically associated with C interoperability, particularly in the context of concurrency in Go with CGo [@grieger2015cgo].
 
 #### Server
 
