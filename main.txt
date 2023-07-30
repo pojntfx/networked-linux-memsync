@@ -2083,7 +2083,7 @@ interface is rather minimal[50]:
     }
 
 The STFS project[51] has shown that by using this abstraction layer,
-seemingly incompatible, non-linear backends can still be maGpped to a
+seemingly incompatible, non-linear backends can still be mapped to a
 file system. The project is backend by a tape drive, which is inherently
 append-only and optimized for linear access. Thanks to the inclusion of
 an on-disk index and various optimization methods, the resulting file
@@ -3193,7 +3193,7 @@ storage device, for which many protocols and systems exist already.
 
 Key-Value Stores with Redis
 
-On such option is Redis, an in-memory key-value store with network
+On such option is Redis, an in-memory key-value (KV) store with network
 access. To implement a mount backend, chunk offses can be mapped to
 keys, and since bytes are a valid key type, the chunk itself can be
 stored directly in the KV store; if keys don’t exist, they are simply
@@ -4669,18 +4669,19 @@ Streaming App and Game Assets
 
 Another streaming usecase relates to the in-place streaming of assets.
 Usually, a game needs to be fully downloaded before it is playable; for
-many modern AAA titles, this can be hundreds of gigabytes of data,
-resulting in very long download times even on fast internet connections.
-Usually however, not all assets need to be downloaded before the game
-can be played; only some of them are, i.e. the launcher, UI libraries or
-the first level’s assets. While theoritically it would be possible to
-design a game engine in such a way that assets are only fetched from a
-remote as they are being required, this would require extensive changes
-to most engine’s architecture, and also be hard to port back to existing
-titles; furthermore, current transparent solutions that can fetch in
-assets (i.e. mounting a remote NBD drive or FUSE) are unlikely to be
-viable solutions considering their high sensitivity to network latency
-and the high network throughput required for streaming in these assets.
+many modern high-budget titles, this can be hundreds of gigabytes of
+data, resulting in very long download times even on fast internet
+connections. Usually however, not all assets need to be downloaded
+before the game can be played; only some of them are, i.e. the launcher,
+UI libraries or the first level’s assets. While theoritically it would
+be possible to design a game engine in such a way that assets are only
+fetched from a remote as they are being required, this would require
+extensive changes to most engine’s architecture, and also be hard to
+port back to existing titles; furthermore, current transparent solutions
+that can fetch in assets (i.e. mounting a remote NBD drive or FUSE) are
+unlikely to be viable solutions considering their high sensitivity to
+network latency and the high network throughput required for streaming
+in these assets.
 
 By using the managed mount API to stream in the assets, the overhead of
 such a solution can be reduced, without requiring changes to the game or

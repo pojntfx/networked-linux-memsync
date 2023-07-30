@@ -1,3 +1,9 @@
+commit dc3c8dcacfb11a1e5cf0d1ec485c6dbc6f05b6a5
+Author: Felicitas Pojtinger <felicitas@pojtinger.com>
+Date:   Sun Jul 30 18:45:47 2023 +0200
+
+    feat: Add list of abbreviations to notes
+
 commit d5cf6b28337c6a679aae0aee1dc5acaa177e1ccf
 Author: Felicitas Pojtinger <felicitas@pojtinger.com>
 Date:   Sun Jul 30 17:33:51 2023 +0200

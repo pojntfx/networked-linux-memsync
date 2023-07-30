@@ -80,7 +80,8 @@ Felicitas Pojtinger (Stuttgart Media University)
 -   7 Summary
 -   8 Conclusion
 -   9 References
-    -   9.1 Structure
+    -   9.1 Abbrevations
+    -   9.2 Structure
     -   Citations
 
 Introduction
@@ -3019,6 +3020,37 @@ Conclusion
     are today
 
 References
+
+Abbrevations
+
+API: Application Programming Interface I/O: Input/Output IO:
+Input/Output OS: Operating System CPU: Central Processing Unit RAM:
+Random Access Memory SSD: Solid State Drive HDD: Hard Disk Drive UUID:
+Universally Unique Identifier CRC32: Cyclic Redundancy Check 32-Bit LRU:
+Least Recently Used WAN: Wide Area Network LAN: Local Area Network TCP:
+Transmission Control Protocol UDP: User Datagram Protocol P2P:
+Peer-To-Peer NATs: Network Address Translators IPC: Inter-Process
+Communication RTT: Round-Trip Time SRP: SCSI RDMA Protocol GNU: GNU’s
+Not Unix UNIX: UNIX Family of Operating Systems macOS: Apple Macintosh
+Operating System FreeBSD: Free Berkeley Software Distribution NBD:
+Network Block Device S3fs: S3 File System NVMe: Non-Volatile Memory
+Express LTFS: Linear Tape File System LTO: Linear Tape-Open EXT4: Fourth
+Extended Filesystem Btrfs: B-Tree File System C: C Programming Language
+Rust: Rust Programming Language Go: Go Programming Language C++: C++
+Programming Language ARM: ARM RISC Computer Processor Architecture x86:
+x86 CISC Computer Processor Architecture RISC-V: RISC-V RISC Computer
+Processor Architecture LPDDR5: Low-Power Double Data Rate 5 HTTP:
+Hypertext Transfer Protocol HTTPS: HTTP Secure HTTP/2: HTTP Version 2
+QUIC: Quick UDP Internet Connections WebRTC: Web Real-Time Communication
+Wasm: WebAssembly IETF: Internet Engineering Task Force OIDC: OpenID
+Connect AWS: Amazon Web Services CNCF: Cloud Native Computing Foundation
+S3: Simple Storage Service TLS: Transport Layer Security mTLS: Mutual
+TLS SSH: Secure Shell DoS: Denial of Service JSON: JavaScript Object
+Notation JSONL: JSON Lines SQL: Structured Query Language NoSQL: Not
+Only SQL Protobuf: Protocol Buffers IDL: Interface Definition Language
+DSL: Domain-Specific Language KV: Key-Value Syscalls: System Calls VM:
+Virtual Machine RPC: Remote Procedure Call REST: Representational State
+Transfer FUSE: File Systems in Userspace
 
 Structure
 
