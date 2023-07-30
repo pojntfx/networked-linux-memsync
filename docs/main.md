@@ -43,6 +43,9 @@ bibliography: static/references.bib
 csl: static/ieee.csl
 lof: true
 colorlinks: false
+mainfont: "Latin Modern Roman"
+sansfont: "Latin Modern Roman"
+monofont: "Latin Modern Mono"
 ---
 
 # Efficient Synchronization of Linux Memory Regions over a Network
