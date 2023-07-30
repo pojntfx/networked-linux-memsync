@@ -1166,7 +1166,7 @@ File-Based Synchronization
     -   We have implemented a simple protocol for this delta
         synchronization, just like rsync’s delta synchronization
         algorithm (code snippet from
-        https://github.com/loopholelabs/darkmagyk/blob/master/cmd/darkmagyk-orchestrator/main.go#L1337-L1411
+        https://github.com/pojntfx/networked-linux-memsync/blob/master/cmd/darkmagyk-orchestrator/main.go#L1337-L1411
         etc.)
     -   For this protocol specifically, we send the changed file’s name
         as the first message when starting the synchronization, but a
@@ -1187,19 +1187,19 @@ File-Based Synchronization
         communication with the specific syncer
     -   In goroutine it reads the type of the peer
     -   For the src-control peer type (code snippet from
-        https://github.com/loopholelabs/darkmagyk/blob/159d4af/cmd/darkmagyk-cloudpoint/main.go#L824-L844)
+        https://github.com/pojntfx/networked-linux-memsync/blob/159d4af/cmd/darkmagyk-cloudpoint/main.go#L824-L844)
         -   Reads a file name from the syncer
         -   Registers the connection as the one providing the file with
             this name
         -   Broadcasts the file as one now being available
     -   For the dst-control peer type (code snippet from
-        https://github.com/loopholelabs/darkmagyk/blob/159d4af/cmd/darkmagyk-cloudpoint/main.go#L845-L880)
+        https://github.com/pojntfx/networked-linux-memsync/blob/159d4af/cmd/darkmagyk-cloudpoint/main.go#L845-L880)
         -   It listens to the broadcasted files from src-control peers
         -   Relays any received file names to the dst-control peers so
             that it can subscribe
         -   Also sends all currently known file names to the peer
     -   For the dst peer type (code snippet from
-        https://github.com/loopholelabs/darkmagyk/blob/159d4af/cmd/darkmagyk-cloudpoint/main.go#L882-L942)
+        https://github.com/pojntfx/networked-linux-memsync/blob/159d4af/cmd/darkmagyk-cloudpoint/main.go#L882-L942)
         -   Decodes a file name from the connection
         -   Looks for a corresponding src-control peer
         -   If it has found a peer, it creates and sends a new ID for
@@ -1211,11 +1211,11 @@ File-Based Synchronization
             created synchronization connection and the connection of the
             dst peer, relaying any information between the two
     -   For the src-data peer type (code snippet from
-        https://github.com/loopholelabs/darkmagyk/blob/159d4af/cmd/darkmagyk-cloudpoint/main.go#L943-L954)
+        https://github.com/pojntfx/networked-linux-memsync/blob/159d4af/cmd/darkmagyk-cloudpoint/main.go#L943-L954)
         -   Decodes the ID for the peer
         -   Broadcasts the ID, which allows the dst peer to continue
 -   File advertisement (code snippet from
-    https://github.com/loopholelabs/darkmagyk/blob/159d4afe0828452c61c63233aa134fb3c2a45a1a/pkg/filetransfer/src.go#L112-L269)
+    https://github.com/pojntfx/networked-linux-memsync/blob/159d4afe0828452c61c63233aa134fb3c2a45a1a/pkg/filetransfer/src.go#L112-L269)
     -   Connects to the multiplexer hub
     -   Registers itself as a src-control type of peer
     -   Sends the file name to the multipler hub
@@ -1234,7 +1234,7 @@ File-Based Synchronization
     -   After a file transmission is done, waits for the specified
         polling interval, then starts a file transmission cycle again
 -   File receiver loop (code snippet from
-    https://github.com/loopholelabs/darkmagyk/blob/159d4afe0828452c61c63233aa134fb3c2a45a1a/pkg/filetransfer/dst.go#L127-L243)
+    https://github.com/pojntfx/networked-linux-memsync/blob/159d4afe0828452c61c63233aa134fb3c2a45a1a/pkg/filetransfer/dst.go#L127-L243)
     -   Connects to the multiplexer hub
     -   Registers itself as the dst-control type of peer
     -   Spawns a new goroutine after a file name has been received from
@@ -1248,7 +1248,7 @@ File-Based Synchronization
     -   Starts the file receiption process in a loop, and exits if a
         callback determines that the file has been synced completely
 -   File transmission (code snippet from
-    https://github.com/loopholelabs/darkmagyk/blob/159d4afe0828452c61c63233aa134fb3c2a45a1a/pkg/filetransfer/src.go#L14-L110)
+    https://github.com/pojntfx/networked-linux-memsync/blob/159d4afe0828452c61c63233aa134fb3c2a45a1a/pkg/filetransfer/src.go#L14-L110)
     -   Does the actual file transmission part of delta synchronization
     -   Receives the remote hashes from the mulitplexer hub
     -   Calculates the local hashes
@@ -1261,7 +1261,7 @@ File-Based Synchronization
     -   Loops over each of the chunks that need to be sent, and sends
         the updated data for the file in order
 -   Hash calculation (code snippet from
-    https://github.com/loopholelabs/darkmagyk/blob/159d4afe0828452c61c63233aa134fb3c2a45a1a/pkg/filetransfer/hashes.go#L17-L73)
+    https://github.com/pojntfx/networked-linux-memsync/blob/159d4afe0828452c61c63233aa134fb3c2a45a1a/pkg/filetransfer/hashes.go#L17-L73)
     -   GetHashesForBlocks handles the concurrent calculation of the
         hashes for a file on both the file transmitter and receiver
     -   It uses a semaphore to limit the amount of concurrent access to
@@ -1275,7 +1275,7 @@ File-Based Synchronization
     -   After all hashes have been calculated, it adds them to the array
         and returns them
 -   File receiption (code snippet from
-    https://github.com/loopholelabs/darkmagyk/blob/159d4afe0828452c61c63233aa134fb3c2a45a1a/pkg/filetransfer/dst.go#L23-L125)
+    https://github.com/pojntfx/networked-linux-memsync/blob/159d4afe0828452c61c63233aa134fb3c2a45a1a/pkg/filetransfer/dst.go#L23-L125)
     -   Is the receiving part of the delta synchronization algorithm
     -   Starts by calculating hashes for the local copy of the file
     -   Sends the local hashes to the emote, then waits until it has
@@ -3048,11 +3048,13 @@ Inc. Pearson Prentice Hall, 2006.
 [2] M. Kerrisk, The linux programming interface: A linux and UNIX system
 programming handbook. No Starch Press, 2010.
 
-[3] D. DeVault, “A hare code generator for finding ioctl numbers.”
-https://drewdevault.com/2022/05/14/generating-ioctls.html, 2022.
+[3] D. DeVault, “A hare code generator for finding ioctl numbers.” 2022.
+Accessed: Jul. 28, 2023. [Online]. Available:
+https://drewdevault.com/2022/05/14/generating-ioctls.html
 
-[4] T. kernel development community, “Quick start.”
-https://www.kernel.org/doc/html/next/rust/quick-start.html, 2023.
+[4] Kernel Development Community, “Quick start.” 2023. Accessed: Jul.
+19, 2023. [Online]. Available:
+https://www.kernel.org/doc/html/next/rust/quick-start.html
 
 [5] R. Love, Linux kernel development, 3rd ed. Pearson Education, Inc.,
 2010.
@@ -3095,6 +3097,7 @@ https://www.usenix.org/conference/hotstorage17/program/presentation/choi
 [16] M. Prokop, “Inotify: Efficient, real-time linux file system event
 monitoring,” Apr. 2010.
 https://www.infoq.com/articles/inotify-linux-file-system-event-monitoring/
+(accessed Jul. 19, 2023).
 
 [17] A. S. Tanenbaum, Computer networks. Pearson Education, Inc.
 Publishing as Prentice Hall PTR, 2003.
@@ -3125,9 +3128,8 @@ on file and storage technologies (FAST 17), Feb. 2017, pp.
 https://www.usenix.org/conference/fast17/technical-sessions/presentation/vangoor
 
 [24] E. Blake, W. Verhelst, and other NBD maintainers, “The NBD
-protocol.”
-https://github.com/NetworkBlockDevice/nbd/blob/master/doc/proto.md, Apr.
-2023.
+protocol.” Apr. 2023. Accessed: Jul. 18, 2023. [Online]. Available:
+https://github.com/NetworkBlockDevice/nbd/blob/master/doc/proto.md
 
 [25] S. He, C. Hu, B. Shi, T. Wo, and B. Li, “Optimizing virtual machine
 live migration without shared storage in hybrid clouds,” in 2016 IEEE
@@ -3151,42 +3153,45 @@ Associates; Bantam Books, 1994.
 [29] A. A. A. Donovan and B. W. Kernighan, The go programming language.
 Addison-Wesley Professional, 2015.
 
-[30] gRPC Authors, “Introduction to gRPC.” 2023.Available:
+[30] gRPC Contributors, “Introduction to gRPC.” 2023. Accessed: Jul. 18,
+2023. [Online]. Available:
 https://grpc.io/docs/what-is-grpc/introduction/
 
-[31] L. Labs, “fRPC: A modern RPC framework designed for high
-performance and stability.” https://frpc.io/getting-started/overview,
-2022.
+[31] Loophole Labs, Inc, “fRPC: A modern RPC framework designed for high
+performance and stability.” 2022. Accessed: Jul. 23, 2023. [Online].
+Available: https://frpc.io/getting-started/overview
 
 [32] S. Vij, A. Sørlie, F. Pojtinger, and J. Sun, “Frisbee-go:
 Bring-your-own protocol messaging framework designed for performance and
-stability.” 2022.Available: https://github.com/loopholelabs/frisbee-go
+stability.” 2022. Accessed: Jul. 28, 2023. [Online]. Available:
+https://github.com/loopholelabs/frisbee-go
 
-[33] S. Shivansh Vij, “Polyglot: A high-performance serialization
-framework used for encoding and decoding arbitrary data structures
-across languages.” https://github.com/loopholelabs/polyglot, 2022.
+[33] S. Vij, A. Sørlie, and F. Pojtinger, “Polyglot: A high-performance
+serialization framework used for encoding and decoding arbitrary data
+structures across languages.” 2022. Accessed: Jul. 23, 2023. [Online].
+Available: https://github.com/loopholelabs/polyglot
 
-[34] Redis Ltd, “Introduction to redis.” https://redis.io/docs/about/,
-2023.
+[34] Redis Ltd, “Introduction to redis.” 2023. Accessed: Jul. 18, 2023.
+[Online]. Available: https://redis.io/docs/about/
 
-[35] Redis Ltd, “Redis pub/sub.” https://redis.io/docs/interact/pubsub/,
-2023.
+[35] Redis Ltd, “Redis pub/sub.” 2023. Accessed: Jul. 18, 2023.
+[Online]. Available: https://redis.io/docs/interact/pubsub/
 
-[36] Amazon Web Services, Inc, “What is amazon S3?”
-https://docs.aws.amazon.com/AmazonS3/latest/userguide/Welcome.html,
-2023.
+[36] Amazon Web Services, Inc, “What is amazon S3?” 2023. Accessed: Jul.
+18, 2023. [Online]. Available:
+https://docs.aws.amazon.com/AmazonS3/latest/userguide/Welcome.html
 
-[37] MinIO, Inc, “Core administration concepts.”
-https://min.io/docs/minio/kubernetes/upstream/administration/concepts.html,
-2023.
+[37] MinIO, Inc, “Core administration concepts.” 2023. Accessed: Jul.
+18, 2023. [Online]. Available:
+https://min.io/docs/minio/kubernetes/upstream/administration/concepts.html
 
 [38] A. Lakshman and P. Malik, “Cassandra: A decentralized structured
 storage system,” SIGOPS Oper. Syst. Rev., vol. 44, no. 2, pp. 35–40,
 Apr. 2010, doi: 10.1145/1773912.1773922.
 
-[39] Inc. ScyllaDB, “ScyllaDB ring architecture - overview.”
-https://opensource.docs.scylladb.com/stable/architecture/ringarchitecture/index.html,
-2023.
+[39] ScyllaDB, Inc., “ScyllaDB ring architecture - overview.” 2023.
+Accessed: Jul. 18, 2023. [Online]. Available:
+https://opensource.docs.scylladb.com/stable/architecture/ringarchitecture/index.html
 
 [40] P. Grabowski, J. Stasiewicz, and K. Baryla, “Apache cassandra 4.0
 performance benchmark: Comparing cassandra 4.0, cassandra 3.11 and
@@ -3194,7 +3199,9 @@ scylla open source 4.4,” ScyllaDB Inc, 2021.Available:
 https://www.scylladb.com/wp-content/uploads/wp-apache-cassandra-4-performance-benchmark-3.pdf
 
 [41] F. Pojtinger, “STFS: Simple Tape File System, a file system for
-tapes and tar files.” https://github.com/pojntfx/stfs, 2022.
+tapes and tar files.” 2022. Accessed: Jul. 20, 2023. [Online].
+Available: https://github.com/pojntfx/stfs
 
 [42] J. Waibel and F. Pojtinger, “sile-fystem: A generic FUSE
-implementation.” https://github.com/jakWai01/sile-fystem, 2022.
+implementation.” 2022. Accessed: Jul. 20, 2023. [Online]. Available:
+https://github.com/jakWai01/sile-fystem

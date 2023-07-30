@@ -1,3 +1,33 @@
+commit b814cc03c42580d6a0de03d9aabc77654fc68dc0
+Author: Felicitas Pojtinger <felicitas@pojtinger.com>
+Date:   Sun Jul 30 06:04:13 2023 +0200
+
+    refactor: Do initial proofreading of the technology section
+
+commit 53169a62bfe57951fd37ebb857bad3375178a22e
+Author: Felicitas Pojtinger <felicitas@pojtinger.com>
+Date:   Sun Jul 30 04:40:40 2023 +0200
+
+    feat: Add file transfer example code
+
+commit b13fb4be963961af072e91f3be4677f77dc9b547
+Author: Felicitas Pojtinger <felicitas@pojtinger.com>
+Date:   Sun Jul 30 04:36:25 2023 +0200
+
+    fix: Use proper Bibtex citations for online sources
+
+commit 1cd30a5d90d0b37fe4e7a14d254de22c85b77af9
+Author: Felicitas Pojtinger <felicitas@pojtinger.com>
+Date:   Sun Jul 30 04:35:44 2023 +0200
+
+    feat: Add copyright note and signature
+
+commit c3bf22c73acbd2d4c316c5324e6b3bf378acf4ea
+Author: Felicitas Pojtinger <felicitas@pojtinger.com>
+Date:   Sun Jul 30 03:40:46 2023 +0200
+
+    feat: Start fork of Eisvogel template, add custom title page, add list of figures
+
 commit e4f180ab50017ac3191f980b4d50bc4e3c26456a
 Author: Felicitas Pojtinger <felicitas@pojtinger.com>
 Date:   Sun Jul 30 01:05:06 2023 +0200

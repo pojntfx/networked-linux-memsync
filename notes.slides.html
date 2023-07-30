@@ -1461,7 +1461,7 @@ common practice</li>
 <li>We have implemented a simple protocol for this delta
 synchronization, just like rsync’s delta synchronization algorithm (code
 snippet from
-https://github.com/loopholelabs/darkmagyk/blob/master/cmd/darkmagyk-orchestrator/main.go#L1337-L1411
+https://github.com/pojntfx/networked-linux-memsync/blob/master/cmd/darkmagyk-orchestrator/main.go#L1337-L1411
 etc.)</li>
 <li>For this protocol specifically, we send the changed file’s name as
 the first message when starting the synchronization, but a simple
@@ -1484,7 +1484,7 @@ receiver</li>
 with the specific syncer</li>
 <li>In goroutine it reads the type of the peer</li>
 <li>For the <code>src-control</code> peer type (code snippet from
-https://github.com/loopholelabs/darkmagyk/blob/159d4af/cmd/darkmagyk-cloudpoint/main.go#L824-L844)
+https://github.com/pojntfx/networked-linux-memsync/blob/159d4af/cmd/darkmagyk-cloudpoint/main.go#L824-L844)
 <ul>
 <li>Reads a file name from the syncer</li>
 <li>Registers the connection as the one providing the file with this
@@ -1492,7 +1492,7 @@ name</li>
 <li>Broadcasts the file as one now being available</li>
 </ul></li>
 <li>For the <code>dst-control</code> peer type (code snippet from
-https://github.com/loopholelabs/darkmagyk/blob/159d4af/cmd/darkmagyk-cloudpoint/main.go#L845-L880)
+https://github.com/pojntfx/networked-linux-memsync/blob/159d4af/cmd/darkmagyk-cloudpoint/main.go#L845-L880)
 <ul>
 <li>It listens to the broadcasted files from <code>src-control</code>
 peers</li>
@@ -1501,7 +1501,7 @@ so that it can subscribe</li>
 <li>Also sends all currently known file names to the peer</li>
 </ul></li>
 <li>For the <code>dst</code> peer type (code snippet from
-https://github.com/loopholelabs/darkmagyk/blob/159d4af/cmd/darkmagyk-cloudpoint/main.go#L882-L942)
+https://github.com/pojntfx/networked-linux-memsync/blob/159d4af/cmd/darkmagyk-cloudpoint/main.go#L882-L942)
 <ul>
 <li>Decodes a file name from the connection</li>
 <li>Looks for a corresponding <code>src-control</code> peer</li>
@@ -1515,7 +1515,7 @@ synchronization connection and the connection of the <code>dst</code>
 peer, relaying any information between the two</li>
 </ul></li>
 <li>For the <code>src-data</code> peer type (code snippet from
-https://github.com/loopholelabs/darkmagyk/blob/159d4af/cmd/darkmagyk-cloudpoint/main.go#L943-L954)
+https://github.com/pojntfx/networked-linux-memsync/blob/159d4af/cmd/darkmagyk-cloudpoint/main.go#L943-L954)
 <ul>
 <li>Decodes the ID for the peer</li>
 <li>Broadcasts the ID, which allows the <code>dst</code> peer to
@@ -1523,7 +1523,7 @@ continue</li>
 </ul></li>
 </ul></li>
 <li>File advertisement (code snippet from
-https://github.com/loopholelabs/darkmagyk/blob/159d4afe0828452c61c63233aa134fb3c2a45a1a/pkg/filetransfer/src.go#L112-L269)
+https://github.com/pojntfx/networked-linux-memsync/blob/159d4afe0828452c61c63233aa134fb3c2a45a1a/pkg/filetransfer/src.go#L112-L269)
 <ul>
 <li>Connects to the multiplexer hub</li>
 <li>Registers itself as a <code>src-control</code> type of peer</li>
@@ -1544,7 +1544,7 @@ the loop if requested</li>
 interval, then starts a file transmission cycle again</li>
 </ul></li>
 <li>File receiver loop (code snippet from
-https://github.com/loopholelabs/darkmagyk/blob/159d4afe0828452c61c63233aa134fb3c2a45a1a/pkg/filetransfer/dst.go#L127-L243)
+https://github.com/pojntfx/networked-linux-memsync/blob/159d4afe0828452c61c63233aa134fb3c2a45a1a/pkg/filetransfer/dst.go#L127-L243)
 <ul>
 <li>Connects to the multiplexer hub</li>
 <li>Registers itself as the <code>dst-control</code> type of peer</li>
@@ -1560,7 +1560,7 @@ look for a peer that advertises the requested file</li>
 callback determines that the file has been synced completely</li>
 </ul></li>
 <li>File transmission (code snippet from
-https://github.com/loopholelabs/darkmagyk/blob/159d4afe0828452c61c63233aa134fb3c2a45a1a/pkg/filetransfer/src.go#L14-L110)
+https://github.com/pojntfx/networked-linux-memsync/blob/159d4afe0828452c61c63233aa134fb3c2a45a1a/pkg/filetransfer/src.go#L14-L110)
 <ul>
 <li>Does the actual file transmission part of delta synchronization</li>
 <li>Receives the remote hashes from the mulitplexer hub</li>
@@ -1575,7 +1575,7 @@ synchronized</li>
 updated data for the file in order</li>
 </ul></li>
 <li>Hash calculation (code snippet from
-https://github.com/loopholelabs/darkmagyk/blob/159d4afe0828452c61c63233aa134fb3c2a45a1a/pkg/filetransfer/hashes.go#L17-L73)
+https://github.com/pojntfx/networked-linux-memsync/blob/159d4afe0828452c61c63233aa134fb3c2a45a1a/pkg/filetransfer/hashes.go#L17-L73)
 <ul>
 <li><code>GetHashesForBlocks</code> handles the concurrent calculation
 of the hashes for a file on both the file transmitter and receiver</li>
@@ -1591,7 +1591,7 @@ encodes them as hash values</li>
 returns them</li>
 </ul></li>
 <li>File receiption (code snippet from
-https://github.com/loopholelabs/darkmagyk/blob/159d4afe0828452c61c63233aa134fb3c2a45a1a/pkg/filetransfer/dst.go#L23-L125)
+https://github.com/pojntfx/networked-linux-memsync/blob/159d4afe0828452c61c63233aa134fb3c2a45a1a/pkg/filetransfer/dst.go#L23-L125)
 <ul>
 <li>Is the receiving part of the delta synchronization algorithm</li>
 <li>Starts by calculating hashes for the local copy of the file</li>
@@ -3523,13 +3523,11 @@ programming handbook</em>. No Starch Press, 2010.</div>
 <div id="ref-devault2022hareioctl" class="csl-entry">
 <div class="csl-left-margin">[3] </div><div class="csl-right-inline">D.
 DeVault, <span>“A hare code generator for finding ioctl numbers.”</span>
-<a href="https://drewdevault.com/2022/05/14/generating-ioctls.html" class="uri">https://drewdevault.com/2022/05/14/generating-ioctls.html</a>,
-2022.</div>
+2022. Accessed: Jul. 28, 2023. [Online]. Available: <a href="https://drewdevault.com/2022/05/14/generating-ioctls.html">https://drewdevault.com/2022/05/14/generating-ioctls.html</a></div>
 </div>
 <div id="ref-linux2023docs" class="csl-entry">
-<div class="csl-left-margin">[4] </div><div class="csl-right-inline">T.
-kernel development community, <span>“Quick start.”</span> <a href="https://www.kernel.org/doc/html/next/rust/quick-start.html" class="uri">https://www.kernel.org/doc/html/next/rust/quick-start.html</a>,
-2023.</div>
+<div class="csl-left-margin">[4] </div><div class="csl-right-inline">Kernel Development Community, <span>“Quick
+start.”</span> 2023. Accessed: Jul. 19, 2023. [Online]. Available: <a href="https://www.kernel.org/doc/html/next/rust/quick-start.html">https://www.kernel.org/doc/html/next/rust/quick-start.html</a></div>
 </div>
 <div id="ref-love2010linux" class="csl-entry">
 <div class="csl-left-margin">[5] </div><div class="csl-right-inline">R.
@@ -3593,7 +3591,8 @@ Choi, J. Kim, and H. Han, <span>“Efficient memory mapped file
 <div id="ref-prokop2010inotify" class="csl-entry">
 <div class="csl-left-margin">[16] </div><div class="csl-right-inline">M.
 Prokop, <span>“Inotify: Efficient, real-time linux file system event
-monitoring,”</span> Apr. 2010. <a href="https://www.infoq.com/articles/inotify-linux-file-system-event-monitoring/">https://www.infoq.com/articles/inotify-linux-file-system-event-monitoring/</a></div>
+monitoring,”</span> Apr. 2010. <a href="https://www.infoq.com/articles/inotify-linux-file-system-event-monitoring/">https://www.infoq.com/articles/inotify-linux-file-system-event-monitoring/</a>
+(accessed Jul. 19, 2023).</div>
 </div>
 <div id="ref-tanenbaum2003net" class="csl-entry">
 <div class="csl-left-margin">[17] </div><div class="csl-right-inline">A.
@@ -3637,8 +3636,8 @@ technologies (FAST 17)</em>, Feb. 2017, pp. 59–72.Available: <a href="https://
 <div id="ref-blake2023nbd" class="csl-entry">
 <div class="csl-left-margin">[24] </div><div class="csl-right-inline">E.
 Blake, W. Verhelst, and other NBD maintainers, <span>“The NBD
-protocol.”</span> <a href="https://github.com/NetworkBlockDevice/nbd/blob/master/doc/proto.md" class="uri">https://github.com/NetworkBlockDevice/nbd/blob/master/doc/proto.md</a>,
-Apr. 2023.</div>
+protocol.”</span> Apr. 2023. Accessed: Jul. 18, 2023. [Online].
+Available: <a href="https://github.com/NetworkBlockDevice/nbd/blob/master/doc/proto.md">https://github.com/NetworkBlockDevice/nbd/blob/master/doc/proto.md</a></div>
 </div>
 <div id="ref-he2016migration" class="csl-entry">
 <div class="csl-left-margin">[25] </div><div class="csl-right-inline">S.
@@ -3672,42 +3671,43 @@ A. A. Donovan and B. W. Kernighan, <em>The go programming language</em>.
 Addison-Wesley Professional, 2015.</div>
 </div>
 <div id="ref-google2023grpc" class="csl-entry">
-<div class="csl-left-margin">[30] </div><div class="csl-right-inline">gRPC Authors, <span>“Introduction to
-gRPC.”</span> 2023.Available: <a href="https://grpc.io/docs/what-is-grpc/introduction/">https://grpc.io/docs/what-is-grpc/introduction/</a></div>
+<div class="csl-left-margin">[30] </div><div class="csl-right-inline">gRPC Contributors, <span>“Introduction to
+gRPC.”</span> 2023. Accessed: Jul. 18, 2023. [Online]. Available: <a href="https://grpc.io/docs/what-is-grpc/introduction/">https://grpc.io/docs/what-is-grpc/introduction/</a></div>
 </div>
 <div id="ref-loopholelabs2023frpc" class="csl-entry">
-<div class="csl-left-margin">[31] </div><div class="csl-right-inline">L.
-Labs, <span>“fRPC: A modern RPC framework designed for high performance
-and stability.”</span> <a href="https://frpc.io/getting-started/overview" class="uri">https://frpc.io/getting-started/overview</a>, 2022.</div>
+<div class="csl-left-margin">[31] </div><div class="csl-right-inline">Loophole Labs, Inc, <span>“fRPC: A modern RPC
+framework designed for high performance and stability.”</span> 2022.
+Accessed: Jul. 23, 2023. [Online]. Available: <a href="https://frpc.io/getting-started/overview">https://frpc.io/getting-started/overview</a></div>
 </div>
 <div id="ref-loopholelabs2022frisbee" class="csl-entry">
 <div class="csl-left-margin">[32] </div><div class="csl-right-inline">S.
 Vij, A. Sørlie, F. Pojtinger, and J. Sun, <span>“Frisbee-go:
 Bring-your-own protocol messaging framework designed for performance and
-stability.”</span> 2022.Available: <a href="https://github.com/loopholelabs/frisbee-go">https://github.com/loopholelabs/frisbee-go</a></div>
+stability.”</span> 2022. Accessed: Jul. 28, 2023. [Online]. Available:
+<a href="https://github.com/loopholelabs/frisbee-go">https://github.com/loopholelabs/frisbee-go</a></div>
 </div>
 <div id="ref-loopholelabs2023polyglot" class="csl-entry">
 <div class="csl-left-margin">[33] </div><div class="csl-right-inline">S.
-Shivansh Vij, <span>“Polyglot: A high-performance serialization
-framework used for encoding and decoding arbitrary data structures
-across languages.”</span> <a href="https://github.com/loopholelabs/polyglot" class="uri">https://github.com/loopholelabs/polyglot</a>, 2022.</div>
+Vij, A. Sørlie, and F. Pojtinger, <span>“Polyglot: A high-performance
+serialization framework used for encoding and decoding arbitrary data
+structures across languages.”</span> 2022. Accessed: Jul. 23, 2023.
+[Online]. Available: <a href="https://github.com/loopholelabs/polyglot">https://github.com/loopholelabs/polyglot</a></div>
 </div>
 <div id="ref-redis2023introduction" class="csl-entry">
 <div class="csl-left-margin">[34] </div><div class="csl-right-inline">Redis Ltd, <span>“Introduction to
-redis.”</span> <a href="https://redis.io/docs/about/" class="uri">https://redis.io/docs/about/</a>, 2023.</div>
+redis.”</span> 2023. Accessed: Jul. 18, 2023. [Online]. Available: <a href="https://redis.io/docs/about/">https://redis.io/docs/about/</a></div>
 </div>
 <div id="ref-redis2023pubsub" class="csl-entry">
-<div class="csl-left-margin">[35] </div><div class="csl-right-inline">Redis Ltd, <span>“Redis pub/sub.”</span> <a href="https://redis.io/docs/interact/pubsub/" class="uri">https://redis.io/docs/interact/pubsub/</a>, 2023.</div>
+<div class="csl-left-margin">[35] </div><div class="csl-right-inline">Redis Ltd, <span>“Redis pub/sub.”</span> 2023.
+Accessed: Jul. 18, 2023. [Online]. Available: <a href="https://redis.io/docs/interact/pubsub/">https://redis.io/docs/interact/pubsub/</a></div>
 </div>
 <div id="ref-aws2023s3" class="csl-entry">
 <div class="csl-left-margin">[36] </div><div class="csl-right-inline">Amazon Web Services, Inc, <span>“What is amazon
-S3?”</span> <a href="https://docs.aws.amazon.com/AmazonS3/latest/userguide/Welcome.html" class="uri">https://docs.aws.amazon.com/AmazonS3/latest/userguide/Welcome.html</a>,
-2023.</div>
+S3?”</span> 2023. Accessed: Jul. 18, 2023. [Online]. Available: <a href="https://docs.aws.amazon.com/AmazonS3/latest/userguide/Welcome.html">https://docs.aws.amazon.com/AmazonS3/latest/userguide/Welcome.html</a></div>
 </div>
 <div id="ref-minio2023coreadmin" class="csl-entry">
 <div class="csl-left-margin">[37] </div><div class="csl-right-inline">MinIO, Inc, <span>“Core administration
-concepts.”</span> <a href="https://min.io/docs/minio/kubernetes/upstream/administration/concepts.html" class="uri">https://min.io/docs/minio/kubernetes/upstream/administration/concepts.html</a>,
-2023.</div>
+concepts.”</span> 2023. Accessed: Jul. 18, 2023. [Online]. Available: <a href="https://min.io/docs/minio/kubernetes/upstream/administration/concepts.html">https://min.io/docs/minio/kubernetes/upstream/administration/concepts.html</a></div>
 </div>
 <div id="ref-lakshman2010cassandra" class="csl-entry">
 <div class="csl-left-margin">[38] </div><div class="csl-right-inline">A.
@@ -3716,9 +3716,9 @@ storage system,”</span> <em>SIGOPS Oper. Syst. Rev.</em>, vol. 44, no.
 2, pp. 35–40, Apr. 2010, doi: <a href="https://doi.org/10.1145/1773912.1773922">10.1145/1773912.1773922</a>.</div>
 </div>
 <div id="ref-scylladb2023ring" class="csl-entry">
-<div class="csl-left-margin">[39] </div><div class="csl-right-inline">Inc. ScyllaDB, <span>“ScyllaDB ring
-architecture - overview.”</span> <a href="https://opensource.docs.scylladb.com/stable/architecture/ringarchitecture/index.html" class="uri">https://opensource.docs.scylladb.com/stable/architecture/ringarchitecture/index.html</a>,
-2023.</div>
+<div class="csl-left-margin">[39] </div><div class="csl-right-inline">ScyllaDB, Inc., <span>“ScyllaDB ring
+architecture - overview.”</span> 2023. Accessed: Jul. 18, 2023.
+[Online]. Available: <a href="https://opensource.docs.scylladb.com/stable/architecture/ringarchitecture/index.html">https://opensource.docs.scylladb.com/stable/architecture/ringarchitecture/index.html</a></div>
 </div>
 <div id="ref-grabowski2021scylladb" class="csl-entry">
 <div class="csl-left-margin">[40] </div><div class="csl-right-inline">P.
@@ -3729,12 +3729,14 @@ scylla open source 4.4,”</span> ScyllaDB Inc, 2021.Available: <a href="https:/
 <div id="ref-pojtinger2022stfs" class="csl-entry">
 <div class="csl-left-margin">[41] </div><div class="csl-right-inline">F.
 Pojtinger, <span>“<span class="nocase">STFS: Simple Tape File System, a
-file system for tapes and tar files</span>.”</span> <a href="https://github.com/pojntfx/stfs" class="uri">https://github.com/pojntfx/stfs</a>, 2022.</div>
+file system for tapes and tar files</span>.”</span> 2022. Accessed: Jul.
+20, 2023. [Online]. Available: <a href="https://github.com/pojntfx/stfs">https://github.com/pojntfx/stfs</a></div>
 </div>
 <div id="ref-waibel2022silefystem" class="csl-entry">
 <div class="csl-left-margin">[42] </div><div class="csl-right-inline">J.
 Waibel and F. Pojtinger, <span>“<span class="nocase">sile-fystem: A
-generic FUSE implementation</span>.”</span> <a href="https://github.com/jakWai01/sile-fystem" class="uri">https://github.com/jakWai01/sile-fystem</a>, 2022.</div>
+generic FUSE implementation</span>.”</span> 2022. Accessed: Jul. 20,
+2023. [Online]. Available: <a href="https://github.com/jakWai01/sile-fystem">https://github.com/jakWai01/sile-fystem</a></div>
 </div>
 </div>
 </div>
