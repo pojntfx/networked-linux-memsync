@@ -779,13 +779,13 @@ Linux block device. It typically works by communicating between a user
 space-provided server and a Kernel-provided client. Though potentially
 deployable over Wide Area Networks (WAN), it is primarily designed for
 Local Area Networks (LAN) or localhost usage. The protocol is divided
-into two phases: the handshake and the transmission[31].
+into two phases: the handshake and the transmission[31]:
 
-TODO: Add sequence diagram of the NBD protocol
+[Sequence diagram of the baseline NBD protocol (simplified)]
 
 The NBD protocol involves multiple participants, notably one or several
 clients, a server, and the concept of an export. It starts with a client
-establishing a connection with the server. The server reciprocates by
+establishing a connection with the server. The server responds by
 delivering a greeting message highlighting various server flags. The
 client responds by transmitting its own flags along with the name of an
 export to use; a single NBD server can expose multiple devices.
@@ -2219,8 +2219,9 @@ using Go structs:
 In order to keep the actual handshake as simple as possible, only the
 fixed newstyle handshake is implemented, which also makes the
 implementation compliant with the baseline specification as defined by
-the protocol[31]. The negotiation starts by the server sending the
-negotiation header to the NBD client and ignoring the client’s flags:
+the protocol[31] (see figure ). The negotiation starts by the server
+sending the negotiation header to the NBD client and ignoring the
+client’s flags:
 
     // Sending the negotiation header
     binary.Write(conn, binary.BigEndian, protocol.NegotiationNewstyleHeader{
@@ -2268,7 +2269,7 @@ client can’t handle the exposed export, i.e. due to it not supporting
 the advertised block size.
 
 The actual transmission phase is implemented in a similar way, by
-reading headers in a loop, switchin on the message type and handling it
+reading headers in a loop, switching on the message type and handling it
 accordingly. TRANSMISSION_TYPE_REQUEST_READ forwards a read request to
 the selected export’s backend and sends the relevant chunk to the
 client, TRANSMISSION_TYPE_REQUEST_WRITE reads the offset and chunk from
@@ -2980,7 +2981,7 @@ The tracking support is imlement in the same modular and composable way
 as the syncer, by providing a new pipeline stage, the
 TrackingReadWriter. Once activated by the Track RPC, the tracker
 intecepts all WriteAt calls and adds them to a local map before calling
-the next stage.:
+the next stage:
 
     // If tracking is enabled, mark the chunk as dirty
     if c.tracking {
@@ -2992,17 +2993,13 @@ the next stage.:
     return c.backend.WriteAt(p, off)
 
 Once the Sync RPC is called by the destination host, these dirty offsets
-are returned and the map is cleared:
-
-TODO: Add graphic of the pipeline’s design
-
-A benefit of the protocol being defined in such a way that only the
-client ever calls an RPC, thus making the protocol uni-directional, is
-that both the transport layer and RPC system are completely
-interchangeable. This works by returning a simple abstract service
-utility struct from Open, which can then be used as the implementation
-for any RPC framework, i.e. with the actual gRPC service simply
-functioning as an adapter:
+are returned and the map is cleared. A benefit of the protocol being
+defined in such a way that only the client ever calls an RPC, thus
+making the protocol uni-directional, is that both the transport layer
+and RPC system are completely interchangeable. This works by returning a
+simple abstract service utility struct from Open, which can then be used
+as the implementation for any RPC framework, i.e. with the actual gRPC
+service simply functioning as an adapter:
 
     type SeederGrpc struct {
         v1.UnimplementedSeederServer
@@ -3029,15 +3026,11 @@ seeder, which is implemented by a RPC framework. Using this, as soon as
 the leecher is opened, it calls Track() in the background and starts the
 NBD device in parallel to achieve a similar reduction in initial read
 latency as the mount API. The leecher introduces a new pipeline stage,
-the LockableReadWriterAt:
-
-TODO: Add graphic of pipeline design
-
-This component simply blocks all read and write operations to/from the
-NBD device until Finalize has been called by using a sync.Cond. This is
-required becaused otherwise, stale data (before Finalize marked the
-chunks as dirty) could have poisoned the kernel’s file cache if the
-application read data before finalization:
+the LockableReadWriterAt. This component simply blocks all read and
+write operations to/from the NBD device until Finalize has been called
+by using a sync.Cond. This is required becaused otherwise, stale data
+(before Finalize marked the chunks as dirty) could have poisoned the
+kernel’s file cache if the application read data before finalization:
 
     // For `ReadAt/WriteAt`: Waits for finalization, then calls the actual read/write operation
     a.lock.L.Lock()
@@ -3768,7 +3761,7 @@ be improved upon. This is particularly true for protocol buffers, which,
 while being faster than JSON, have issues with encoding large chunks of
 data, and can become a real bottleneck with large chunk sizes:
 
-TODO: Add graphic from https://frpc.io/performance/grpc-benchmarks
+[RPCs/second per client for 1 MB messages, repeated 10 times[60]]
 
 fRPC[40], a drop-in replacement for gRPC, can improve upon this by
 switching out the serialization layer with the faster Polyglot[42]
@@ -3812,7 +3805,7 @@ specifications:
 
 To make the results reproducible, the benchmark scripts and notebooks to
 plot the related visualizations can be found in the accompanying
-repository[60], and multiple runs have been conducted for each benchmark
+repository[61], and multiple runs have been conducted for each benchmark
 to ensure consistency.
 
 Access Methods
@@ -4370,7 +4363,7 @@ occur in the first place.
 NBD, the underlying technology and protocol for the mount API, has
 proven to be fairly performant, but it still could be improved upon to
 get closer to the performance of other access methods, like raw memory
-access. One such option is ublk[61], which has the potential to
+access. One such option is ublk[62], which has the potential to
 significantly improve concurrent access speeds over the socket-based
 connection between the client and server that NBD uses. It is similar in
 architecture to NBD, where a user space server provides the block device
@@ -4382,7 +4375,7 @@ block devices in user space.
 
 Using Mounts for Remote Swap with ram-dl
 
-ram-dl[62] is an experimental tech demo built to demonstrate how the
+ram-dl[63] is an experimental tech demo built to demonstrate how the
 mount API can be used. It uses the fRPC mount backend to expand local
 system memory, enabling a variety of usecases such as mounting a remote
 system’s RAM locally or easily inspecting a remote system’s memory
@@ -4414,7 +4407,7 @@ Mapping Tape Into Memory With tapisk
 
 Overview
 
-tapisk[63] is a tool that exposes a tape drive as a block device. While
+tapisk[64] is a tool that exposes a tape drive as a block device. While
 seemingly unrelated to memory synchronization, it does serve as an
 interesting usecase due to the similarities to STFS (mentioned earlier
 in the FUSE section), which exposed a tape drive as a file system, and
@@ -4537,7 +4530,7 @@ a remote tape library robot’s drive to a system over the network.
 
 Being able to map a tape into memory without having to read the entire
 contents first can have a variety of usecases. Tapes can store a large
-amount of data, in the case of LTO-9, up to 18TB on a single tape[64];
+amount of data, in the case of LTO-9, up to 18TB on a single tape[65];
 being able to access such a large amount of data directly in memory,
 instead of having to work with tooling like tar, can significantly
 improve developer experience. In addition to making it much easier to
@@ -4655,7 +4648,7 @@ from the first to the last offset, the client needs to wait for the file
 to be completely accessible locally before playing it. While MP4 and
 other formats supports ways to encode such metadata in the beginning or
 once every few chunks in order to make them streamable, this is not the
-case for many already existing files and comes with other tradeoffs[65].
+case for many already existing files and comes with other tradeoffs[66].
 
 By using r3map however, the pull heuristic function can be used to
 immediately pre-fetch the metadata, independently of where it is placed;
@@ -4776,7 +4769,7 @@ be done using a higher-level protocol; moreover, this assumes that the
 in-memory representation of the data structure is consistent across all,
 something which is not necessarily the case with programming languages
 such as Go with multiple processor architectures being involved. While
-projects such as Apache Arrow[66] allow for application state to
+projects such as Apache Arrow[67] allow for application state to
 represented in a language- and CPU architecture-independent way, this
 comes with some of the same restrictions on which state can be
 synchronized as with other solutions such as Firebase.
@@ -5128,30 +5121,34 @@ https://github.com/pojntfx/dudirekta/blob/main/cmd/dudirekta-example-webrtc-peer
 [59] I. Ward, “Documentation for the JSON lines text file format.” 2013.
 Accessed: Jul. 28, 2023. [Online]. Available: https://jsonlines.org/
 
-[60] F. Pojtinger, GitHub Repository for Efficient Synchronization of
+[60] Loophole Labs, Inc, “fRPC: gRPC benchmarks.” 2022. Accessed: Jul.
+30, 2023. [Online]. Available:
+https://frpc.io/performance/grpc-benchmarks
+
+[61] F. Pojtinger, GitHub Repository for Efficient Synchronization of
 Linux Memory Regions over a Network: A Comparative Study and
 Implementation. 2023.Available:
 https://github.com/pojntfx/networked-linux-memsync
 
-[61] Kernel Development Community, “Userspace block device driver (ublk
+[62] Kernel Development Community, “Userspace block device driver (ublk
 driver),” 2023. https://docs.kernel.org/block/ublk.html (accessed Jul.
 28, 2023).
 
-[62] F. Pojtinger, “Ram-dl: A tool to download more RAM (yes,
+[63] F. Pojtinger, “Ram-dl: A tool to download more RAM (yes,
 seriously!).” 2023. Accessed: Jul. 23, 2023. [Online]. Available:
 https://github.com/pojntfx/ram-dl
 
-[63] F. Pojtinger, “Tapisk: Expose a tape drive as a block device.”
+[64] F. Pojtinger, “Tapisk: Expose a tape drive as a block device.”
 2023. Accessed: Jul. 23, 2023. [Online]. Available:
 https://github.com/pojntfx/tapisk
 
-[64] LTO Program, “The LTO program releases specifications for upcoming
+[65] LTO Program, “The LTO program releases specifications for upcoming
 generation 9.” 2020. Accessed: Jul. 23, 2023. [Online]. Available:
 https://www.lto.org/2020/09/the-lto-program-releases-specifications-for-upcoming-generation-9/
 
-[65] M. Levkov, “Understanding the MPEG-4 movie atom.” Adobe Developer
+[66] M. Levkov, “Understanding the MPEG-4 movie atom.” Adobe Developer
 Network, 2020. Accessed: Jul. 30, 2023. [Online]. Available:
 https://web.archive.org/web/20210130152901/https://www.adobe.com/devnet/video/articles/mp4_movie_atom.html
 
-[66] Apache Software Foundation, “Apache arrow website.” 2023. Accessed:
+[67] Apache Software Foundation, “Apache arrow website.” 2023. Accessed:
 Jul. 23, 2023. [Online]. Available: https://arrow.apache.org/

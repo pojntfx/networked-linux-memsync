@@ -1,3 +1,9 @@
+commit 035e19eb13f246f07fde48ced0281190bbf37513
+Author: Felicitas Pojtinger <felicitas@pojtinger.com>
+Date:   Sun Jul 30 23:58:21 2023 +0200
+
+    feat: Create sequence diagram for the NBD baseline protocol, link to Loophole Labs benchmarks
+
 commit 93bc8fb00b236fb8436facd3b794d2547a26895f
 Author: Felicitas Pojtinger <felicitas@pojtinger.com>
 Date:   Sun Jul 30 22:51:12 2023 +0200
