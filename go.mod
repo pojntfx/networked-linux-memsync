@@ -11,6 +11,7 @@ require (
 	github.com/pojntfx/go-nbd v0.1.10
 	github.com/pojntfx/r3map v0.0.0-20230702125402-aa6d3def2dc8
 	github.com/redis/go-redis/v9 v9.0.5
+	golang.org/x/sync v0.3.0
 	golang.org/x/sys v0.9.0
 	google.golang.org/grpc v1.56.1
 )
