@@ -1280,8 +1280,6 @@ interface is simple:
 The protocol is stateless, as there is only a simple remote reader and
 writer interface; there are no distinct protocol phases, either.
 
-TODO: Add protocol sequence diagram TODO: Add state machine diagram
-
 Chunking
 
 And additional issue that was mentioned before that this approach can
@@ -1407,7 +1405,7 @@ the leecher marks these chunks are remotes, immediately resumes the
 application (which is now accessing the leecher’s block device), and
 queues the dirty chunks to be pulled in the background.
 
-TODO: Add protocol sequence diagram TODO: Add state machine diagram
+[Sequence diagram of the migration protocol (simplified)]
 
 By splitting the migration into these two distinct phases, the overhead
 of having to start the deivce can be skipped and additional app
@@ -1666,8 +1664,6 @@ between all hosts, which also reduces network traffic since this central
 hub could also be used to forward one stream to all other peers instead
 of having to send it multiple times. The protocol defines three actors:
 The multiplexer, file advertiser and file receiver.
-
-TODO: Add sequence diagram for the protocol
 
 Multiplexer Hub
 
@@ -2870,10 +2866,7 @@ Pipeline
 For the direct mount system, the NBD server was connected directly to
 the remote; managed mounts on the other hand have an internal pipeline
 of pullers, pushers, a syncer, local and remote backends as well as a
-chunking system:
-
-TODO: Add graphic of the internal pipeline and how systems are connected
-to each other
+chunking system.
 
 Using such a pipeline system of independent stages and other components
 also makes the system very testable. To do so, instead of providing a
@@ -2949,11 +2942,11 @@ Overview
 
 As mentioned in Pull-Based Synchronization with Migrations earlier, the
 mount API is not optimal for a migration scenario. Splitting the
-migration into two discrete phases can help fix the biggest problem, the
-maximum guaranteed downtime; thanks to the flexible pipeline system of
-ReadWriterAts, a lot of the code from the mount API can be reused for
-the migration, even if the API and corresponding wire protocol are
-different.
+migration into two discrete phases (see figure ) can help fix the
+biggest problem, the maximum guaranteed downtime; thanks to the flexible
+pipeline system of ReadWriterAts, a lot of the code from the mount API
+can be reused for the migration, even if the API and corresponding wire
+protocol are different.
 
 Seeder
 
@@ -2977,8 +2970,8 @@ of the mount API when used for the migration, where only the destination
 is able to expose a mount, while the source simply serves data without
 accessing it.
 
-The tracking support is imlement in the same modular and composable way
-as the syncer, by providing a new pipeline stage, the
+The tracking support is implemented in the same modular and composable
+way as the syncer, by providing a new pipeline stage, the
 TrackingReadWriter. Once activated by the Track RPC, the tracker
 intecepts all WriteAt calls and adds them to a local map before calling
 the next stage:

@@ -1,3 +1,9 @@
+commit de864b1ef063d28cf22c4b054841e238121b933a
+Author: Felicitas Pojtinger <felicitas@pojtinger.com>
+Date:   Mon Jul 31 00:43:12 2023 +0200
+
+    feat: Add sequence diagram for migration protocol
+
 commit 035e19eb13f246f07fde48ced0281190bbf37513
 Author: Felicitas Pojtinger <felicitas@pojtinger.com>
 Date:   Sun Jul 30 23:58:21 2023 +0200
