@@ -1,3 +1,9 @@
+commit 99a7c19082715b6bd693dec9a0c4d2163fb47ee9
+Author: Felicitas Pojtinger <felicitas@pojtinger.com>
+Date:   Sun Jul 30 07:03:26 2023 +0200
+
+    fix: Access non-cached chunks for backend benchmarks
+
 commit b814cc03c42580d6a0de03d9aabc77654fc68dc0
 Author: Felicitas Pojtinger <felicitas@pojtinger.com>
 Date:   Sun Jul 30 06:04:13 2023 +0200

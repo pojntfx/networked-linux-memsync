@@ -4030,18 +4030,26 @@ Latency
 [Average first chunk latency for memory, file, directory, Redis, S3 and
 ScylllaDB backends (0ms RTT)]
 
-While the average first chunk latency for the memory, file, directory,
-Redis, S3 and ScylllaDB backends at 0 ms are all similar and all below
-3.5 µs, Redis has lowest measured latency at just 2.5 µs.
+When it comes to the average first chunk latency for the memory, file,
+directory, Redis, S3 and ScyllaDB backends, considerable differences
+between the different backends can be observed. While the overhead of
+the memory, file and directory backends over the raw access latecy of
+the direct and managed mounts (see figure ) is minimal, the
+network-capable backends have a much higher latency. While the values
+measured for Redis are only marginally higher than those of the file
+backend, S3 and Cassandra have significantly higher average read
+latencies, reaching more than a millisecond in the case of the latter.
 
 [Box plot of first chunk latency distribution for memory, file,
 directory, Redis, S3 and ScylllaDB (0ms RTT)]
 
-Looking at the latency distribution, Redis once again is visible as
-having both the smallest amount of spread and also the lowest amount of
-latency, while the memory and S3 backends are noticable for having a low
-amount of outliers, compared to the directory backend which has a
-significant amount of spread.
+When looking at the latency distribution, a significant difference in
+spread between the backends can be observed. While the memory, directory
+and S3 backends show only minimal spread albeit at different average
+latencies, the network-capable Redis backend shows less spread than the
+file backend. Compared to the other options, the Cassandra backend shows
+the most amount of spread by far, being characterized by a noticably
+high median latency, too.
 
 Throughput
 
@@ -4302,30 +4310,32 @@ solution.
 
 Backends
 
-Redis is the backend with the smallest amount of spread (see figure )
-and the lowest amount of initial chunk latency at a 0 ms RTT (see figure
-). When used for direct mounts, it has a lower throughput compared to
-managed mounts (see figure ), showing good support for concurrent chunk
-access; it also has the highest thoughput for direct mounts by a
-significant margin (see figure ) due to it’s optimized wire protocol and
-fast key lookups. It also has good throughput in managed mounts due to
-these optimizations (see figure ), making it a good choice for ephemeral
-data like caches, where quick access times are necessary or the direct
-mount API provides benefits, i.e. in LAN deployments.
+Redis is the network-capable backend with the the lowest amount of
+initial chunk latency at a 0 ms RTT (see figure ). When used for direct
+mounts, it has a lower throughput compared to managed mounts (see figure
+), showing good support for concurrent chunk access; it also has the
+highest thoughput for direct mounts by a significant margin (see figure
+) due to it’s optimized wire protocol and fast key lookups. It also has
+good throughput in managed mounts due to these optimizations (see figure
+), making it a good choice for ephemeral data like caches, where quick
+access times are necessary or the direct mount API provides benefits,
+i.e. in LAN deployments.
 
 ScylllaDB has the highest throughput for 0 ms RTT deployments for
 managed mounts, showing a very good concurrent access performance (see
 figure ). It does however fall short when it comes to usage in direct
 mounts, where the performance is worse than any other backend (see
 figure ), showing the database’s high read latency overhead for looking
-up individual chunks. For managed mounts however, as the RTT increases,
-it shows only slightly lower performance compared to Redis (see figure
-); as a result, it is a good choice of backend if most data will be
-accessed by the managed mount’s background pull system, but a bad choice
-if chunks will be accessed outside of this due to the low direct mount
-throughput. Another use case where ScylllaDB can potentially be
-beneficial due to it’s configurable consistency is storing persistent
-data in a way that is more dependable than Redis or S3.
+up individual chunks, which is also backed up by looking at it’s initial
+chunk latency distribution (see figure ). For managed mounts however, as
+the RTT increases, it shows only slightly lower performance compared to
+Redis (see figure ); as a result, it is a good choice of backend if most
+data will be accessed concurrently by the managed mount’s background
+pull system, but a bad choice if chunks will be accessed outside of this
+due to the low direct mount throughput. Another use case where ScylllaDB
+can potentially be beneficial due to it’s configurable consistency is
+storing persistent data in a way that is more dependable than Redis or
+S3.
 
 S3 has the lowest throughput of all network-capable backends that were
 implemented for managed mounts (see figure ). It’s performance is
