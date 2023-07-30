@@ -1,3 +1,9 @@
+commit d5cf6b28337c6a679aae0aee1dc5acaa177e1ccf
+Author: Felicitas Pojtinger <felicitas@pojtinger.com>
+Date:   Sun Jul 30 17:33:51 2023 +0200
+
+    refactor: Make references to books more precise by including page numbers
+
 commit 99a7c19082715b6bd693dec9a0c4d2163fb47ee9
 Author: Felicitas Pojtinger <felicitas@pojtinger.com>
 Date:   Sun Jul 30 07:03:26 2023 +0200

@@ -3041,9 +3041,9 @@ Structure
 
 Citations
 
-[1] A. S. Tanenbaum and A. S. Woodhull, Operating systems: Design and
-implementation, 3rd ed. Upper Saddle River, NJ 07458: Pearson Education,
-Inc. Pearson Prentice Hall, 2006.
+[1] A. S. Tanenbaum and A. S. Woodhull, “Operating systems: Design and
+implementation,” 3rd ed., Upper Saddle River, NJ 07458: Pearson
+Education, Inc. Pearson Prentice Hall, 2006, pp. 27–29.
 
 [2] M. Kerrisk, The linux programming interface: A linux and UNIX system
 programming handbook. No Starch Press, 2010.
@@ -3057,23 +3057,24 @@ https://drewdevault.com/2022/05/14/generating-ioctls.html
 https://www.kernel.org/doc/html/next/rust/quick-start.html
 
 [5] R. Love, Linux kernel development, 3rd ed. Pearson Education, Inc.,
-2010.
+2010, pp. 8, 343–344.
 
 [6] W. Mauerer, Professional linux kernel architecture. Indianapolis,
-IN: Wiley Publishing, Inc., 2008.
+IN: Wiley Publishing, Inc., 2008, pp. 474–487, 1026–1027.
 
 [7] W. R. Stevens, Advanced programming in the UNIX environment. Delhi:
-Addison Wesley Logman (Singapore) Pte Ltd., Indian Branch, 2000.
+Addison Wesley Logman (Singapore) Pte Ltd., Indian Branch, 2000, p. 19.
 
 [8] K. A. Robbins and S. Robbins, Unix™ systems programming:
-Communication, concurrency, and threads. Prentice Hall PTR, 2003.
+Communication, concurrency, and threads. Prentice Hall PTR, 2003, p.
+313.
 
 [9] W. R. Stevens, B. Fenner, and A. M. Rudoff, UNIX® network
 programming volume 1, third edition: The sockets networking API. Addison
-Wesley, 2003, p. 1024.
+Wesley, 2003, pp. 507–531.
 
 [10] A. J. Smith, “Cache memories,” ACM Comput. Surv., vol. 14, no. 3,
-pp. 473–530, Sep. 1982, doi: 10.1145/356887.356892.
+p. 474, Sep. 1982, doi: 10.1145/356887.356892.
 
 [11] H. A. Maruf and M. Chowdhury, “Memory disaggregation: Advances and
 open challenges.” 2023.Available: https://arxiv.org/abs/2305.03943
@@ -3084,10 +3085,10 @@ https://www.usenix.org/conference/usenix-summer-1994-technical-conference/slab-a
 
 [13] M. Gorman, Understanding the linux virtual memory manager. Upper
 Saddle River, New Jersey 07458: Pearson Education, Inc. Publishing as
-Prentice Hall Professional Technical Reference, 2004.
+Prentice Hall Professional Technical Reference, 2004, pp. 53–57, 179.
 
 [14] A. Silberschatz, P. B. Galvin, and G. Gagne, Operating system
-concepts, 10th ed. Hoboken, NJ: Wiley, 2018.Available:
+concepts, 10th ed. Hoboken, NJ: Wiley, 2018, pp. 425–426.Available:
 https://lccn.loc.gov/2017043464
 
 [15] J. Choi, J. Kim, and H. Han, “Efficient memory mapped file I/O for
@@ -3100,7 +3101,7 @@ https://www.infoq.com/articles/inotify-linux-file-system-event-monitoring/
 (accessed Jul. 19, 2023).
 
 [17] A. S. Tanenbaum, Computer networks. Pearson Education, Inc.
-Publishing as Prentice Hall PTR, 2003.
+Publishing as Prentice Hall PTR, 2003, pp. 21, 23.
 
 [18] “Transmission Control Protocol.” RFC 793; J. Postel, Sep. 1981.
 doi: 10.17487/RFC0793.
@@ -3145,13 +3146,13 @@ Latin America Transactions, vol. 13, no. 4, pp. 1178–1186, 2015, doi:
 10.1109/TLA.2015.7106373.
 
 [27] T. Akidau, S. Chernyak, and R. Lax, Streaming systems. Sebastopol,
-CA: O’Reilly Media, Inc., 2018.
+CA: O’Reilly Media, Inc., 2018, pp. 23–25.
 
 [28] J. D. Peek, UNIX power tools. Sebastopol, CA; New York: O’Reilly
-Associates; Bantam Books, 1994.
+Associates; Bantam Books, 1994, pp. 4–5.
 
 [29] A. A. A. Donovan and B. W. Kernighan, The go programming language.
-Addison-Wesley Professional, 2015.
+Addison-Wesley Professional, 2015, pp. 217–221, 255–227.
 
 [30] gRPC Contributors, “Introduction to gRPC.” 2023. Accessed: Jul. 18,
 2023. [Online]. Available:
