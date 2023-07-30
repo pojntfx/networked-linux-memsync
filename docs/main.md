@@ -69,9 +69,9 @@ User space on the other hand is the portion of system memory where user applicat
 
 The Linux kernel was released by Linus Torvalds in 1991. Developed primarily in the C language, it has recently seen the addition of Rust as an approved option for further expansion and development, esp. for drivers[@linux2023docs]. The kernel powers millions of devices across the globe, including servers, desktop computers, mobile phones, and embedded devices. As a kernel, it serves as an intermediary between hardware and applications. It is engineered for compatibility with a wide array of architectures, such as ARM, x86, RISC-V, and others.
 
-The kernel does not function as a standalone operating system in itself; rather, this role is fulfilled by distributions, which build upon the Linux kernel to create fully-fledged operating systems[@love2010linux]. Distributions supplement the kernel with additional userspace tools, examples being GNU coreutils or BusyBox. Depending on their target audience, they further enhance functionality by integrating desktop environments and other software.
+The kernel does not function as a standalone operating system in itself; rather, this role is fulfilled by distributions, which build upon the Linux kernel to create fully-fledged operating systems. Distributions supplement the kernel with additional userspace tools, examples being GNU coreutils or BusyBox. Depending on their target audience, they further enhance functionality by integrating desktop environments and other software.
 
-The open-source nature of the Linux kernel makes it especially interesting for academic exploration and usage. It offers transparency, allowing anyone to inspect the source code in depth. Furthermore, it encourages collaboration by enabling anyone to modify and contribute to the source code. This transparency, coupled with the potential for customization and improvement, makes developing for the Linux kernel a good choice for academic work.
+The open-source nature of the Linux kernel makes it especially interesting for academic exploration and usage. It offers transparency, allowing anyone to inspect the source code in depth. Furthermore, it encourages collaboration by enabling anyone to modify and contribute to the source code.
 
 ### Linux Kernel Modules
 
@@ -93,9 +93,9 @@ It is however important to note that signals are not typically utilized as a pri
 
 ### UNIX Sockets
 
-Sockets allow processes within the same host system to communicate with each other[@stevens2003unixnet]. Unlike UNIX signals, much like TCP sockets, they can be used for IPC by allowing not only to submit additional data for an event, and are particularly popular on Linux.
+Sockets allow processes within the same host system to communicate with each other. Unlike UNIX signals, much like TCP sockets, they can be used for IPC by allowing not only to submit additional data for an event, and are particularly popular on Linux.
 
-Stream sockets use TCP to provide reliable, two-way, connection-based byte streams, making them optimal for use in applications which require srong consistency guarantees. Datagram sockets on the other hand use UDP, which allows for fast, connection-less communication with less guarantees. In addition to these two different types of sockets, named and unnamed sockets exist. Named sockets are represented by a special file type on the file system and can be identified by a path, which allows for easy communication between unrelated processes. Unnamed sockets exist only in memory and disappear after the creating process terminates, making them a better choice for subsystems of applications to communicate with each other. In addition to this, UNIX sockets can pass a file descriptor between processes, which allows for interesting approaches to sharing resources with technologies such as `userfaultfd`.
+Stream sockets use TCP to provide reliable, two-way, connection-based byte streams, making them optimal for use in applications which require srong consistency guarantees. Datagram sockets on the other hand use UDP, which allows for fast, connection-less communication with less guarantees. In addition to these two different types of sockets, named and unnamed sockets exist. Named sockets are represented by a special file type on the file system and can be identified by a path, which allows for easy communication between unrelated processes. Unnamed sockets exist only in memory and disappear after the creating process terminates, making them a better choice for subsystems of applications to communicate with each other. In addition to this, UNIX sockets can pass a file descriptor between processes, which allows for interesting approaches to sharing resources with technologies such as `userfaultfd`[@stevens2003unixnet].
 
 ### Principle of Locality
 
@@ -151,9 +151,9 @@ The use of swap space can impact system performance. Since secondary storage dev
 
 Page faults are instances in which a process attempts to access a page that is not currently available in primary memory. This situation triggers the operating system to swap the necessary page from secondary storage into primary memory. These are significant events in memory management, as they determine how efficiently an operating system utilizes its resources.
 
-They can be broadly categorized into two types: minor and major. Minor page faults occur when the desired page resides in memory but isn't linked to the process that requires it. On the other hand, a major page fault takes place when the page has to be loaded from secondary storage, a process that typically takes more time and resources[@maurer2008professional].
+They can be broadly categorized into two types: minor and major. Minor page faults occur when the desired page resides in memory but isn't linked to the process that requires it. On the other hand, a major page fault takes place when the page has to be loaded from secondary storage, a process that typically takes more time and resources.
 
-To minimize the occurrence of page faults, memory management algorithms such as the afore-mentioned Least Recently Used (LRU) and the more straightforward clock algorithm are often employed. These algorithms effectively manage the order and priority of memory pages, helping to ensure that frequently used pages are readily available in primary memory.
+To minimize the occurrence of page faults, memory management algorithms such as the afore-mentioned Least Recently Used (LRU) and the more straightforward clock algorithm are often employed. These algorithms effectively manage the order and priority of memory pages, helping to ensure that frequently used pages are readily available in primary memory[@maurer2008professional].
 
 Handling page faults involves certain techniques to ensure smooth operation. One such technique is prefetching, which anticipates future page requests and proactively loads these pages into memory. Another approach involves page compression, where inactive pages are compressed and stored in memory preemptively[@silberschatz2018operating]. This reduces the likelihood of major page faults by conserving memory space, allowing more pages to reside in primary memory.
 
@@ -166,8 +166,6 @@ In general, handling page faults is a task delegated to the kernel. This critica
 One standout feature of `mmap` is its ability to create what is essentially a direct memory mapping between a file and a region of memory[@choi2017mmap]. This connection means that read operations performed on the mapped memory region directly correspond to reading the file and vice versa, enhancing efficiency as the amount of expensive context switches (compared to i.e. the `read` or `write` system calls) can be reduced.
 
 The key advantage that `mmap` provides is the capacity to facilitate zero-copy operations. In practical terms, this means that data can be accessed directly as if it were positioned in memory, eliminating the need to copy it from the disk first. This direct memory access saves time and reduces processing requirements, offering substantial performance improvements.
-
-`mmap` is also proficient in sharing memory between processes without having to pass through the kernel with system calls[@stevens2000advanced]. With this feature, `mmap` can create shared memory spaces where multiple processes can read and write, enhancing IPC and data transfer efficiency.
 
 The potential speed improvement does however come with a notable drawback: It bypasses the file system cache, which can potentially result in stale data when multiple processes are reading and writing simultaneously. This bypass may lead to a scenario where one process modifies data in the `mmap` region, and another process that is not monitoring for changes might remain unaware and continue to work with outdated data.
 
@@ -187,7 +185,7 @@ Disk caching in Linux is a strategic method that temporarily stores frequently a
 
 While such caching mechanisms can improve performance, they also introduce complexities. One such complexity involves maintaining data consistency between the disk and cache through the process known as writebacks; aggressive writebacks, where data is copied back to disk frequently, can lead to reduced performance, while excessive delays may risk data loss if the system crashes before data has been saved.
 
-Another complexity arises from the necessity to release cached data under memory pressure, known as cache eviction. This requires sophisticated algorithms, such as LRU, to ensure effective utilization of available cache space[@maurer2008professional]. Prioritizing what to keep in cache when memory pressure builds does directly impact the overall system performance.
+Another complexity arises from the necessity to release cached data under memory pressure, known as cache eviction. As mentioned before, this requires sophisticated algorithms, such as LRU, to ensure effective utilization of available cache space[@maurer2008professional]. Prioritizing what to keep in cache when memory pressure builds does directly impact the overall system performance.
 
 ### RTT, LAN and WAN
 
@@ -322,11 +320,11 @@ Pipelines comprise a series of data processing stages, wherein the output of one
 
 One of the classic examples of pipelines is the instruction pipeline in CPUs, where different stages of instruction execution - fetch, decode, execute, and writeback - are performed in parallel. This design increases the instruction throughput of the CPU, allowing it to process multiple instructions simultaneously at different stages of the pipeline.
 
-Another familiar implementation is observed in UNIX pipes, a fundamental part of shells such as GNU Bash or POSIX `sh`. Here, the output of a command can be piped into another for further processing; for instance, the results from a `curl` command fetching data from an API could be piped into the `jq` tool for JSON manipulation[@peek1994unix].
+Another familiar implementation is observed in UNIX pipes, a fundamental part of shells such as GNU Bash or POSIX `sh`. Here, the output of a command can be piped into another for further processing[@peek1994unix]; for instance, the results from a `curl` command fetching data from an API could be piped into the `jq` tool for JSON manipulation.
 
 ### Go
 
-Go is a statically typed, compiled open-source programming language released by Google in 2009[@donovan2015go]. It is typically known for its simplicity, and was developed to address the unsuitability of many traditional languages for modern distrbuted systems development. Thanks to input from many people affiliated with UNIX, such as Rob Pike and Ken Thomposon, as well as good support for concurrency, Go is particulary popular for the development of cloud services and other types of network programming. The headline feature of Go is "Goroutines", a lightweight feature that allows for concurrent function execution that is similar to threads, but more scalable to support millions of Goroutines per program. Synchronization between different Goroutines is provided by using channels, which are type- and concurrency-safe conduits for data.
+Go is a statically typed, compiled open-source programming language released by Google in 2009. It is typically known for its simplicity, and was developed to address the unsuitability of many traditional languages for modern distrbuted systems development. Thanks to input from many people affiliated with UNIX, such as Rob Pike and Ken Thomposon, as well as good support for concurrency, Go is particulary popular for the development of cloud services and other types of network programming. The headline feature of Go is "Goroutines", a lightweight feature that allows for concurrent function execution that is similar to threads, but more scalable to support millions of Goroutines per program. Synchronization between different Goroutines is provided by using channels, which are type- and concurrency-safe conduits for data[@donovan2015go].
 
 ### gRPC and Protocol Buffers
 
