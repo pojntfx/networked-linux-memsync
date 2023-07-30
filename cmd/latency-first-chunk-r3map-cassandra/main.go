@@ -160,7 +160,7 @@ func main() {
 
 	beforeFirstChunk := time.Now()
 
-	if _, err := devFile.ReadAt(p, 0); err != nil {
+	if _, err := devFile.ReadAt(p, *chunkSize); err != nil {
 		panic(err)
 	}
 

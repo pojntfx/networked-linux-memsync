@@ -5,13 +5,15 @@ set -e
 rm -f /tmp/*.benchout
 
 # Set the default number of runs if not provided
-RUNS=50
+RUNS=5
 
 # Loop to run the execution of program
 declare -a services=("memory" "file" "directory" "redis" "s3" "cassandra")
 
 for service in "${services[@]}"; do
     for i in $(seq 1 $RUNS); do
+        echo $service $i
+
         output=$(/tmp/latency-first-chunk-r3map-$service)
         echo "${output}" >>/tmp/latency-first-chunk-backendvar-$service.benchout
 
