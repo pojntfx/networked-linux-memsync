@@ -900,6 +900,8 @@ $endif$
 %% end added
 %%
 
+\usepackage{acronym}
+
 \begin{document}
 
 %%
@@ -1061,10 +1063,81 @@ $endif$
 $endif$
 $if(lof)$
 \listoffigures
+\newpage{}
 $endif$
 $if(lot)$
 \listoftables
 $endif$
+\section*{List of Acronyms}
+\begin{acronym}
+ \acro{API}{Application Programming Interface}
+ \acro{I/O}{Input/Output}
+ \acro{IO}{Input/Output}
+ \acro{OS}{Operating System}
+ \acro{CPU}{Central Processing Unit}
+ \acro{RAM}{Random Access Memory}
+ \acro{SSD}{Solid State Drive}
+ \acro{HDD}{Hard Disk Drive}
+ \acro{UUID}{Universally Unique Identifier}
+ \acro{CRC32}{Cyclic Redundancy Check 32-Bit}
+ \acro{LRU}{Least Recently Used}
+ \acro{WAN}{Wide Area Network}
+ \acro{LAN}{Local Area Network}
+ \acro{TCP}{Transmission Control Protocol}
+ \acro{UDP}{User Datagram Protocol}
+ \acro{P2P}{Peer-To-Peer}
+ \acro{NATs}{Network Address Translators}
+ \acro{IPC}{Inter-Process Communication}
+ \acro{RTT}{Round-Trip Time}
+ \acro{SRP}{SCSI RDMA Protocol}
+ \acro{GNU}{GNU's Not Unix}
+ \acro{UNIX}{UNIX Family of Operating Systems}
+ \acro{macOS}{Apple Macintosh Operating System}
+ \acro{FreeBSD}{Free Berkeley Software Distribution}
+ \acro{NBD}{Network Block Device}
+ \acro{S3fs}{S3 File System}
+ \acro{NVMe}{Non-Volatile Memory Express}
+ \acro{LTFS}{Linear Tape File System}
+ \acro{LTO}{Linear Tape-Open}
+ \acro{EXT4}{Fourth Extended Filesystem}
+ \acro{Btrfs}{B-Tree File System}
+ \acro{C}{C Programming Language}
+ \acro{Rust}{Rust Programming Language}
+ \acro{Go}{Go Programming Language}
+ \acro{C++}{C++ Programming Language}
+ \acro{ARM}{ARM RISC Computer Processor Architecture}
+ \acro{x86}{x86 CISC Computer Processor Architecture}
+ \acro{RISC-V}{RISC-V RISC Computer Processor Architecture}
+ \acro{LPDDR5}{Low-Power Double Data Rate 5}
+ \acro{HTTP}{Hypertext Transfer Protocol}
+ \acro{HTTPS}{HTTP Secure}
+ \acro{HTTP/2}{HTTP Version 2}
+ \acro{QUIC}{Quick UDP Internet Connections}
+ \acro{WebRTC}{Web Real-Time Communication}
+ \acro{Wasm}{WebAssembly}
+ \acro{IETF}{Internet Engineering Task Force}
+ \acro{OIDC}{OpenID Connect}
+ \acro{AWS}{Amazon Web Services}
+ \acro{CNCF}{Cloud Native Computing Foundation}
+ \acro{S3}{Simple Storage Service}
+ \acro{TLS}{Transport Layer Security}
+ \acro{mTLS}{Mutual TLS}
+ \acro{SSH}{Secure Shell}
+ \acro{DoS}{Denial of Service}
+ \acro{JSON}{JavaScript Object Notation}
+ \acro{JSONL}{JSON Lines}
+ \acro{SQL}{Structured Query Language}
+ \acro{NoSQL}{Not Only SQL}
+ \acro{Protobuf}{Protocol Buffers}
+ \acro{IDL}{Interface Definition Language}
+ \acro{DSL}{Domain-Specific Language}
+ \acro{KV}{Key-Value}
+ \acro{Syscalls}{System Calls}
+ \acro{VM}{Virtual Machine}
+ \acro{RPC}{Remote Procedure Call}
+ \acro{REST}{Representational State Transfer}
+ \acro{FUSE}{File Systems in Userspace}
+\end{acronym}
 $if(linestretch)$
 \setstretch{$linestretch$}
 $endif$
