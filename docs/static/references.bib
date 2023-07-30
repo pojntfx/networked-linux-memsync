@@ -45,27 +45,12 @@
 }
 
 @misc{blake2023nbd,
-  title        = {The NBD Protocol},
-  author       = {Blake, Eric and Verhelst, Wouter and other NBD maintainers},
-  year         = {2023},
-  month        = {4},
-  howpublished = {\url{https://github.com/NetworkBlockDevice/nbd/blob/master/doc/proto.md}},
-  note         = {Accessed: Jul 18, 2023}
-}
-
-@inproceedings{aguilera2018remoteregions,
-  author    = {Aguilera, Marcos K. and Amit, Nadav and Calciu, Irina and Deguillard, Xavier and Gandhi, Jayneel and Novakovic, Stanko and Ramanathan, Arun and Subrahmanyam, Pratap and Suresh, Lalith and Tati, Kiran and Venkatasubramanian, Rajesh and Wei, Michael},
-  title     = {Remote Regions: A Simple Abstraction for Remote Memory},
-  year      = {2018},
-  isbn      = {9781931971447},
-  publisher = {USENIX Association},
-  address   = {USA},
-  abstract  = {We propose an intuitive abstraction for a process to export its memory to remote hosts, and to access the memory exported by others. This abstraction provides a simpler interface to RDMA and other remote memory technologies compared to the existing verbs interface. The key idea is that a process can export parts of its memory as files, called remote regions, that can be accessed through the usual file system operations (read, write, memory map, etc). We built this abstraction in the Linux kernel, and evaluated it. We show that remote regions are easy to use and perform close to RDMA. We demonstrate it via micro-benchmarks and by adapting two in-memory single-host applications to use remote memory: R and Metis. With R, using remote regions requires no changes to the code and allows R to run with remote memory that exceeds the physical memory of a host. With Metis, the modifications amount to ≈100 lines of code and they allow Metis to scale its performance across 8 hosts.},
-  booktitle = {Proceedings of the 2018 USENIX Conference on Usenix Annual Technical Conference},
-  pages     = {775–787},
-  numpages  = {13},
-  location  = {Boston, MA, USA},
-  series    = {USENIX ATC '18}
+  title   = {The NBD Protocol},
+  author  = {Blake, Eric and Verhelst, Wouter and other NBD maintainers},
+  year    = {2023},
+  month   = {4},
+  url     = {https://github.com/NetworkBlockDevice/nbd/blob/master/doc/proto.md},
+  urldate = {2023-07-18}
 }
 
 @article{baruchi2015workload,
@@ -263,52 +248,52 @@
 }
 
 @misc{google2023grpc,
-  title  = {Introduction to gRPC},
-  author = {{gRPC Authors}},
-  year   = {2023},
-  url    = {https://grpc.io/docs/what-is-grpc/introduction/},
-  note   = {Last modified February 16, 2023, accessed July 18, 2023}
+  title   = {Introduction to gRPC},
+  author  = {{gRPC Contributors}},
+  year    = {2023},
+  url     = {https://grpc.io/docs/what-is-grpc/introduction/},
+  urldate = {2023-07-18}
 }
 
 @misc{google2023protobuf,
-  title        = {Protocol Buffers},
-  howpublished = {\url{https://protobuf.dev/}},
-  year         = {2023},
-  note         = {Last changed on June 27, 2023, accessed July 18, 2023},
-  author       = {{Google LLC}}
+  title   = {Protocol Buffers},
+  url     = {https://protobuf.dev/},
+  year    = {2023},
+  urldate = {2023-07-18},
+  author  = {{Google LLC}}
 }
 
 @misc{redis2023introduction,
-  title        = {Introduction to Redis},
-  howpublished = {\url{https://redis.io/docs/about/}},
-  year         = {2023},
-  note         = {Last change on July 5, 2023, accessed July 18, 2023},
-  author       = {{Redis Ltd}}
+  title   = {Introduction to Redis},
+  url     = {https://redis.io/docs/about/},
+  year    = {2023},
+  urldate = {2023-07-18},
+  author  = {{Redis Ltd}}
 }
 
 @misc{redis2023pubsub,
-  title        = {Redis Pub/Sub},
-  howpublished = {\url{https://redis.io/docs/interact/pubsub/}},
-  year         = {2023},
-  note         = {Last change on July 6, 2023, accessed July 18, 2023},
-  author       = {{Redis Ltd}}
+  title   = {Redis Pub/Sub},
+  url     = {https://redis.io/docs/interact/pubsub/},
+  year    = {2023},
+  urldate = {2023-07-18},
+  author  = {{Redis Ltd}}
 }
 
 @misc{aws2023s3,
-  title        = {What is Amazon S3?},
-  howpublished = {\url{https://docs.aws.amazon.com/AmazonS3/latest/userguide/Welcome.html}},
-  year         = {2023},
-  note         = {Accessed July 18, 2023},
-  author       = {{Amazon Web Services, Inc}}
+  title   = {What is Amazon S3?},
+  url     = {https://docs.aws.amazon.com/AmazonS3/latest/userguide/Welcome.html},
+  year    = {2023},
+  urldate = {2023-07-18},
+  author  = {{Amazon Web Services, Inc}}
 }
 
 
 @misc{minio2023coreadmin,
-  title        = {Core Administration Concepts},
-  howpublished = {\url{https://min.io/docs/minio/kubernetes/upstream/administration/concepts.html}},
-  year         = {2023},
-  note         = {Accessed July 18, 2023},
-  author       = {{MinIO, Inc}}
+  title   = {Core Administration Concepts},
+  url     = {https://min.io/docs/minio/kubernetes/upstream/administration/concepts.html},
+  year    = {2023},
+  urldate = {2023-07-18},
+  author  = {{MinIO, Inc}}
 }
 
 @article{lakshman2010cassandra,
@@ -339,19 +324,19 @@
 }
 
 @misc{scylladb2023ring,
-  author       = {ScyllaDB, Inc.},
-  title        = {ScyllaDB Ring Architecture - Overview},
-  year         = {2023},
-  howpublished = {\url{https://opensource.docs.scylladb.com/stable/architecture/ringarchitecture/index.html}},
-  note         = {Accessed: 2023-07-18}
+  author  = {{ScyllaDB, Inc.}},
+  title   = {ScyllaDB Ring Architecture - Overview},
+  year    = {2023},
+  url     = {https://opensource.docs.scylladb.com/stable/architecture/ringarchitecture/index.html},
+  urldate = {2023-07-18}
 }
 
 @misc{linux2023docs,
-  title        = {Quick Start},
-  author       = {The kernel development community},
-  howpublished = {\url{https://www.kernel.org/doc/html/next/rust/quick-start.html}},
-  year         = {2023},
-  note         = {Accessed: 2023-07-19}
+  title   = {Quick Start},
+  author  = {{Kernel Development Community}},
+  url     = {https://www.kernel.org/doc/html/next/rust/quick-start.html},
+  year    = {2023},
+  urldate = {2023-07-19}
 }
 
 @online{prokop2010inotify,
@@ -361,7 +346,7 @@
   month     = {Apr},
   url       = {https://www.infoq.com/articles/inotify-linux-file-system-event-monitoring/},
   publisher = {InfoQ},
-  note      = {Accessed: 2023-07-19}
+  urldate   = {2023-07-19}
 }
 
 @inproceedings{he2016migration,
@@ -376,15 +361,15 @@
 }
 
 @misc{barr2021offline,
-  author       = {Barr, Jeff},
-  title        = {New - Offline Tape Migration Using AWS Snowball Edge},
-  year         = {2021},
-  howpublished = {\url{https://aws.amazon.com/blogs/aws/new-offline-tape-migration-using-aws-snowball-edge/}},
-  note         = {Accessed: 2023-07-19}
+  author  = {Barr, Jeff},
+  title   = {New - Offline Tape Migration Using AWS Snowball Edge},
+  year    = {2021},
+  url     = {https://aws.amazon.com/blogs/aws/new-offline-tape-migration-using-aws-snowball-edge/},
+  urldate = {2023-07-19}
 }
 
 @online{kernel2023suspend,
-  author    = {The Kernel Development Community},
+  author    = {{Kernel Development Community}},
   title     = {Swap Suspend},
   year      = 2023,
   url       = {https://www.kernel.org/doc/html/latest/power/swsusp.html},
@@ -408,46 +393,45 @@
 }
 
 @misc{gaul2023s3fs,
-  author       = {Gaul, Andrew and Nakatani, Takeshi and @rrizun},
-  title        = {s3fs: FUSE-based file system backed by Amazon S3},
-  year         = 2023,
-  howpublished = {\url{https://github.com/s3fs-fuse/s3fs-fuse}},
-  note         = {Accessed: 2023-07-19}
+  author  = {Gaul, Andrew and Nakatani, Takeshi},
+  title   = {s3fs: FUSE-based file system backed by Amazon S3},
+  year    = 2023,
+  url     = {https://github.com/s3fs-fuse/s3fs-fuse},
+  urldate = {2023-07-19}
 }
 
 @misc{libfuse2022sshfs,
-  author       = {The libfuse authors},
-  title        = {SSHFS: A network filesystem client to connect to SSH servers},
-  year         = 2022,
-  howpublished = {\url{https://github.com/libfuse/sshfs}},
-  note         = {Accessed: 2023-07-19}
+  author = {{libfuse Contributors}},
+  title  = {SSHFS: A network filesystem client to connect to SSH servers},
+  year   = 2022,
+  url    = {https://github.com/libfuse/sshfs},
+  urldate = {2023-07-19}
 }
 
 @misc{clements2013nbd,
-  author       = {Clements, Paul},
-  title        = {[PATCH] nbd: increase default and max request sizes},
-  year         = 2013,
-  month        = {Apr},
-  day          = {2},
-  howpublished = {\url{https://lore.kernel.org/lkml/20130402194120.54043222C0@clements/}},
-  note         = {Accessed: 2023-07-19}
+  author  = {Clements, Paul},
+  title   = {[PATCH] nbd: increase default and max request sizes},
+  year    = 2013,
+  month   = {Apr},
+  day     = {2},
+  url     = {https://lore.kernel.org/lkml/20130402194120.54043222C0@clements/},
+  urldate = {2023-07-19}
 }
 
 @manual{verhelst2023nbdclient,
-  title  = {nbd-client man page},
-  author = {Verhelst, Wouter},
-  year   = {2023},
-  url    = {https://manpages.ubuntu.com/manpages/lunar/en/man8/nbd-client.8.html},
-  note   = {Accessed: 2023-07-19}
+  title   = {nbd-client man page},
+  author  = {Verhelst, Wouter},
+  year    = {2023},
+  url     = {https://manpages.ubuntu.com/manpages/lunar/en/man8/nbd-client.8.html},
+  urldate = {2023-07-19}
 }
 
 @misc{libfuse2020example,
-  author       = {The libfuse authors},
-  title        = {FUSE minimal example filesystem using high-level API},
-  year         = {2020},
-  howpublished = {\url{https://github.com/libfuse/libfuse/blob/master/example/hello.c}},
-  note         = {Accessed: July 19, 2023},
-  urldate      = {2023-07-19}
+  author  = {{libfuse Contributors}},
+  title   = {FUSE minimal example filesystem using high-level API},
+  year    = {2020},
+  url     = {https://github.com/libfuse/libfuse/blob/master/example/hello.c},
+  urldate = {2023-07-19}
 }
 
 @book{stallings2010architecture,
@@ -460,142 +444,141 @@
 }
 
 @misc{corbet2015linux43,
-  author       = {Jonathan Corbet},
-  title        = {4.3 Merge window, part 2},
-  howpublished = {\url{https://lwn.net/Articles/656731/}},
-  year         = {2015},
-  note         = {Accessed: July 20, 2023},
-  url          = {https://lwn.net/Articles/656731/}
+  author  = {Jonathan Corbet},
+  title   = {4.3 Merge window, part 2},
+  year    = {2015},
+  url     = {https://lwn.net/Articles/656731/},
+  urldate = {2023-07-20}
 }
 
 @misc{waibel2022silefystem,
-  title        = {{sile-fystem: A generic FUSE implementation}},
-  author       = {Waibel, Jakob and Pojtinger, Felicitas},
-  year         = {2022},
-  howpublished = {\url{https://github.com/jakWai01/sile-fystem}},
-  note         = {Last accessed: 2023-07-20}
+  title   = {{sile-fystem: A generic FUSE implementation}},
+  author  = {Waibel, Jakob and Pojtinger, Felicitas},
+  year    = {2022},
+  url     = {https://github.com/jakWai01/sile-fystem},
+  urldate = {2023-07-20}
+}
 }
 
 @misc{pojtinger2022stfs,
-  title        = {{STFS: Simple Tape File System, a file system for tapes and tar files}},
-  author       = {Pojtinger, Felicitas},
-  year         = {2022},
-  howpublished = {\url{https://github.com/pojntfx/stfs}},
-  note         = {Last accessed: 2023-07-20}
+  title   = {{STFS: Simple Tape File System, a file system for tapes and tar files}},
+  author  = {Pojtinger, Felicitas},
+  year    = {2022},
+  url     = {https://github.com/pojntfx/stfs},
+  urldate = {2023-07-20}
 }
 
 @misc{pojtinger2022stfstests,
-  title        = {STFS file system unit tests},
-  author       = {Pojtinger, Felicitas},
-  year         = {2022},
-  howpublished = {\url{https://github.com/pojntfx/stfs/blob/main/pkg/fs/filesystem_test.go}},
-  note         = {Last accessed: 2023-07-20}
+  title   = {STFS file system unit tests},
+  author  = {Pojtinger, Felicitas},
+  year    = {2022},
+  url     = {https://github.com/pojntfx/stfs/blob/main/pkg/fs/filesystem_test.go},
+  urldate = {2023-07-20}
 }
 
 @misc{francia2023afero,
-  author       = {Francia, Steve},
-  title        = {Fs interface - Afero: A FileSystem Abstraction System for Go},
-  year         = {2023},
-  note         = {Last accessed: 2023-07-20},
-  howpublished = {\url{https://pkg.go.dev/github.com/spf13/afero#Fs}},
-  urldate      = {2023-07-20}
+  author  = {Francia, Steve},
+  title   = {Fs interface - Afero: A FileSystem Abstraction System for Go},
+  year    = {2023},
+  url     = {https://pkg.go.dev/github.com/spf13/afero#Fs},
+  urldate = {2023-07-20}
 }
 
 @misc{grieger2015cgo,
-  title  = {The cost and complexity of Cgo},
-  author = {Grieger, Tobias},
-  year   = {2015},
-  month  = {Dec},
-  url    = {https://www.cockroachlabs.com/blog/the-cost-and-complexity-of-cgo/},
-  note   = {Accessed: 2023-07-21}
+  title   = {The cost and complexity of Cgo},
+  author  = {Grieger, Tobias},
+  year    = {2015},
+  month   = {Dec},
+  url     = {https://www.cockroachlabs.com/blog/the-cost-and-complexity-of-cgo/},
+  urldate = {2023-07-21}
 }
 
 @misc{pojtinger2023weron,
-  title        = {weron: Overlay networks based on WebRTC},
-  author       = {Pojtinger, Felicitas},
-  year         = {2023},
-  howpublished = {\url{https://github.com/pojntfx/weron}},
-  note         = {Last accessed: 2023-07-21}
+  title   = {weron: Overlay networks based on WebRTC},
+  author  = {Pojtinger, Felicitas},
+  year    = {2023},
+  url     = {https://github.com/pojntfx/weron},
+  urldate = {2023-07-21}
 }
 
 @misc{linux2023nbd,
-  author       = {The Linux Kernel Contributors},
-  title        = {NBD kernel module in the Linux kernel source tree},
-  howpublished = {\url{https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/drivers/block/nbd.c#n2592}},
-  year         = {2023},
-  note         = {Accessed: 2023-07-21}
+  author  = {{Linux Kernel Contributors}},
+  title   = {NBD kernel module in the Linux kernel source tree},
+  url     = {https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/drivers/block/nbd.c#n2592},
+  year    = {2023},
+  urldate = {2023-07-21}
 }
 
 @misc{pojtinger2023dudirekta,
-  title        = {dudirekta: Transport-agnostic framework that allows exposing and calling functions on both clients and servers},
-  author       = {Pojtinger, Felicitas},
-  year         = {2023},
-  howpublished = {\url{https://github.com/pojntfx/dudirekta}},
-  note         = {Last accessed: 2023-07-22}
+  title   = {dudirekta: Transport-agnostic framework that allows exposing and calling functions on both clients and servers},
+  author  = {Pojtinger, Felicitas},
+  year    = {2023},
+  url     = {https://github.com/pojntfx/dudirekta},
+  urldate = {2023-07-22}
 }
 
 @misc{pojtinger2023dudirektawebrtc,
-  title        = {dudirekta: WebRTC transport layer example},
-  author       = {Pojtinger, Felicitas},
-  year         = {2023},
-  howpublished = {\url{https://github.com/pojntfx/dudirekta/blob/main/cmd/dudirekta-example-webrtc-peer/main.go}},
-  note         = {Last accessed: 2023-07-22}
+  title   = {dudirekta: WebRTC transport layer example},
+  author  = {Pojtinger, Felicitas},
+  year    = {2023},
+  url     = {https://github.com/pojntfx/dudirekta/blob/main/cmd/dudirekta-example-webrtc-peer/main.go},
+  urldate = {2023-07-22}
 }
 
 @misc{loopholelabs2023polyglot,
-  title        = {Polyglot: A high-performance serialization framework used for encoding and decoding arbitrary data structures across languages},
-  author       = {Shivansh, Vij, Sørlie, Alex, Pojtinger, Felicitas},
-  year         = {2022},
-  howpublished = {\url{https://github.com/loopholelabs/polyglot}},
-  note         = {Last accessed: 2023-07-23}
+  title   = {Polyglot: A high-performance serialization framework used for encoding and decoding arbitrary data structures across languages},
+  author  = {Vij, Shivansh and Sørlie, Alex and Pojtinger, Felicitas},
+  year    = {2022},
+  url     = {https://github.com/loopholelabs/polyglot},
+  urldate = {2023-07-23}
 }
 
 @misc{loopholelabs2023frpc,
-  title        = {fRPC: A modern RPC framework designed for high performance and stability},
-  author       = {Loophole Labs},
-  year         = {2022},
-  howpublished = {\url{https://frpc.io/getting-started/overview}},
-  note         = {Last accessed: 2023-07-23}
+  title   = {fRPC: A modern RPC framework designed for high performance and stability},
+  author  = {{Loophole Labs, Inc}},
+  year    = {2022},
+  url     = {https://frpc.io/getting-started/overview},
+  urldate = {2023-07-23}
 }
 
 @misc{loopholelabs2022frisbee,
-  author = {Vij, Shivansh and Sørlie, Alex and Pojtinger, Felicitas and Sun, Jonathan},
-  title  = {Frisbee-Go: Bring-your-own protocol messaging framework designed for performance and stability},
-  year   = {2022},
-  url    = {https://github.com/loopholelabs/frisbee-go},
-  note   = {Accessed: 2023-07-28}
+  author  = {Vij, Shivansh and Sørlie, Alex and Pojtinger, Felicitas and Sun, Jonathan},
+  title   = {Frisbee-Go: Bring-your-own protocol messaging framework designed for performance and stability},
+  year    = {2022},
+  url     = {https://github.com/loopholelabs/frisbee-go},
+  urldate = {2023-07-28}
 }
 
 @misc{pojtinger2023ramdl,
-  title        = {ram-dl: A tool to download more RAM (yes, seriously!)},
-  author       = {Pojtinger, Felicitas},
-  year         = {2023},
-  howpublished = {\url{https://github.com/pojntfx/ram-dl}},
-  note         = {Last accessed: 2023-07-23}
+  title   = {ram-dl: A tool to download more RAM (yes, seriously!)},
+  author  = {Pojtinger, Felicitas},
+  year    = {2023},
+  url     = {https://github.com/pojntfx/ram-dl},
+  urldate = {2023-07-23}
 }
 
 @misc{pojtinger2023tapisk,
-  title        = {tapisk: Expose a tape drive as a block device.},
-  author       = {Pojtinger, Felicitas},
-  year         = {2023},
-  howpublished = {\url{https://github.com/pojntfx/tapisk}},
-  note         = {Last accessed: 2023-07-23}
+  title   = {tapisk: Expose a tape drive as a block device.},
+  author  = {Pojtinger, Felicitas},
+  year    = {2023},
+  url     = {https://github.com/pojntfx/tapisk},
+  urldate = {2023-07-23}
 }
 
 @misc{lto2020gen9,
-  author       = {{LTO Program}},
-  title        = {The LTO program releases specifications for upcoming generation 9},
-  howpublished = {\url{https://www.lto.org/2020/09/the-lto-program-releases-specifications-for-upcoming-generation-9/}},
-  year         = {2020},
-  note         = {Accessed: July 23, 2023}
+  author  = {{LTO Program}},
+  title   = {The LTO program releases specifications for upcoming generation 9},
+  url     = {https://www.lto.org/2020/09/the-lto-program-releases-specifications-for-upcoming-generation-9/},
+  year    = {2020},
+  urldate = {2023-07-23}
 }
 
 @misc{apache2023arrow,
-  author = {The Apache Software Foundation},
-  title  = {Apache Arrow Website},
-  year   = {2023},
-  url    = {https://arrow.apache.org/},
-  note   = {Accessed: 2023-07-23}
+  author  = {{Apache Software Foundation}},
+  title   = {Apache Arrow Website},
+  year    = {2023},
+  url     = {https://arrow.apache.org/},
+  urldate = {2023-07-23}
 }
 
 @software{pojtinger2023memsync,
@@ -608,8 +591,8 @@
 }
 
 @online{linux2023ublk,
-  title     = {Userspace block device driver (ublk driver)},
-  author    = {The Kernel Development Community},
+  title     = {Userspace Block Device Driver (Ublk Driver)},
+  author    = {{Kernel Development Community}},
   year      = {2023},
   url       = {https://docs.kernel.org/block/ublk.html},
   urldate   = {2023-07-28},
@@ -626,11 +609,11 @@
 }
 
 @misc{devault2022hareioctl,
-  author       = {Drew DeVault},
-  title        = {A Hare code generator for finding ioctl numbers},
-  howpublished = {\url{https://drewdevault.com/2022/05/14/generating-ioctls.html}},
-  year         = {2022},
-  note         = {Accessed: 2023-07-28}
+  author  = {Drew DeVault},
+  title   = {A Hare code generator for finding ioctl numbers},
+  url     = {https://drewdevault.com/2022/05/14/generating-ioctls.html},
+  year    = {2022},
+  urldate = {2023-07-28}
 }
 
 
@@ -675,9 +658,9 @@
 
 
 @misc{ward2013jsonl,
-  author = {Ward, Ian},
-  title  = {Documentation for the JSON Lines text file format},
-  year   = {2013},
-  url    = {https://jsonlines.org/},
-  note   = {Accessed: 2023-07-28}
+  author  = {Ward, Ian},
+  title   = {Documentation for the JSON Lines text file format},
+  year    = {2013},
+  url     = {https://jsonlines.org/},
+  urldate = {2023-07-28}
 }
