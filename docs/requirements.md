@@ -37,8 +37,6 @@ Reference lists:
 
 - Inhaltsverzeichnis
 - Abbildungsverzeichnis
-- Tabellenverzeichnis
-- Formelzeichenverzeichnis
 - Literatur- und Quellenverzeichnis
 
 Notes on the CD/DVD (must be made with water-proof markers):

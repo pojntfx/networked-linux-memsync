@@ -1,32 +1,39 @@
 ---
-author: [Felicitas Pojtinger (Stuttgart Media University)]
+author: [Felicitas Pojtinger]
+institute: Hochschule der Medien Stuttgart
 date: "2023-08-04"
-subject: "Efficient Synchronization of Linux Memory Regions over a Network: A Comparative Study and Implementation"
+subject: Efficient Synchronization of Linux Memory Regions over a Network
+subtitle: A Comparative Study and Implementation
 keywords:
-  - TODO: Add keywords
-subtitle: "TODO: Add subtitle"
+  - linux
+  - memory-synchronization
+  - memory-hierarchy
+  - remote-memory
+  - mmap
+  - delta-synchronization
+  - fuse
+  - nbd
+  - live-migration
 lang: en-US
 abstract: |
   ## \abstractname{} {.unnumbered .unlisted}
 
   This thesis presents a novel, universal approach for memory region access, synchronization, and migration over a network. Various methods for achieving this are evaluated on parameters such as implementation overhead, initialization time, latency, and throughput, with an outline of the necessary architecture and optimizations. The proposed solution, based on block devices in user space backend by background push- and pull mechanisms, suit both LAN and WAN environments, and offers a unified API enabling mounting and migration of nearly any state over a network with minimal changes to existing applications. Illustrations of real-world use cases, configurations and backends are provided, together with a production-ready reference implementation of the full mount and migration APIs via the open-source r3map (remote mmap) library.
 
+  ## Kurzfassung {.unnumbered .unlisted}
+
   Diese Bachelor-Thesis präsentiert einen neuen, universellen Ansatz für den Zugriff auf Speicherbereiche sowie deren Synchronisation und Migration über ein Netzwerk. Verschiedene Methoden zur Erreichung dieses Ziels werden hinsichtlich Faktoren wie Implementierungsaufwand, Initialisierungszeit, Latenz und Durchsatz bewertet, zusammen mit einer Übersicht über die notwendige Architektur und Optimierungen. Die vorgeschlagene Lösung, basierend auf Block Devices in Userspace mit asynchronen Push- und Pull-Mechanismen, ist kompatibel mit LAN- und WAN-Umgebungen und bietet eine einheitliche Schnittstelle, die das Einbinden und die Migration nahezu jeden Zustands über ein Netzwerk mit minimalen Änderungen an bestehenden Anwendungen ermöglicht. Es werden Beispiele für Anwendungsfälle, Konfigurationen und Backends aus der Praxis bereitgestellt, zusammen mit einer Referenzimplementierung der vollständigen Schnittstelle über die dafür entwickelte Open-Source-Bibliothek r3map (remote mmap).
+
+  \newpage{}
 bibliography: static/references.bib
 csl: static/ieee.csl
+lof: true
+colorlinks: false
 ---
 
-# Efficient Synchronization of Linux Memory Regions over a Network: A Comparative Study and Implementation
+# Efficient Synchronization of Linux Memory Regions over a Network
 
-## Tables
-
-### Graphics
-
-TODO: Add graphics table
-
-### Abbrevations
-
-TODO: Add abbrevations table
+\newpage{}
 
 ## Introduction
 
@@ -2666,4 +2673,4 @@ While there are limitations with the proposed solution's underlying technologies
 
 Despite these limitations, the promise of providing a truly universal way of working with remote memory, without having to signficantly change existing applications or hypervisors, is provided in the form of the reference implementation. It is also able to provide multiple specialized configurations for LAN and WAN environments, making it possible to use remote memory technology in completely different and much more dymanic environments than before. As a result, entirely new ways of thinking about application architecture and lifecycles become possible, which can help enable the applications of tomorrow to become both simpler to maintain and more scalable than those built today.
 
-## References
+## Bibliography
