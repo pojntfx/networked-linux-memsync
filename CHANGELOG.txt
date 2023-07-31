@@ -1,3 +1,9 @@
+commit 908cc04460cbdaae2adf7cdb63886ad7aa007fb4
+Author: Felicitas Pojtinger <felicitas@pojtinger.com>
+Date:   Mon Jul 31 01:59:57 2023 +0200
+
+    feat: Add links to userfaultfd and r3map's repos
+
 commit e9cb1c466c7ea400f33f2da99726d062f8b618f1
 Author: Felicitas Pojtinger <felicitas@pojtinger.com>
 Date:   Mon Jul 31 01:44:10 2023 +0200

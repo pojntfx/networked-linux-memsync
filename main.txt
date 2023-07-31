@@ -727,9 +727,9 @@ system, the kernel module sends a request for executing that operation
 to the userspace program. This is followed by the userspace program
 returning a response, which the FUSE kernel module conveys back to the
 user. As such, FUSE circumvents the complexity of implementing the file
-system implementation directly in the kernel. This approach enhances
+system implementation directly in the kernel. This architecture enhances
 safety, preventing entire kernel crashes due to errors within the
-implementation being limited to user instead of kernel space.
+implementation being limited to user instead of kernel space:
 
 [Structural diagramm of Filesystem in Userspace[27]]
 
@@ -1423,7 +1423,7 @@ registering signal handlers, we can use the userfaultfd system
 introduced with Linux 4.3[50] to handle these faults in userspace in a
 more idiomatic way.
 
-In the Go implementation created for this thesis, userfaultfd-go,
+In the Go implementation created for this thesis, userfaultfd-go[51],
 userfaultfd works by first creating a region of memory, e.g. by using
 mmap, which is then registered with the userfaultfd API:
 
@@ -2033,11 +2033,11 @@ Developing a backend for a file system abstraction API such as afero.Fs
 instead of implementing it to work with FUSE bindings directly offers
 several advantages. This layer of indirection allows splitting the FUSE
 implementation from the actual inode structure of the system, which
-makes it unit testable[51]. This is a high priority due to the
+makes it unit testable[52]. This is a high priority due to the
 complexities and edge cases involved with creating a file system. A
 standard API also offers the ability to implement things such as caching
 by simply nesting multiple afero.Fs interfaces, and the required
-interface is rather minimal[52]:
+interface is rather minimal[53]:
 
     type Fs interface {
         Create(name string) (File, error)
@@ -2055,7 +2055,7 @@ interface is rather minimal[52]:
         Chtimes(name string, atime time.Time, mtime time.Time) error
     }
 
-The STFS project[53] has shown that by using this abstraction layer,
+The STFS project[54] has shown that by using this abstraction layer,
 seemingly incompatible, non-linear backends can still be mapped to a
 file system. The project is backend by a tape drive, which is inherently
 append-only and optimized for linear access. Thanks to the inclusion of
@@ -2064,7 +2064,7 @@ system was still performant enough for standard use, while also
 supporting most of the features required by the average user such as
 symlinks, file updates and more.
 
-By using a project like sile-fystem[54], it is also possible to use any
+By using a project like sile-fystem[55], it is also possible to use any
 afero.Fs filesystem as a FUSE backend; this can signficantly reduce the
 required implementation overhead, as it doesn’t require writing a custom
 adapter:
@@ -2091,13 +2091,13 @@ NBD with go-nbd
 Overview
 
 Due to a lack of existing, lean and maintained NBD libraries for Go, a
-custom pure Go NBD library was implemented. Most NBD libraries also only
-provide a server and no the client component, but both are needed for
-the NBD-based migration approach to work. By not having to rely on CGo
-or a pre-existing NBD library like nbdkit, this custom library can also
-skip a significant amount of the overhead that is typically associated
-with C interoperability, particularly in the context of concurrency in
-Go with CGo [55].
+custom pure Go NBD library was implemented[56]. Most NBD libraries also
+only provide a server and no the client component, but both are needed
+for the NBD-based migration approach to work. By not having to rely on
+CGo or a pre-existing NBD library like nbdkit, this custom library can
+also skip a significant amount of the overhead that is typically
+associated with C interoperability, particularly in the context of
+concurrency in Go with CGo [57].
 
 Server
 
@@ -2147,7 +2147,7 @@ depending on a generic net.Conn, it is possible to easily integrate
 go-nbd in existing client/server systems or to switch out the typical
 TCP transport layer with i.e. QUIC. By not requiring dial/accept
 semantics it is also possible to use a P2P communication layer for
-peer-to-peer NBD such as WebRTC with weron[56], which also provides the
+peer-to-peer NBD such as WebRTC with weron[58], which also provides the
 necessary net.Conn interface.
 
 In addition to this net.Conn, options can be provided to the server;
@@ -2288,7 +2288,7 @@ Unlike the server, the client is implemented by using both the kernel’s
 NBD client and a userspace component. In order to use the kernel NBD
 client, it is necessary to first find a free NBD device (/dev/nbd*);
 these devices are allocated by the kernel NBD module and can be
-specified with the nbds_max parameter[57]. In order to find a free
+specified with the nbds_max parameter[59]. In order to find a free
 device, we can either specify it manually, or check sysfs for a NBD
 device that reports a zero size:
 
@@ -3261,7 +3261,7 @@ Another aspect that plays an important role in performance for real-life
 deployments is the choice of RPC framework and transport protocol. As
 mentioned before, both the mount and migration APIs are
 transport-independent, and as a result almost any RPC framework can be
-used. A RPC framework developed as part of r3map is Dudireka[58]. As
+used. A RPC framework developed as part of r3map is Dudireka[60]. As
 such, it was designed specifically with the hybrid pre-and post-copy
 scenario in mind. To optimize for this, it has support for concurrent
 RPCs, which allows for efficient background pulls as multiple chunks can
@@ -3283,7 +3283,7 @@ transport protocols like QUIC in WAN deployments, which can reduce the
 initial latency by using the 0-RTT handshake and thus makes calling an
 RPC less expensive. By not requiring TCP-style client-server semantics,
 Dudirekta can also be used to allow for P2P migrations over a protocol
-such as WebRTC[59].
+such as WebRTC[61].
 
 Usage
 
@@ -3409,7 +3409,7 @@ which also works on both the client and the server side:
 Protocol
 
 The protocol used for dudirekta is simple and based on JSONL, a for
-exchanging newline-delimited JSON data[60]; a function call, i.e. to
+exchanging newline-delimited JSON data[62]; a function call, i.e. to
 Println looks like this:
 
     [true, "1", "Println", ["Hello, world!"]]
@@ -3728,7 +3728,7 @@ be improved upon. This is particularly true for protocol buffers, which,
 while being faster than JSON, have issues with encoding large chunks of
 data, and can become a real bottleneck with large chunk sizes:
 
-[RPCs/second per client for 1 MB messages, repeated 10 times[61]]
+[RPCs/second per client for 1 MB messages, repeated 10 times[63]]
 
 fRPC[40], a drop-in replacement for gRPC, can improve upon this by
 switching out the serialization layer with the faster Polyglot[42]
@@ -3772,7 +3772,7 @@ specifications:
 
 To make the results reproducible, the benchmark scripts and notebooks to
 plot the related visualizations can be found in the accompanying
-repository[62], and multiple runs have been conducted for each benchmark
+repository[64], and multiple runs have been conducted for each benchmark
 to ensure consistency.
 
 Access Methods
@@ -4330,7 +4330,7 @@ occur in the first place.
 NBD, the underlying technology and protocol for the mount API, has
 proven to be fairly performant, but it still could be improved upon to
 get closer to the performance of other access methods, like raw memory
-access. One such option is ublk[63], which has the potential to
+access. One such option is ublk[65], which has the potential to
 significantly improve concurrent access speeds over the socket-based
 connection between the client and server that NBD uses. It is similar in
 architecture to NBD, where a user space server provides the block device
@@ -4342,7 +4342,7 @@ block devices in user space.
 
 Using Mounts for Remote Swap with ram-dl
 
-ram-dl[64] is an experimental tech demo built to demonstrate how the
+ram-dl[66] is an experimental tech demo built to demonstrate how the
 mount API can be used. It uses the fRPC mount backend to expand local
 system memory, enabling a variety of usecases such as mounting a remote
 system’s RAM locally or easily inspecting a remote system’s memory
@@ -4374,7 +4374,7 @@ Mapping Tape Into Memory With tapisk
 
 Overview
 
-tapisk[65] is a tool that exposes a tape drive as a block device. While
+tapisk[67] is a tool that exposes a tape drive as a block device. While
 seemingly unrelated to memory synchronization, it does serve as an
 interesting usecase due to the similarities to STFS (mentioned earlier
 in the FUSE section), which exposed a tape drive as a file system, and
@@ -4497,7 +4497,7 @@ a remote tape library robot’s drive to a system over the network.
 
 Being able to map a tape into memory without having to read the entire
 contents first can have a variety of usecases. Tapes can store a large
-amount of data, in the case of LTO-9, up to 18TB on a single tape[66];
+amount of data, in the case of LTO-9, up to 18TB on a single tape[68];
 being able to access such a large amount of data directly in memory,
 instead of having to work with tooling like tar, can significantly
 improve developer experience. In addition to making it much easier to
@@ -4615,7 +4615,7 @@ from the first to the last offset, the client needs to wait for the file
 to be completely accessible locally before playing it. While MP4 and
 other formats supports ways to encode such metadata in the beginning or
 once every few chunks in order to make them streamable, this is not the
-case for many already existing files and comes with other tradeoffs[67].
+case for many already existing files and comes with other tradeoffs[69].
 
 By using r3map however, the pull heuristic function can be used to
 immediately pre-fetch the metadata, independently of where it is placed;
@@ -4736,7 +4736,7 @@ be done using a higher-level protocol; moreover, this assumes that the
 in-memory representation of the data structure is consistent across all,
 something which is not necessarily the case with programming languages
 such as Go with multiple processor architectures being involved. While
-projects such as Apache Arrow[68] allow for application state to
+projects such as Apache Arrow[70] allow for application state to
 represented in a language- and CPU architecture-independent way, this
 comes with some of the same restrictions on which state can be
 synchronized as with other solutions such as Firebase.
@@ -5053,74 +5053,82 @@ https://github.com/pojntfx/r3map
 [50] J. Corbet, “4.3 merge window, part 2.” 2015. Accessed: Jul. 20,
 2023. [Online]. Available: https://lwn.net/Articles/656731/
 
-[51] F. Pojtinger, “STFS file system unit tests.” 2022. Accessed: Jul.
+[51] F. Pojtinger, “Userfaultfd-go: Go bindings to userfaultfd.” 2022.
+Accessed: Jul. 31, 2023. [Online]. Available:
+https://github.com/loopholelabs/userfaultfd-go
+
+[52] F. Pojtinger, “STFS file system unit tests.” 2022. Accessed: Jul.
 20, 2023. [Online]. Available:
 https://github.com/pojntfx/stfs/blob/main/pkg/fs/filesystem_test.go
 
-[52] S. Francia, “Fs interface - afero: A FileSystem abstraction system
+[53] S. Francia, “Fs interface - afero: A FileSystem abstraction system
 for go.” 2023. Accessed: Jul. 20, 2023. [Online]. Available:
 https://pkg.go.dev/github.com/spf13/afero#Fs
 
-[53] F. Pojtinger, “STFS: Simple Tape File System, a file system for
+[54] F. Pojtinger, “STFS: Simple Tape File System, a file system for
 tapes and tar files.” 2022. Accessed: Jul. 20, 2023. [Online].
 Available: https://github.com/pojntfx/stfs
 
-[54] J. Waibel and F. Pojtinger, “sile-fystem: A generic FUSE
+[55] J. Waibel and F. Pojtinger, “sile-fystem: A generic FUSE
 implementation.” 2022. Accessed: Jul. 20, 2023. [Online]. Available:
 https://github.com/jakWai01/sile-fystem
 
-[55] T. Grieger, “The cost and complexity of cgo.” Dec. 2015. Accessed:
+[56] F. Pojtinger, “go-nbd: Pure Go NBD server and client library.”
+2023. Accessed: Jul. 31, 2023. [Online]. Available:
+https://github.com/pojntfx/go-nbd
+
+[57] T. Grieger, “The cost and complexity of cgo.” Dec. 2015. Accessed:
 Jul. 21, 2023. [Online]. Available:
 https://www.cockroachlabs.com/blog/the-cost-and-complexity-of-cgo/
 
-[56] F. Pojtinger, “Weron: Overlay networks based on WebRTC.” 2023.
+[58] F. Pojtinger, “Weron: Overlay networks based on WebRTC.” 2023.
 Accessed: Jul. 21, 2023. [Online]. Available:
 https://github.com/pojntfx/weron
 
-[57] Linux Kernel Contributors, “NBD kernel module in the linux kernel
+[59] Linux Kernel Contributors, “NBD kernel module in the linux kernel
 source tree.” 2023. Accessed: Jul. 21, 2023. [Online]. Available:
 https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/drivers/block/nbd.c#n2592
 
-[58] F. Pojtinger, “Dudirekta: Transport-agnostic framework that allows
+[60] F. Pojtinger, “Dudirekta: Transport-agnostic framework that allows
 exposing and calling functions on both clients and servers.” 2023.
 Accessed: Jul. 22, 2023. [Online]. Available:
 https://github.com/pojntfx/dudirekta
 
-[59] F. Pojtinger, “Dudirekta: WebRTC transport layer example.” 2023.
+[61] F. Pojtinger, “Dudirekta: WebRTC transport layer example.” 2023.
 Accessed: Jul. 22, 2023. [Online]. Available:
 https://github.com/pojntfx/dudirekta/blob/main/cmd/dudirekta-example-webrtc-peer/main.go
 
-[60] I. Ward, “Documentation for the JSON lines text file format.” 2013.
+[62] I. Ward, “Documentation for the JSON lines text file format.” 2013.
 Accessed: Jul. 28, 2023. [Online]. Available: https://jsonlines.org/
 
-[61] Loophole Labs, Inc, “fRPC: gRPC benchmarks.” 2022. Accessed: Jul.
+[63] Loophole Labs, Inc, “fRPC: gRPC benchmarks.” 2022. Accessed: Jul.
 30, 2023. [Online]. Available:
 https://frpc.io/performance/grpc-benchmarks
 
-[62] F. Pojtinger, GitHub Repository for Efficient Synchronization of
+[64] F. Pojtinger, GitHub Repository for Efficient Synchronization of
 Linux Memory Regions over a Network: A Comparative Study and
 Implementation. 2023.Available:
 https://github.com/pojntfx/networked-linux-memsync
 
-[63] Kernel Development Community, “Userspace block device driver (ublk
+[65] Kernel Development Community, “Userspace block device driver (ublk
 driver),” 2023. https://docs.kernel.org/block/ublk.html (accessed Jul.
 28, 2023).
 
-[64] F. Pojtinger, “Ram-dl: A tool to download more RAM (yes,
+[66] F. Pojtinger, “Ram-dl: A tool to download more RAM (yes,
 seriously!).” 2023. Accessed: Jul. 23, 2023. [Online]. Available:
 https://github.com/pojntfx/ram-dl
 
-[65] F. Pojtinger, “Tapisk: Expose a tape drive as a block device.”
+[67] F. Pojtinger, “Tapisk: Expose a tape drive as a block device.”
 2023. Accessed: Jul. 23, 2023. [Online]. Available:
 https://github.com/pojntfx/tapisk
 
-[66] LTO Program, “The LTO program releases specifications for upcoming
+[68] LTO Program, “The LTO program releases specifications for upcoming
 generation 9.” 2020. Accessed: Jul. 23, 2023. [Online]. Available:
 https://www.lto.org/2020/09/the-lto-program-releases-specifications-for-upcoming-generation-9/
 
-[67] M. Levkov, “Understanding the MPEG-4 movie atom.” Adobe Developer
+[69] M. Levkov, “Understanding the MPEG-4 movie atom.” Adobe Developer
 Network, 2020. Accessed: Jul. 30, 2023. [Online]. Available:
 https://web.archive.org/web/20210130152901/https://www.adobe.com/devnet/video/articles/mp4_movie_atom.html
 
-[68] Apache Software Foundation, “Apache arrow website.” 2023. Accessed:
+[70] Apache Software Foundation, “Apache arrow website.” 2023. Accessed:
 Jul. 23, 2023. [Online]. Available: https://arrow.apache.org/
