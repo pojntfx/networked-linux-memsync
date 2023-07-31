@@ -405,12 +405,12 @@ Conclusion</a></li>
 accessing remote resources, such as via databases or custom APIs. The
 same applies to resource synchronization, which is typically addressed
 on a case-by-case basis via methods such as third-party databases, file
-synchronization services, or bespoke synchronization protocols. The
-migration of resources is also frequently a challenge, relying on APIs
-better suited for persistence, like storing the resource in a remote
-database. These solutions are generally custom-built for specific
-applications, despite the typical internal representation of the
-resource as a memory region or file.</p>
+synchronization services, or bespoke synchronization protocols. Resource
+migration is also a frequent challenge, solutions for which often rely
+on APIs better suited for long-term persistence, like storing the
+resource in a remote database. Today’s solutions for resource
+synchronization are generally custom-built per application, despite the
+typical internal resource abstraction being a memory region or file.</p>
 <p>What if, instead of applying application-specific protocols and
 abstractions for accessing, synchronizing, and migrating resources,
 theses processes could be universally managed by directly operating on
@@ -741,18 +741,18 @@ overhead especially where there are infrequent changes to the file
 system.</p>
 <p>Thanks to its efficiency and flexibility, <code>inotify</code> is
 used across many applications, especially in file synchronization
-services. In this usecase, the ability to instantly notify the system of
-file changes aids in instant synchronization of files, demonstrating how
-critical its role can be in real-time or near real-time systems that are
-dependent on keeping data up-to-date. However, as is the case with many
-system calls, there is a limit to its scalability. <code>inotify</code>
-is constrained by a limit on how many watches can be established; this
-limitation can pose challenges in intricate systems where there is a
-high quantity of files or directories to watch for changes in, and might
-warrant additional management or fallback to heavier polling mechanisms
-for some parts of the system<span class="citation">[18]</span>.</p>
+services. In this use case, the ability to instantly notify the system
+of file changes aids in instant synchronization of files, demonstrating
+how critical its role can be in real-time or near real-time systems that
+are dependent on keeping data up-to-date. However, as is the case with
+many system calls, there is a limit to its scalability.
+<code>inotify</code> is constrained by a limit on how many watches can
+be established; this limitation can pose challenges in intricate systems
+where there is a high quantity of files or directories to watch for
+changes in, and might warrant additional management or fallback to
+heavier polling mechanisms for some parts of the system<span class="citation">[18]</span>.</p>
 <h2 id="linux-kernel-caching"><span class="header-section-number">3.9</span> Linux Kernel Caching</h2>
-<p>Caching is a key feature of the Linux kernel that work to boost
+<p>Caching is a key feature of the Linux kernel that works to boost
 efficiency and performance. Within this framework, there are two broad
 categories: disk caching and file caching.</p>
 <p>Disk caching in Linux is a strategic method that temporarily stores
@@ -788,14 +788,14 @@ Networking</h2>
 source to a destination and back. It provides a valuable insight into
 application latency, and can varying according to many factors such as
 network type, system load and physical distance. Local area networks
-(LAN) are geographically small networks that are typically characterised
-by having a low RTT, resulting in a low latency due to the small
-distance (typically no more than across an office or data center) that
-data needs to travel. As a result of their small geographical size and
-isolation, perimeter security is often applied to such networks, meaning
-that the LAN is viewed as a trusted network that doesn’t necessarily
-require authentication or encryption between internal systems, resulting
-in a potentially smaller overhead.</p>
+(LAN) are geographically small networks characterised by having a low
+RTT, resulting in a low latency due to the short distance (typically no
+more than across an office or data center) that data needs to travel. As
+a result of their small geographical size and isolation, perimeter
+security is often applied to such networks, meaning that the LAN is
+viewed as a trusted network that doesn’t necessarily require
+authentication or encryption between internal systems, resulting in a
+potentially lower overhead.</p>
 <p>Wide area networks (WAN) on the other hand typically span a large
 geographical area, with the internet being an example that operates on a
 planetary scale. Due to the physical distance between source and
@@ -981,7 +981,7 @@ latency.</p>
 operational quirks such as multiple different handshake versions and
 legacy features. As a result, it is advisable to only implement the
 latest recommended versions and the foundational feature set when
-considering NBD for a narrow usecase.</p>
+considering NBD for a narrow use case.</p>
 <p>Despite the simplicity of the protocol, there are certain scenarios
 where NBD falls short. Compared to FUSE, it has limitations when dealing
 with backing devices that operate drastically different from
@@ -989,7 +989,7 @@ random-access storage devices like a tape drive, since it lacks the
 ability to work with high-level abstractions such as files or
 directories. For example, it does not support shared access to the same
 file for multiple clients. However, this shortcoming can be considered
-as an advantage for narrow usecases like memory synchronization, given
+as an advantage for narrow use cases like memory synchronization, given
 that it operates on a block level, where synchronization features are
 not needed or implemented at a higher layer.</p>
 <h2 id="virtual-machine-live-migration"><span class="header-section-number">3.14</span> Virtual Machine Live
@@ -997,8 +997,9 @@ Migration</h2>
 <p>Virtual machine live migration involves moving a virtual machine, its
 state, and its connected devices from one host to another, with the
 objective to minimize disrupted service by minimizing downtime during
-the processes. Algorithms that implement this usecase can be categorized
-into two broad types: pre-copy migration and post-copy migration.</p>
+the processes. Algorithms that implement this use case can be
+categorized into two broad types: pre-copy migration and post-copy
+migration.</p>
 <h3 id="pre-copy"><span class="header-section-number">3.14.1</span>
 Pre-Copy</h3>
 <p>The primary characteristic of pre-copy migration is its
@@ -1184,7 +1185,7 @@ choice for caching or storing data that does not fit well into a
 traditional SQL architecture<span class="citation">[43]</span>.</p>
 <p>One of the primary reasons for Redis’s speed is its reliance on
 in-memory data storage rather than on disk, enabling very low-latency
-reads and writes. While the primary usecase of Redis is in in-memory
+reads and writes. While the primary use case of Redis is in in-memory
 operations, it also supports persistence by flushing data to disk. This
 feature broadens the use cases for Redis, allowing it to handle
 applications that require longer-term data storage in addition to a
@@ -1356,7 +1357,7 @@ memory region is never actually copied to the destination hist), but
 rather a mount of a remote memory region over the NBD protocol.</p>
 <p>From an initial overview, the biggest benefit of <code>mmap</code>ing
 such a block device instead of a file on a custom file system is the
-reduced complexity. For the narrow usecase of memory synchronization,
+reduced complexity. For the narrow use case of memory synchronization,
 not all of the features provided by a full file system are be required,
 which means that the implementation of a NBD server and client, as well
 as the accompanying protocols, is significantly less complex and can
@@ -1469,7 +1470,7 @@ paradigms are combined to form a hybrid solution. Due to reasons
 elaborated on in more detail in the discussion section, the managed
 mount API however is primarly intended for efficiently reading from a
 remote resource and synching back changes eventually, rather than
-migrating a resource between two hosts. For the migration usecase, the
+migrating a resource between two hosts. For the migration use case, the
 migration API, which will be introduced in the following section,
 provides a better solution by building on similar concepts as the
 managed mounts API.</p>
@@ -1480,7 +1481,7 @@ Overview</h3>
 <p>Similarly to the managed mount API, this migration API again tracks
 changes to the memory of the migratable resource using NBD. As mentioned
 before however, the managed mount API is not optimized for the migration
-usecase, but rather for efficiently accessing a remote resource. For
+use case, but rather for efficiently accessing a remote resource. For
 live migration, one metric is very important: maximum acceptable
 downtime. This refers to the time that a application, VM etc. must be
 suspended or otherwise prevented from writing to or reading from the
@@ -1659,10 +1660,10 @@ handles it. The same applies to writes, meaning that in the same way
 that files need to be <code>sync</code>ed in order for them to be
 flushed to disk, <code>mmap</code>ed regions need to be
 <code>msync</code>ed in order to flush changes to the backing file. This
-is particularly important for a memory usecase, since reading from the
+is particularly important for a memory use case, since reading from the
 backing file without flushing first would result in the synchronization
 of potentially stale data, and is different to how traditional file
-synchronization can handle this usecase, where the Linux file cache
+synchronization can handle this use case, where the Linux file cache
 would respond with the changes if the file is read from disk even if
 <code>sync</code> was not called beforehand. For file I/O, it is
 possible to skip the kernel cache and read/write directly from/to the
@@ -2621,7 +2622,7 @@ exceeded.</p>
 <h3 id="overview-4"><span class="header-section-number">5.9.1</span>
 Overview</h3>
 <p>RPC backends provide a dynamic way to access a remote backend. This
-is useful for lots of usecases, esp. if the backend exposes a custom
+is useful for lots of use cases, esp. if the backend exposes a custom
 resource or requires custom authorization or caching. For the mount API
 specifically however, having access to a remote backend that doesn’t
 require a custom RPC system can be useful, since the backend for a
@@ -2688,9 +2689,9 @@ ScylllaDB</h3>
 <p>Another option to access persistent remote resource is a NoSQL
 database such as Cassandra, specifically ScyllaDB, which improves on
 Cassandra’s latency, a key metric for mounting remote resources. While
-this backend is more of a proof of concept rather than a real usecase,
+this backend is more of a proof of concept rather than a real use case,
 it does show that even a database can be mapped to a memory region,
-which does allow for the interesting usecase of making the databases’
+which does allow for the interesting use case of making the databases’
 contents available directly in memory without having to use a
 database-specific client. Here, <code>ReadAt</code> and
 <code>WriteAt</code> are implemented by issues queries through
@@ -3600,7 +3601,7 @@ background pull system is high, where Casssandra has considerably worse
 throughput.</p>
 <h2 id="limitations"><span class="header-section-number">7.9</span>
 Limitations</h2>
-<p>While the mount APIs are functional for most usecases, there are
+<p>While the mount APIs are functional for most use cases, there are
 performance and usability issues due it being implemented in Go. Go is a
 garbage collected language, and if the garbage collector is active, it
 has to stop goroutines. If the <code>mmap</code> API is used to access a
@@ -3637,7 +3638,7 @@ with <code>ram-dl</code></h2>
 <p><code>ram-dl</code><span class="citation">[66]</span> is an
 experimental tech demo built to demonstrate how the mount API can be
 used. It uses the fRPC mount backend to expand local system memory,
-enabling a variety of usecases such as mounting a remote system’s RAM
+enabling a variety of use cases such as mounting a remote system’s RAM
 locally or easily inspecting a remote system’s memory contents.</p>
 <p>In is based on the direct mount API and uses <code>mkswap</code>,
 <code>swapon</code> and <code>swapoff</code> to enable the Kernel to
@@ -3666,7 +3667,7 @@ around configuration.</p>
 Overview</h3>
 <p><code>tapisk</code><span class="citation">[67]</span> is a tool that
 exposes a tape drive as a block device. While seemingly unrelated to
-memory synchronization, it does serve as an interesting usecase due to
+memory synchronization, it does serve as an interesting use case due to
 the similarities to STFS (mentioned earlier in the FUSE section), which
 exposed a tape drive as a file system, and serves as an interesting
 example for how even seemingly incompatible backends for can be used to
@@ -3782,7 +3783,7 @@ introduced earlier, which can give remote access to any
 fRPC, it is also possible to access a remote tape this way, i.e. to map
 a remote tape library robot’s drive to a system over the network.</p>
 <p>Being able to map a tape into memory without having to read the
-entire contents first can have a variety of usecases. Tapes can store a
+entire contents first can have a variety of use cases. Tapes can store a
 large amount of data, in the case of LTO-9, up to 18TB on a single
 tape<span class="citation">[68]</span>; being able to access such a
 large amount of data directly in memory, instead of having to work with
@@ -3797,7 +3798,7 @@ well, with the added benefit of also being able to support any
 filesystem that supports block devices as their backend. Compared to the
 LTFS approach, this results in a much more maintainable project; while
 LTFS is tens of thousands of kernel-level source lines of code,
-<code>tapisk</code> achieves effectively the same usecase with just
+<code>tapisk</code> achieves effectively the same use case with just
 under 350.</p>
 <h2 id="improving-cloud-storage-clients"><span class="header-section-number">7.12</span> Improving Cloud Storage
 Clients</h2>
@@ -3855,7 +3856,7 @@ synchronize memory regions, but other state too, including disks.</p>
 Asset Streaming</h2>
 <h3 id="streaming-access-to-remote-databases"><span class="header-section-number">7.13.1</span> Streaming Access to Remote
 Databases</h3>
-<p>Another usecase that r3map can be used for is accessing a remote
+<p>Another use case that r3map can be used for is accessing a remote
 database locally. While using a database backend (such as the ScylllaDB
 backend introduced earlier) is one option of storing the chunk, this use
 case is particularly interesting for file-based databases like SQLite
@@ -3904,7 +3905,7 @@ device providing the resource can simply be mounted as a file system and
 thus be used transparently.</p>
 <h3 id="streaming-app-and-game-assets"><span class="header-section-number">7.13.3</span> Streaming App and Game
 Assets</h3>
-<p>Another streaming usecase relates to the in-place streaming of
+<p>Another streaming use case relates to the in-place streaming of
 assets. Usually, a game needs to be fully downloaded before it is
 playable; for many modern high-budget titles, this can be hundreds of
 gigabytes of data, resulting in very long download times even on fast
@@ -3965,7 +3966,7 @@ universal way of both synchronization and migration of application
 state, without having to implement a custom protocol.</p>
 <h3 id="mounting-state"><span class="header-section-number">7.14.2</span> Mounting State</h3>
 <p>By allocating all structures on r3map’s provided <code>mmap</code>ed
-byte slice, many interesting usecases become possible. For example, a
+byte slice, many interesting use cases become possible. For example, a
 TODO app could use it as it’s backend. Once loaded, the app mounts the
 TODO list as a byte slice from a remote server using the managed mount
 API; since authentication is pluggable and i.e. a database backend like
@@ -3987,7 +3988,7 @@ application state, migration of arbitrary app state also becomes a
 posibility. If a user has a TODO app running on a host like their
 smartphone, but wants to continue writing a task description on their
 desktop system, they can migrate the app’s state directly and without a
-third party/remote database by using r3map. For this usecase, the
+third party/remote database by using r3map. For this use case, the
 migration API can be used. In order to optimize the migration, the
 pre-copy phase can be started automatically, i.e. if the phone and
 desktop are physically close to each other or in the same network; in
