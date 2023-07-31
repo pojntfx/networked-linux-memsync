@@ -270,12 +270,12 @@ access, synchronization, and migration over a network. Various methods
 for achieving this are evaluated on parameters such as implementation
 overhead, initialization time, latency, and throughput, with an outline
 of the necessary architecture and optimizations. The proposed solution,
-based on block devices in user space backend by background push- and
-pull mechanisms, suit both LAN and WAN environments, and offers a
-unified API enabling mounting and migration of nearly any state over a
-network with minimal changes to existing applications. Illustrations of
-real-world use cases, configurations and backends are provided, together
-with a production-ready reference implementation of the full mount and
+based on block devices in user space backend by background push and pull
+mechanisms, suit both LAN and WAN environments, and offers a unified API
+enabling mounting and migration of nearly any state over a network with
+minimal changes to existing applications. Illustrations of real-world
+use cases, configurations and backends are provided, together with a
+production-ready reference implementation of the full mount and
 migration APIs via the open-source r3map (remote mmap) library.</p>
 <h2 id="kurzfassung" class="unnumbered unlisted">Kurzfassung</h2>
 <p>Diese Bachelor-Thesis präsentiert einen neuen, universellen Ansatz
@@ -434,22 +434,30 @@ synchronization are generally custom-built per application, despite the
 typical internal resource abstraction being a memory region or file.</p>
 <p>What if, instead of applying application-specific protocols and
 abstractions for accessing, synchronizing, and migrating resources,
-theses processes could be universally managed by directly operating on
+these processes could be universally managed by directly operating on
 the memory region? While systems for interacting with remote memory
 exist, they primarily serve niche purposes, such as virtual machine live
 migration. They also suffer from the absence of a universal, generic
 API, often due to their design based on compatibility with a particular
-application’s architecture, rather than them being intended for use as a
-library.</p>
+application’s architecture such as a specific hypervisor, rather than
+them being intended for use as a library. This current state
+significantly diminishes developer experience, and represents a
+significant barrier for adoption.</p>
 <p>In light of these limitations, this thesis explores alternative
 strategies to create a more universal approach to remote memory
-management. It details the implementation of selected methodologies
-using APIs like <code>userfaultfd</code> and NBD, discusses challenges
-and potential optimizations, and provides an outline for a universal API
-and related wire protocols. Furthermore, it assesses the performance of
-various configurations to determine the optimal use case for each
-approach, and their suitability for both WAN and LAN deployment
-contexts.</p>
+management. After looking at the current state of related technology, it
+details the implementation of selected methodologies using APIs like
+<code>userfaultfd</code> and NBD, discusses challenges and potential
+optimizations, and provides an outline for a universal API and related
+wire protocols. It also assesses the performance of various
+configurations, like background push and pull mechanisms, two-phase
+protocols and worker counts, to determine the optimal use case for each
+approach as well as their suitability for both WAN and LAN deployment
+contexts. Ultimately, it introduces a comprehensive, production-ready
+reference implementation of an NBD-based solution, which is able to
+cover most use cases in real-world applications today through the
+open-source r3map (remote mmap) library, before continuing to future
+research opportunities and possible improvements.</p>
 </section>
 <section id="technology" data-number="0.2">
 <h2 data-number="1.2"><span class="header-section-number">1.2</span>
@@ -1357,11 +1365,12 @@ Planning</h2>
 <section id="pull-based-synchronization-with-userfaultfd" data-number="0.3.1">
 <h3 data-number="1.3.1"><span class="header-section-number">1.3.1</span>
 Pull-Based Synchronization With <code>userfaultfd</code></h3>
-<p><code>userfaultfd</code> allows the implementation of a post-copy
-migration scenario. In this setup, a memory region is created on the
-destination host. When the migrated application starts to read from this
-remote region after it was resumed, it triggers a page fault, which we
-want to resolve by fetching the relevant offset from the remote.</p>
+<p><code>userfaultfd</code> is a technology that allows for the
+implementation of a post-copy migration scenario. In this setup, a
+memory region is created on the destination host. When the migrated
+application starts to read from this remote region after it was resumed,
+it triggers a page fault, which we want to resolve by fetching the
+relevant offset from the remote.</p>
 <p>Typically, page faults are resolved by the kernel. While this makes
 sense for use cases where they can be resolved by loading a local
 resource into memory, here we want to handle the page faults using a
