@@ -490,12 +490,12 @@ mapped memory region directly correspond to reading the file and vice
 versa, enhancing efficiency as the amount of expensive context switches
 (compared to i.e. the read or write system calls) can be reduced.
 
-The key advantage that mmap provides is the capacity to facilitate
-zero-copy operations. In practical terms, this means that data can be
-accessed directly as if it were positioned in memory, eliminating the
-need to copy it from the disk first. This direct memory access saves
-time and reduces processing requirements, offering substantial
-performance improvements.
+The key advantage that mmap provides is it’s ability to do zero-copy
+operations. In practical terms, this means that data can be accessed
+directly as if it were positioned in memory, eliminating the need to
+copy it from the disk first. This direct memory access saves time and
+reduces processing requirements, offering substantial performance
+improvements.
 
 This speed improvement does however come with a notable drawback: It
 bypasses the file system cache, which can potentially result in stale
@@ -515,13 +515,13 @@ considerable benefits in cases where there is a need to focus system
 resources on certain file system events, and not on others.
 
 Naturally, inotify comes with some recognizable advantages.
-Significantly, it diminishes overhead and resource use when compared to
-polling strategies. Polling is an operation-heavy approach as it
-continuously checks the status of the file system, regardless of whether
-any changes have occurred. In contrast, inotify works in a more
-event-driven way, where it only takes action when a specific event
-actually occurs. This is usually more efficient, reducing overhead
-especially where there are infrequent changes to the file system.
+Significantly, it reduces overhead and resource use when compared to
+polling strategies. Polling is an I/O-heavy approach as it continuously
+checks the status of the file system, regardless of whether any changes
+have occurred. In contrast, inotify works in a more event-driven way,
+where it only takes action when a specific event actually occurs. This
+is usually more efficient, reducing overhead especially where there are
+infrequent changes to the file system.
 
 Thanks to its efficiency and flexibility, inotify is used across many
 applications, especially in file synchronization services. In this use
@@ -538,36 +538,32 @@ the system[18].
 
 Linux Kernel Caching
 
-Caching is a key feature of the Linux kernel that works to boost
-efficiency and performance. Within this framework, there are two broad
-categories: disk caching and file caching.
-
 Disk caching in Linux is a strategic method that temporarily stores
 frequently accessed data in RAM. It is implemented through the page
 cache subsystem, and operates under the assumption that data situated
 near data that has already been accessed will be needed soon. By
-retaining data close to the CPU where it may be swiftly accessed without
-costly disk reads can greatly reduce overall access time. The data
-within the cache is also managed using the LRU algorithm, which prunes
-the least recently used items first when space is needed. Linux also
-caches file system metadata in specialized structures known as the
-dentry and inode caches. This metadata encompasses varied information
-such as file names, attributes, and locations. The key benefit of this
-is that it expedites the resolution of path names and file attributes,
-such as tracking when files were last changed for polling.
+retaining data close to the CPU where it can be quickly accessed without
+expensive disk reads can significatly reduce overall access time. The
+data within the cache is also managed using the LRU algorithm, which
+prunes the least recently used items first when space is needed. Linux
+also caches file system metadata in specialized structures known as the
+dentry and inode caches. This metadata contains information such as file
+names, attributes, and locations. The key benefit of this is that it
+speeds up the resolution of path names and file attributes, such as
+tracking when files were last changed for polling.
 
 While such caching mechanisms can improve performance, they also
-introduce complexities. One such complexity involves maintaining data
-consistency between the disk and cache through the process known as
-writebacks; aggressive writebacks, where data is copied back to disk
-frequently, can lead to reduced performance, while excessive delays may
-risk data loss if the system crashes before data has been saved.
+introduce complexities. One such complexity is maintaining data
+consistency between the disk and cache through writebacks; aggressive
+writebacks, where data is copied back to disk frequently, can lead to
+reduced performance, while excessive delays may risk data loss if the
+system crashes before data has been saved.
 
-Another complexity arises from the necessity to release cached data
-under memory pressure, known as cache eviction. As mentioned before,
-this requires sophisticated algorithms, such as LRU, to ensure effective
+Another complexity stems from the necessity to release cached data under
+memory pressure, known as cache eviction. As mentioned before, this
+requires sophisticated algorithms, such as LRU, to ensure effective
 utilization of available cache space. Prioritizing what to keep in cache
-when memory pressure builds does directly impact the overall system
+as the memory pressure increases directly impacts the overall system
 performance[5].
 
 Networking
@@ -896,13 +892,13 @@ the migration is postponed until the next cycle. The proposed process
 employs a Bayesian classifier to distinguish between favorable and
 unfavorable cycles.
 
-Compared to the popular alternative method which usually involves
-waiting for a significant amount of unchanged chunks to synchronize
-first, the proposed pattern recognition-based approach potentially
-offers substantial improvements. The study found that this method
-yielded an enhancement of up to 74% in terms of live migration
-time/downtime and a 43% reduction concerning the volume of data
-transferred over the network[35].
+Compared to the alternative, which usually involves waiting for a
+significant amount of unchanged chunks to synchronize first, the
+proposed pattern recognition-based approach potentially offers
+substantial improvements. The study found that this method yielded an
+enhancement of up to 74% in terms of live migration time/downtime and a
+43% reduction concerning the volume of data transferred over the
+network[35].
 
 Streams and Pipelines
 
@@ -985,9 +981,8 @@ also server-streaming RPCs, wherein the client sends a request, and the
 server responds with a stream of messages. Conversely, in
 client-streaming RPCs, the client sends a stream of messages to a server
 in response to a request. It also supports bidirectional RPCs, wherein
-both client and server can send messages to each other.
-
-What distinguishes gRPC is its pluggable structure that allows for added
+both client and server can send messages to each other. What
+distinguishes gRPC is its pluggable structure that allows for added
 functionalities such as load balancing, tracing, health checking, and
 authentication, which make it a comprehensive solution for developing
 distributed systems[39].
@@ -1244,8 +1239,8 @@ mmap)[49].
 By combining the NBD server and client into this reusabable unit, we can
 connect the server to a new backend component with a protocol which is
 better suited for WAN usage than NBD. This also allows the
-implementation of smart, asynchronous background push/pull strategies
-instead of simpliy directly writing to/from the network (called “Managed
+implementation of asynchronous background push/pull strategies instead
+of simpliy directly writing to/from the network (called “Managed
 Mounts”). The simplest form of the mount API is the direct mount API; it
 simply swaps out NBD for a transport-independent RPC framework, but does
 not do additional optimizations. It has two simple actors: The client
@@ -1265,7 +1260,7 @@ writer interface; there are no distinct protocol phases, either.
 
 Chunking
 
-And additional issue that was mentioned before that this approach can
+An additional issue that was mentioned before that this approach can
 approve upon is better chunking support. While it is possible to specify
 the NBD protocol’s chunk size by configuring the NBD client and server,
 this is limited to only 4KB in the case of Linux’s implementation. If
@@ -1394,18 +1389,19 @@ By splitting the migration into these two distinct phases, the overhead
 of having to start the deivce can be skipped and additional app
 initialization that doesn’t depend on the app’s state (i.e. memory
 allocation, connecting to databases, loading models etc.) can be
-performed before the application needs to be suspended. This combines
-both the pre-copy algorithm (by pulling the chunks from the seeder ahead
-of time) and the post-copy algorithm (by resolving dirtyc chunsk from
-the seeder after the VM has been migrated) into one coherent protocol.
-As will be discussed further in the results section, the maximum
-tolerable downtime can be drastically reduced, and dirty chunks don’t
-need to be re-transmitted multiple times. Effectively, it allows
-dropping this downtime to the time it takes to msync the seeder’s app
-state, the RTT and, if they are being accessed immediately, how long it
-takes to fetch the chunks that were written in between the start of it
-tracking and finalizing. The migration API can use the same preemptive
-pull system as the managed mount API and benefit from it’s
+performed before the application needs to be suspended.
+
+This combines both the pre-copy algorithm (by pulling the chunks from
+the seeder ahead of time) and the post-copy algorithm (by resolving
+dirtyc chunsk from the seeder after the VM has been migrated) into one
+coherent protocol. As will be discussed further in the results section,
+the maximum tolerable downtime can be drastically reduced, and dirty
+chunks don’t need to be re-transmitted multiple times. Effectively, it
+allows dropping this downtime to the time it takes to msync the seeder’s
+app state, the RTT and, if they are being accessed immediately, how long
+it takes to fetch the chunks that were written in between the start of
+it tracking and finalizing. The migration API can use the same
+preemptive pull system as the managed mount API and benefit from it’s
 optimizations, but does not use the background push system.
 
 An interesting question to ask with this two-step migration API is when
@@ -1741,15 +1737,11 @@ remote’s hashes and potential truncation request:
 
     // Local hash calculation
     localHashes, _, err := GetHashesForBlocks(parallel, path, blocksize)
-
     // Sending the hashes to the remote
-    utils.EncodeJSONFixedLength(conn, localHashes)
-
     // Receiving the remote hashes and the truncation request
     blocksToFetch := []int64{}
     utils.DecodeJSONFixedLength(conn, &blocksToFetch)
     // ...
-
     cutoff := int64(0)
     utils.DecodeJSONFixedLength(conn, &cutoff)
 
@@ -1793,7 +1785,7 @@ interface is rather minimal[53]:
 
 The STFS project[54] has shown that by using this abstraction layer,
 seemingly incompatible, non-linear backends can still be mapped to a
-file system. The project is backend by a tape drive, which is inherently
+file system. The project is backed by a tape drive, which is inherently
 append-only and optimized for linear access. Thanks to the inclusion of
 an on-disk index and various optimization methods, the resulting file
 system was still performant enough for standard use, while also
@@ -1807,15 +1799,10 @@ adapter:
 
     // Creating the file system
     serve := filesystem.NewFileSystem(
-      // ..
-      afero.NewOsFs(),  // afero.Fs implementation here
-      // ...
+      afero.NewOsFs(),  // afero.Fs implementation here, followed by configuration
     )
-    // ...
-
     // Mounting the file system
     fuse.Mount(viper.GetString(mountpoint), serve, cfg)
-    // ...
 
 While the FUSE approach to synchronization is interesting, even with
 these available libraries the required overhead of implementing it (as
@@ -2047,7 +2034,7 @@ UNIX socket pair, returning a file descriptor for both the server and
 the client respectively, after which both components can be started in a
 new goroutine. This highlights the benefit of not requiring a specific
 transport layer or accept semantics for the NBD library, as it is
-possible to skip the usually required TCP handshake for NBD.
+possible to skip the usually required handshakes.
 
 This form of a combined client and server on the local device, with the
 server’s backend providing the actual resource, forms a direct path
@@ -3659,37 +3646,7 @@ possible to overwrite existing chunks despite the tape being
 append-only, since subsequent writes to the same chunk result in the
 changes being written to the end of the file with the index referencing
 the new physical location, but does come at the cost of requiring
-defragmentation to clean up prior iterations of chunks:
-
-    func (b *TapeBackend) WriteAt(p []byte, off int64) (n int, err error) {
-        // Calculating the block for the offset
-        block := uint64(off) / b.blocksize
-
-        // Seek to the end of the tape, unless the last operation was a write
-        if b.lastOpWasRead {
-            mtop := &ioctl.Mtop{}
-            mtop.SetOp(ioctl.MTEOM)
-            mtop.SetCount(1)
-
-            syscall.Syscall(
-                syscall.SYS_IOCTL,
-                drive.Fd(),
-                ioctl.MTIOCTOP,
-                uintptr(unsafe.Pointer(mtop)),
-            )
-            // ...
-        }
-
-        // Get the current physical record
-        curr, err := b.tell(b.drive)
-
-        // Mapping the physical record to the block that is being written
-        b.index.SetLocation(block, curr)
-
-        // Writing the chunk to the tape
-        b.drive.Write(p)
-        // ...
-    }
+defragmentation to clean up prior iterations of chunks.
 
 Evaluation
 

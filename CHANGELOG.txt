@@ -1,3 +1,9 @@
+commit 4e6a94f65713fa8a349601bad4b55f03f7849941
+Author: Felicitas Pojtinger <felicitas@pojtinger.com>
+Date:   Mon Jul 31 22:59:39 2023 +0200
+
+    refactor: Add page-based formatting
+
 commit f7a252ed31385efe5a8fd3f9c1ddfa7a8c337a60
 Author: Felicitas Pojtinger <felicitas@pojtinger.com>
 Date:   Mon Jul 31 21:13:15 2023 +0200
