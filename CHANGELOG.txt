@@ -1,3 +1,9 @@
+commit b36eb54813a9551a3787506c48858d7ac01bc411
+Author: Felicitas Pojtinger <felicitas@pojtinger.com>
+Date:   Mon Jul 31 20:26:04 2023 +0200
+
+    refactor: Improve spelling for results and discussion sections
+
 commit 60cac97057f52b7a8889a938eea93045ee9d2891
 Author: Felicitas Pojtinger <felicitas@pojtinger.com>
 Date:   Mon Jul 31 18:58:29 2023 +0200
