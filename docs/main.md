@@ -46,6 +46,7 @@ colorlinks: false
 mainfont: "Latin Modern Roman"
 sansfont: "Latin Modern Roman"
 monofont: "Latin Modern Mono"
+code-block-font-size: \scriptsize
 ---
 
 # Efficient Synchronization of Linux Memory Regions over a Network
@@ -59,6 +60,8 @@ In today's technological landscape, numerous methods exist for accessing remote 
 What if, instead of applying application-specific protocols and abstractions for accessing, synchronizing, and migrating resources, these processes could be universally managed by directly operating on the memory region? While systems for interacting with remote memory exist, they primarily serve niche purposes, such as virtual machine live migration. They also suffer from the absence of a universal, generic API, often due to their design based on compatibility with a particular application's architecture such as a specific hypervisor, rather than them being intended for use as a library. This current state significantly diminishes developer experience, and represents a significant barrier for adoption.
 
 In light of these limitations, this thesis explores alternative strategies to create a more universal approach to remote memory management. After looking at the current state of related technology, it details the implementation of selected methodologies using APIs like `userfaultfd` and NBD, discusses challenges and potential optimizations, and provides an outline for a universal API and related wire protocols. It also assesses the performance of various configurations, like background push and pull mechanisms, two-phase protocols and worker counts, to determine the optimal use case for each approach as well as their suitability for both WAN and LAN deployment contexts. Ultimately, it introduces a comprehensive, production-ready reference implementation of an NBD-based solution, which is able to cover most use cases in real-world applications today through the open-source r3map (remote mmap) library, before continuing to future research opportunities and possible improvements.
+
+\newpage{}
 
 ## Technology
 
@@ -74,6 +77,8 @@ The Linux kernel was released by Linus Torvalds in 1991. Developed primarily in 
 
 The kernel does not function as a standalone operating system in itself; rather, this role is fulfilled by distributions, which build upon the Linux kernel to create fully-fledged operating systems. Distributions supplement the kernel with additional userspace tools, examples being GNU coreutils or BusyBox. Depending on their target audience, they further enhance functionality by integrating desktop environments and other software.
 
+\newpage{}
+
 Linux is extensible, but not a microkernel. Despite it's monolithic nature, it allows for the integration of kernel modules. These modules are small pieces of kernel-level code that can be dynamically incorporated into the kernel, presenting the advantage of extending kernel functionality without necessitating system reboot, helping to keep the kernel size both manageable and maintainable. Kernel modules are developed using the C or Rust programming languages, like the kernel itself, ensuring compatibility and consistent performance. They interact with the kernel via APIs (Application Programming Interfaces). Despite their utility, since they run in kernel space, modules do carry a potential risk. If not written with careful attention to detail, they can introduce significant instability into the kernel, negatively affecting the overall system performance and reliability[@love2010linux].
 
 Modules can be managed and controlled at different stages, starting from boot time, and be manipulated dynamically when the system is already running. This is facilitated by utilities like `modprobe` and `rmmod`. In the lifecycle of a kernel module, two key functions are of significance: initialization and cleanup. The initialization function is responsible for setting up the module when it's loaded into the kernel. Conversely, the cleanup function is used to safely remove the module from the kernel, freeing up any resources it previously consumed. These lifecycle functions, along with other such hooks, provide a more structured approach to module development[@maurer2008professional].
@@ -86,6 +91,8 @@ Aside from this notification role, signals also serve as an asynchronous communi
 
 To customize how a process should react upon receiving a specific signal, handlers can be utilized. Handlers dictate the course of action a process should take when a signal is received; using the `sigaction()` function, a handler can be installed for a specific signal, enabling a custom response to that signal such as reloading configuration, cleaning up resources before exiting or enabling verbose logging [@robbins2003unix].
 
+\newpage{}
+
 It is however important to note that signals are not typically utilized as a primary inter-process communication (IPC) mechanism. This is due to their limitation in carrying additional data; while signals effectively alert a process of an event, they are not designed to convey forther information related to that event, and as result they are best used in scenarios where simple event-based notifications are sufficient, rather than for more complex data exchange requirements. To work around this, sockets allow processes within the same host system to communicate with each other. Unlike UNIX signals, much like TCP sockets, they can easily be used for IPC by allowing not only to submit additional data for an event, and are particularly popular on Linux.
 
 Stream sockets use TCP to provide reliable, two-way, connection-based byte streams, making them optimal for use in applications which require srong consistency guarantees. Datagram sockets on the other hand use UDP, which allows for fast, connection-less communication with less guarantees. In addition to these two different types of sockets, named and unnamed sockets exist. Named sockets are represented by a special file type on the file system and can be identified by a path, which allows for easy communication between unrelated processes. Unnamed sockets exist only in memory and disappear after the creating process terminates, making them a better choice for subsystems of applications to communicate with each other. In addition to this, UNIX sockets can pass a file descriptor between processes, which allows for interesting approaches to sharing resources with technologies such as `userfaultfd`[@stevens2003unixnet].
@@ -97,6 +104,8 @@ Stream sockets use TCP to provide reliable, two-way, connection-based byte strea
 The principle of locality, or locality of reference, refers to the tendency of a processor in a computer system to recurrently access the same set of memory locations within a brief span of time. This principle forms the basis of a predictable pattern of behavior that is evident across computer systems, and can be divided into two distinct types: temporal locality and spatial locality.
 
 Temporal locality revolves around the frequent use of particular data within a limited time period. Essentially, if a memory location is accessed once, it is probable that this same location will be accessed again in the near future. To leverage this pattern and improve performance, computer systems are designed to maintain a copy of this frequently accessed data in a faster memory storage, which in turn, significantly reduces the latency in subsequent references.
+
+\newpage{}
 
 Spatial locality, on the other hand, refers to the use of data elements that are stored in nearby locations. That is, once a particular memory location is accessed, the system assumes that other nearby locations are also likely to be accessed shortly. Therefore, to optimize performance, the system tries to anticipate these subsequent accesses by preparing for faster access to these nearby memory locations. Temporal locality is considered a unique instance of spatial locality, demonstrating how the two types are closely interlinked[@stallings2010architecture].
 
@@ -114,9 +123,11 @@ Below main memory, we find secondary storage devices such as Solid State Drives 
 
 Tertiary storage, including optical disks and tape, is slow but very cost-effective. Tape storage can store very large amounts of data for long periods of time. These types of storage are typically used for archiving or physically transporting data, such as importing data from personal infrastructure to a service like AWS[@barr2021offline].
 
+\newpage{}
+
 Depending on the technical choices for each of the hierarchy's layers, these latency differences can be quite significant, ranging from below a nanosecond for registers to multiple milliseconds for a HDD:
 
-![Latency profile of different memory technologies[@maruf2023memory]](./static/memory-hierarchy-latency-profile.png)
+![Latency profile of different memory technologies[@maruf2023memory]](./static/memory-hierarchy-latency-profile.png){ width=400px }
 
 The memory hierarchy is not static but evolves with technological advancements, leading to some blurring of these distinct layers. For instance, Non-Volatile Memory Express (NVMe) storage technologies can rival the speed of RAM while offering greater storage capacities[@maruf2023memory]. Similarly, some research, such as the work presented in this thesis, further challenges traditional hierarchies by exposing tertiary or secondary storage with the same interface as main memory.
 
@@ -140,6 +151,8 @@ Swap space also plays a significant role in system hibernation. Before the syste
 
 The use of swap space can impact system performance. Since secondary storage devices are usually slower than primary memory, heavy reliance on swap space can cause significant system slowdowns. To mitigate this, Linux allows for the adjustment of "swappiness", a parameter that controls the system's propensity to swap memory pages. Adjusting this setting can balance the use of swap space to maintain system performance while still preserving the benefits of virtual memory management[@gorman2004linuxmem].
 
+\newpage{}
+
 ### Page Faults
 
 Page faults are instances in which a process attempts to access a page that is not currently available in primary memory. This situation triggers the operating system to swap the necessary page from secondary storage into primary memory. These are significant events in memory management, as they determine how efficiently an operating system utilizes its resources.
@@ -156,7 +169,9 @@ Handling page faults involves certain techniques to ensure smooth operation. One
 
 One standout feature of `mmap` is its ability to create what is essentially a direct memory mapping between a file and a region of memory[@choi2017mmap]. This connection means that read operations performed on the mapped memory region directly correspond to reading the file and vice versa, enhancing efficiency as the amount of expensive context switches (compared to i.e. the `read` or `write` system calls) can be reduced.
 
-The key advantage that `mmap` provides is the capacity to facilitate zero-copy operations. In practical terms, this means that data can be accessed directly as if it were positioned in memory, eliminating the need to copy it from the disk first. This direct memory access saves time and reduces processing requirements, offering substantial performance improvements.
+The key advantage that `mmap` provides is it's ability to do zero-copy operations. In practical terms, this means that data can be accessed directly as if it were positioned in memory, eliminating the need to copy it from the disk first. This direct memory access saves time and reduces processing requirements, offering substantial performance improvements.
+
+\newpage{}
 
 This speed improvement does however come with a notable drawback: It bypasses the file system cache, which can potentially result in stale data when multiple processes are reading and writing simultaneously. This bypass may lead to a scenario where one process modifies data in the `mmap` region, and another process that is not monitoring for changes might remain unaware and continue to work with outdated data[@stevens2000advanced].
 
@@ -164,25 +179,27 @@ This speed improvement does however come with a notable drawback: It bypasses th
 
 `inotify` is an event-driven notification system of the Linux kernel, designed to monitor the file system for different events, such as modifications and accesses, among others. Its particularly useful because it can be configured to watch only write operations on certain files, i.e. only `write` operations. This level of control can offer considerable benefits in cases where there is a need to focus system resources on certain file system events, and not on others.
 
-Naturally, `inotify` comes with some recognizable advantages. Significantly, it diminishes overhead and resource use when compared to polling strategies. Polling is an operation-heavy approach as it continuously checks the status of the file system, regardless of whether any changes have occurred. In contrast, `inotify` works in a more event-driven way, where it only takes action when a specific event actually occurs. This is usually more efficient, reducing overhead especially where there are infrequent changes to the file system.
+Naturally, `inotify` comes with some recognizable advantages. Significantly, it reduces overhead and resource use when compared to polling strategies. Polling is an I/O-heavy approach as it continuously checks the status of the file system, regardless of whether any changes have occurred. In contrast, `inotify` works in a more event-driven way, where it only takes action when a specific event actually occurs. This is usually more efficient, reducing overhead especially where there are infrequent changes to the file system.
 
 Thanks to its efficiency and flexibility, `inotify` is used across many applications, especially in file synchronization services. In this use case, the ability to instantly notify the system of file changes aids in instant synchronization of files, demonstrating how critical its role can be in real-time or near real-time systems that are dependent on keeping data up-to-date. However, as is the case with many system calls, there is a limit to its scalability. `inotify` is constrained by a limit on how many watches can be established; this limitation can pose challenges in intricate systems where there is a high quantity of files or directories to watch for changes in, and might warrant additional management or fallback to heavier polling mechanisms for some parts of the system[@prokop2010inotify].
 
+\newpage{}
+
 ### Linux Kernel Caching
 
-Caching is a key feature of the Linux kernel that works to boost efficiency and performance. Within this framework, there are two broad categories: disk caching and file caching.
+Disk caching in Linux is a strategic method that temporarily stores frequently accessed data in RAM. It is implemented through the page cache subsystem, and operates under the assumption that data situated near data that has already been accessed will be needed soon. By retaining data close to the CPU where it can be quickly accessed without expensive disk reads can significatly reduce overall access time. The data within the cache is also managed using the LRU algorithm, which prunes the least recently used items first when space is needed. Linux also caches file system metadata in specialized structures known as the `dentry` and `inode` caches. This metadata contains information such as file names, attributes, and locations. The key benefit of this is that it speeds up the resolution of path names and file attributes, such as tracking when files were last changed for polling.
 
-Disk caching in Linux is a strategic method that temporarily stores frequently accessed data in RAM. It is implemented through the page cache subsystem, and operates under the assumption that data situated near data that has already been accessed will be needed soon. By retaining data close to the CPU where it may be swiftly accessed without costly disk reads can greatly reduce overall access time. The data within the cache is also managed using the LRU algorithm, which prunes the least recently used items first when space is needed. Linux also caches file system metadata in specialized structures known as the `dentry` and `inode` caches. This metadata encompasses varied information such as file names, attributes, and locations. The key benefit of this is that it expedites the resolution of path names and file attributes, such as tracking when files were last changed for polling.
+While such caching mechanisms can improve performance, they also introduce complexities. One such complexity is maintaining data consistency between the disk and cache through writebacks; aggressive writebacks, where data is copied back to disk frequently, can lead to reduced performance, while excessive delays may risk data loss if the system crashes before data has been saved.
 
-While such caching mechanisms can improve performance, they also introduce complexities. One such complexity involves maintaining data consistency between the disk and cache through the process known as writebacks; aggressive writebacks, where data is copied back to disk frequently, can lead to reduced performance, while excessive delays may risk data loss if the system crashes before data has been saved.
-
-Another complexity arises from the necessity to release cached data under memory pressure, known as cache eviction. As mentioned before, this requires sophisticated algorithms, such as LRU, to ensure effective utilization of available cache space. Prioritizing what to keep in cache when memory pressure builds does directly impact the overall system performance[@maurer2008professional].
+Another complexity stems from the necessity to release cached data under memory pressure, known as cache eviction. As mentioned before, this requires sophisticated algorithms, such as LRU, to ensure effective utilization of available cache space. Prioritizing what to keep in cache as the memory pressure increases directly impacts the overall system performance[@maurer2008professional].
 
 ### Networking
 
 #### RTT, LAN and WAN
 
 Round-trip time (RTT) represents the time data takes to travel from a source to a destination and back. It provides a valuable insight into application latency, and can varying according to many factors such as network type, system load and physical distance. Local area networks (LAN) are geographically small networks characterised by having a low RTT, resulting in a low latency due to the short distance (typically no more than across an office or data center) that data needs to travel. As a result of their small geographical size and isolation, perimeter security is often applied to such networks, meaning that the LAN is viewed as a trusted network that doesn't necessarily require authentication or encryption between internal systems, resulting in a potentially lower overhead.
+
+\newpage{}
 
 Wide area networks (WAN) on the other hand typically span a large geographical area, with the internet being an example that operates on a planetary scale. Due to the physical distance between source and destination, as well as the number of hops required for data to reach the destination, these networks typically have higher RTT and thus latency, and are also vulnerable to wire tapping and packet inspection, meaning that in order to securely transmit data on them, encryption and authentication is required[@tanenbaum2003net].
 
@@ -196,19 +213,25 @@ UDP is a connectionless protocol that does not make the same guarantees about th
 
 TLS is an encryption protocol that intents to secure communication over a public network over the internet. It uses both symmetric and asymmetric encryption, and is used for most internet communication, esp. in combination with HTTP in the form of HTTPS. It consists of a handshake phase, in which the parameters necessary to establish a secure connection, as well as session keys and certificates are exchanged, before continuing on to the encrypted data transfer phase. Besides this use as a server authentication (through certificate authorities) and encryption method, it is also able to authenticate clients through the use of mutual TLS, where both the client and the server submit a certificate[@rescorla2018tls].
 
+\newpage{}
+
 QUIC, a modern UDP-based transport layer protocol, was originally created by Google and standardized by the IETF in 2021[@rfc2021quic]. It aspires to combine the best qualities of TCP and UDP; unlike raw UDP, QUIC ensures the reliability of data transmission and guarantees the ordered delivery of data packets similarly to TCP, while intending to keep UDP's speed advantages. One of QUIC's standout features is its ability to reduce connection establishment times, which effectively lowers initial latency. It achieves this by merging the typically separate connection and security (TLS) handshakes, reducing the time taken for a connection to be established. Additionally, QUIC is designed to prevent the issue of "head-of-line blocking", allowing for the independent delivery of separate data streams. This means it can handle the delivery of separate data streams without one stream blocking another, resulting in smoother and more efficient transmission, a feature which is especially important for applications with lots of concurrent transmissions[@langley2017quic].
+
+\newpage{}
 
 ### Delta Synchronization
 
 Delta synchronization is a technique that allows for efficient synchronization of files between hosts, aiming to transfer only those parts of the file that have undergone changes instead of the entire file in order to reduce network and I/O overhead. Perhaps the most recognized tool employing this method of synchronization is `rsync`, an open-source data synchronization utility in Unix-like operating systems.
 
-![Design flow chart of WebRsync[@xiao2018rsync]](./static/webrsync-sequence-diagram.png)
+![Design flow chart of WebRsync[@xiao2018rsync]](./static/webrsync-sequence-diagram.png){ width=300px }
 
 While there are many applications of such an algorithm, it typically starts on file block division, dissecting the file on the destination side into fixed-size blocks. For each of these blocks, a quick albeit weak checksum calculation is performed, and these checksums are transferred to the source system.
 
 The source initiates the same checksum calculation process. These checksums are then compared to those received from the destination (matching block identification). The outcome of this comparison allows the source to detect the blocks which have transformed since the last synchronization.
 
 Once the altered blocks are identified, the source proceeds to send the offset of each block alongside the data of the changed block to the destination. Upon receiving a block, the destination writes it to the specific offset in the file. This process results in the reconstruction of the file in accordance with the modifications undertaken at the source, after which the next synchronization cycle can start[@xiao2018rsync].
+
+\newpage{}
 
 ### File Systems In Userspace (FUSE)
 
@@ -245,19 +268,25 @@ static int example_read(const char *path, char *buf, size_t size, off_t offset, 
 
 These callbacks would then be added to the FUSE operations struct and passed to `fuse_main`, which takes care of registering the operations with the FUSE kernel module and mounts the FUSE to a directory. Similarly to this, callbacks for handling writes etc. can be provided to the operation struct for a read-write capable FUSE[@libfuse2020example].
 
+\newpage{}
+
 When a user then performs a file system operation on a mounted FUSE file system, the kernel module sends a request for executing that operation to the userspace program. This is followed by the userspace program returning a response, which the FUSE kernel module conveys back to the user. As such, FUSE circumvents the complexity of implementing the file system implementation directly in the kernel. This architecture enhances safety, preventing entire kernel crashes due to errors within the implementation being limited to user instead of kernel space:
 
-![Structural diagramm of Filesystem in Userspace[@commons2023fusestructure]](./static/fuse-structure.png)
+![Structural diagramm of Filesystem in Userspace[@commons2023fusestructure]](./static/fuse-structure.png){ width=400px }
 
 Another benefit of a file system implemented as a FUSE is its inherent portability. Unlike a file system created as a kernel module, its interaction with the FUSE module rather than the kernel itself creates a stronger contract between the two, and allows shipping the file system as a plain binary instead of a binary kernel module, which typically need to be built from source on the target machine unless they are vendored by a distribution. Despite these benefits of FUSE, there is a noticeable performance overhead associated with it. This is largely due to the context switching between the kernel and the userspace that occurs during its operation[@vangoor2017fuse].
 
 FUSE is widely utilized to mount high-level external services as file systems. For instance, it can be used to mount remote AWS S3 buckets with `s3fs`[@gaul2023s3fs] or to mount a remote system's disk via Secure Shell (SSH) with SSHFS [@libfuse2022sshfs].
 
+\newpage{}
+
 ### Network Block Device (NBD)
 
 Network Block Device (NBD) is a protocol for connecting to a remote Linux block device. It typically works by communicating between a user space-provided server and a Kernel-provided client. Though potentially deployable over Wide Area Networks (WAN), it is primarily designed for Local Area Networks (LAN) or localhost usage. The protocol is divided into two phases: the handshake and the transmission[@blake2023nbd]:
 
-![Sequence diagram of the baseline NBD protocol (simplified)\label{nbd-baseline-protocol-simplified-sequence}](./static/nbd-baseline-protocol-simplified-sequence.png)
+![Sequence diagram of the baseline NBD protocol (simplified)\label{nbd-baseline-protocol-simplified-sequence}](./static/nbd-baseline-protocol-simplified-sequence.png){ width=500px }
+
+\newpage{}
 
 The NBD protocol involves multiple participants, notably one or several clients, a server, and the concept of an export. It starts with a client establishing a connection with the server. The server responds by delivering a greeting message highlighting various server flags. The client responds by transmitting its own flags along with the name of an export to use; a single NBD server can expose multiple devices.
 
@@ -268,6 +297,8 @@ While powerful in many regards, NBD has some limitations. Its maximum message si
 NBD, being a protocol with a long legacy, comes with its own set of operational quirks such as multiple different handshake versions and legacy features. As a result, it is advisable to only implement the latest recommended versions and the foundational feature set when considering NBD for a narrow use case.
 
 Despite the simplicity of the protocol, there are certain scenarios where NBD falls short. Compared to FUSE, it has limitations when dealing with backing devices that operate drastically different from random-access storage devices like a tape drive, since it lacks the ability to work with high-level abstractions such as files or directories. For example, it does not support shared access to the same file for multiple clients. However, this shortcoming can be considered as an advantage for narrow use cases like memory synchronization, given that it operates on a block level, where synchronization features are not needed or implemented at a higher layer.
+
+\newpage{}
 
 ### Virtual Machine Live Migration
 
@@ -280,6 +311,8 @@ The primary characteristic of pre-copy migration is its "run-while-copy" nature,
 In the case of a VM, the pre-copy migration procedure starts with transfering the initial state of VM's memory to the destination host. During this operation, if modifications occur to any chunks of data, they are flagged as dirty. These dirty chunks of data are then transferred to the destination until only a small number remain - an amount small enough to stay within the allowable maximum downtime criteria. Following this, the VM is suspended at the source, enabling the synchronization of the remaining chunks of data to the destination without having to continue tracking dirty chunks. Once this synchronization process is completed, the VM is resumed at the destination host.
 
 The pre-copy migration process is fairly robust, especially in instances where there might be network disruption during synchronization. This is because of fact that, at any given point during migration, the VM is readily available in full either at the source or the destination. A limitation to the approach however is that, if the VM or application alters too many chunks on the source during migration, it may not be possible to meet the maximum acceptable downtime criteria. Maximum permissible downtime is also inherently restricted by the available round-trip time (RTT)[@he2016migration].
+
+\newpage{}
 
 #### Post-Copy
 
@@ -297,9 +330,11 @@ Recent studies have explored different strategies to determine the most suitable
 
 One method proposed identifies cyclical workload patterns of VMs and leverages this knowledge to delay migration when it is beneficial. This is achieved by analyzing recurring patterns that may unnecessarily postpone VM migration, and then constructing a model of optimal cycles within which VMs can be migrated. In the context of VM migration, such cycles could for example be triggered by a large application's garbage collector that results in numerous changes to VM memory.
 
+\newpage{}
+
 When a migration is proposed, the system verifies whether it is in an optimal cycle for migration. If it is, the migration proceeds; if not, the migration is postponed until the next cycle. The proposed process employs a Bayesian classifier to distinguish between favorable and unfavorable cycles.
 
-Compared to the popular alternative method which usually involves waiting for a significant amount of unchanged chunks to synchronize first, the proposed pattern recognition-based approach potentially offers substantial improvements. The study found that this method yielded an enhancement of up to 74% in terms of live migration time/downtime and a 43% reduction concerning the volume of data transferred over the network[@baruchi2015workload].
+Compared to the alternative, which usually involves waiting for a significant amount of unchanged chunks to synchronize first, the proposed pattern recognition-based approach potentially offers substantial improvements. The study found that this method yielded an enhancement of up to 74% in terms of live migration time/downtime and a 43% reduction concerning the volume of data transferred over the network[@baruchi2015workload].
 
 ### Streams and Pipelines
 
@@ -323,9 +358,7 @@ gRPC is an open-source, high-performance remote procedure call (RPC) framework d
 
 One of the notable features of the gRPC is its usage of HTTP/2 as the transport protocol. This allows it to exploit features of HTTP/2 such as header compression, which minimizes bandwidth usage, and request multiplexing, enabling multiple requests to be sent concurrently over a single connection. In addition to HTTP/2, gRPC utilizes Protocol Buffers (Protobuf), more specifically proto3, as the Interface Definition Language (IDL) and wire format. Protobuf is a compact, high-performance, and language-neutral mechanism for data serialization. This makes it preferable over the more dynamic, but more verbose and slower JSON format often used in REST APIs.
 
-One of the strengths of the gRPC framework is its support for various types of RPCs. Not only does it support unary RPCs where the client sends a single request to the server and receives a single response in return, mirroring the functionality of a traditional function call, but also server-streaming RPCs, wherein the client sends a request, and the server responds with a stream of messages. Conversely, in client-streaming RPCs, the client sends a stream of messages to a server in response to a request. It also supports bidirectional RPCs, wherein both client and server can send messages to each other.
-
-What distinguishes gRPC is its pluggable structure that allows for added functionalities such as load balancing, tracing, health checking, and authentication, which make it a comprehensive solution for developing distributed systems[@google2023grpc].
+One of the strengths of the gRPC framework is its support for various types of RPCs. Not only does it support unary RPCs where the client sends a single request to the server and receives a single response in return, mirroring the functionality of a traditional function call, but also server-streaming RPCs, wherein the client sends a request, and the server responds with a stream of messages. Conversely, in client-streaming RPCs, the client sends a stream of messages to a server in response to a request. It also supports bidirectional RPCs, wherein both client and server can send messages to each other. What distinguishes gRPC is its pluggable structure that allows for added functionalities such as load balancing, tracing, health checking, and authentication, which make it a comprehensive solution for developing distributed systems[@google2023grpc].
 
 #### fRPC and Polyglot
 
@@ -340,6 +373,8 @@ Redis (Remote Dictionary Server) is an in-memory data structure store, primarily
 One of the primary reasons for Redis's speed is its reliance on in-memory data storage rather than on disk, enabling very low-latency reads and writes. While the primary use case of Redis is in in-memory operations, it also supports persistence by flushing data to disk. This feature broadens the use cases for Redis, allowing it to handle applications that require longer-term data storage in addition to a caching mechanism. In addition to it being mostly in-memory, Redis also supports quick concurrent reads/writes thanks to its non-blocking I/O model, making it a good choice for systems that require the store to be available to many workers or clients.
 
 Redis also includes a publish-subscribe (pub-sub) system. This enables it to function as a message broker, where messages are published to channels and delivered to all the subscribers interested in those channels. This makes it a particularly compelling choice for systems that require both caching and a memory broker, such as queue systems[@redis2023pubsub].
+
+\newpage{}
 
 #### S3 and Minio
 
@@ -361,9 +396,11 @@ Despite these robust capabilities, Cassandra does come with certain limitations.
 
 In response to the perceived shortcomings of Cassandra, ScyllaDB was released in 2015. It shares design principles with Cassandra, such as compatibility with Cassandra's API and data model, but has architectural differences intended to overcome Cassandra's limitations. It's primarily written in C++, contrary to Cassandra's Java-based code. This contributes to ScyllaDB's shared-nothing architecture, a design that aims to minimize contention and enhance performance.
 
-![The 90- and 99-percentile latencies of UPDATE queries, as measured on three i3.4xlarge machines (48 vCPUs in total) in a range of load rates[@grabowski2021scylladb]](./static/cassanda-scylladb-latencies.png)
+![The 90- and 99-percentile latencies of UPDATE queries, as measured on three i3.4xlarge machines (48 vCPUs in total) in a range of load rates[@grabowski2021scylladb]](./static/cassanda-scylladb-latencies.png){ width=400px }
 
 ScyllaDB was particularly engineered to address one shortcoming of Cassandra - issues around latency, specifically the 99th percentile latency that impacts system reliability and predictability. ScyllaDB's design improvements and performance gains over Cassandra have been endorsed by benchmarking studies[@grabowski2021scylladb].
+
+\newpage{}
 
 ## Planning
 
@@ -381,6 +418,8 @@ As mentioned before, `mmap` allows mapping a memory region to a file. Similarly 
 
 While writes done to a `mmap`ed region are eventually being written back to the underlying file, this is not the case immediately, since the kernel still uses caching on an `mmap`ed region in order to speed up reads/writes. As a workaround, we can use the `msync` syscall, which works similarly to the `sync` syscall by flushing any remaining changes from the cache to the backing file.
 
+\newpage{}
+
 In order to actually detect the changes to the underlying file, an obvious solution might be to use `inotify`. This however isn't possible for `mmap`ed files, as the file corresponds to a memory region, and traditional `write` etc. evens are not emitted. Instead of using `inotify` or a similar event-based system to track changes, we can instead use a polling system. This has drawbacks - namely latency and computation load - that were attempted to be worked around in the following implementation, but are inherent to this approach.
 
 ### Push-Pull Synchronization with FUSE
@@ -388,6 +427,8 @@ In order to actually detect the changes to the underlying file, an obvious solut
 Using a file system in user space (FUSE) can serve as the basis for implementing either a pre- or a post-copy live migration system. Similarly to the file-based pre-copy approach, we can use `mmap` to map the migrated resource's memory region to a file. Instead of storing this file on the system's default filesystem however, a custom file system is implemented, which allows dropping the expensive polling system. Since a custom file system allows us to catch reads (for a post-copy migration scenario, were reads would be responded to by fetching from the remote), writes (for a pre-copy scenario, where writes would be forwarded to the destination) and other operations by the kernel, we no longer need to use `inotify`.
 
 While implementing such a custom file system in the kernel is possible, it is a complex task that requires writing a custom kernel module, using a supported language by the kernel (mostly C or a limited subset of Rust), and in general having significant knowledge of kernel internals. Furthermore, since networking would be required to resolve reads/forward writes from/to the source/destination host, a job that would usually be done by user space applications, a user space component would probably also need to be developed in order to support this part of the synchronization system. Instead of implementing it in the kernel, we can use the FUSE API. This makes it possible to write the entire file system in user space, can significantly reduce the complexity of this approach.
+
+\newpage{}
 
 ### Mounts with NBD
 
@@ -407,7 +448,9 @@ Usually, the NBD server and client don't run on the same system, but are instead
 
 While most wire security issues with the protocol can be worked around by simply using TLS, the big issue of it's latency sensitivity remains. Usually, individual blocks would only be fetched as they are being accessed, resulting in a ready latency per block that is at least the RTT. In order to work around this issue, instead of directly connecting a NBD client to a remote NBD server, a layer of indirection (called "Mount") is created. This component consists of both a client and a server, both of which are running on the local system instead of being split into a separate remote and local component, referred to as a "mount", and is implemented as part of the r3map library ("re**m**ote **mm**ap)[@pojtinger2023r3map].
 
-By combining the NBD server and client into this reusabable unit, we can connect the server to a new backend component with a protocol which is better suited for WAN usage than NBD. This also allows the implementation of smart, asynchronous background push/pull strategies instead of simpliy directly writing to/from the network (called "Managed Mounts"). The simplest form of the mount API is the direct mount API; it simply swaps out NBD for a transport-independent RPC framework, but does not do additional optimizations. It has two simple actors: The client and the server. Only unidirectional RPCs from the client to the server are required for this to work, and the required backend service's interface is simple:
+\newpage{}
+
+By combining the NBD server and client into this reusabable unit, we can connect the server to a new backend component with a protocol which is better suited for WAN usage than NBD. This also allows the implementation of asynchronous background push/pull strategies instead of simpliy directly writing to/from the network (called "Managed Mounts"). The simplest form of the mount API is the direct mount API; it simply swaps out NBD for a transport-independent RPC framework, but does not do additional optimizations. It has two simple actors: The client and the server. Only unidirectional RPCs from the client to the server are required for this to work, and the required backend service's interface is simple:
 
 ```go
 type BackendRemote struct {
@@ -422,11 +465,13 @@ The protocol is stateless, as there is only a simple remote reader and writer in
 
 #### Chunking
 
-And additional issue that was mentioned before that this approach can approve upon is better chunking support. While it is possible to specify the NBD protocol's chunk size by configuring the NBD client and server, this is limited to only 4KB in the case of Linux's implementation. If the RTT between the backend and the NBD server however is large, it might be preferable to use a much larger chunk size; this used to not be possible by using NBD directly, but thanks to this layer of indirection it can be implemented.
+An additional issue that was mentioned before that this approach can approve upon is better chunking support. While it is possible to specify the NBD protocol's chunk size by configuring the NBD client and server, this is limited to only 4KB in the case of Linux's implementation. If the RTT between the backend and the NBD server however is large, it might be preferable to use a much larger chunk size; this used to not be possible by using NBD directly, but thanks to this layer of indirection it can be implemented.
 
 Similarly to the Linux kernel's NBD client, backends themselves might also have constraints that prevent them from working without a specific chunk size, or otherwise require aligned reads. This is for example the case for tape drives, where reads and writes must occur with a fixed block size and on aligned offsets; furthermore, these linear storage devices work best if chunks are multiple MBs instead KBs.
 
 It is possible to do this chunking in two places: On the mount API's side (meaning the NBD server), or on the (potentially remote) backend's side. While this will be discussed further in the results section, chunking on the backend's side is usually preferred as doing it client-side can significantly increase latency due to a read being required if a non-aligned write occurs, esp. in the case of a WAN deployment with high RTT.
+
+\newpage{}
 
 But even if the backend does not require any kind of chunking to be accessed - i.e. if it is a remote file - it might still make sense to limit the maximum supported message size between the NBD server and the backend, simply to prevent DoS attacks that would require the backend to allocate large chunks of memory, were such a limit provided by a chunking system not in place.
 
@@ -452,11 +497,17 @@ To improve on this the pull-based migration API, the migration process is split 
 
 The migration protocol that allows for this defines two new actors: The seeder and the leecher. A seeder represents a resource that can be migrated from or a host that exposes a migrabtable resource, while the leecher represents a client that intents to migrate a resource to itself. The protocol starts by running an application with the application's state on the region `mmap`ed to the seeder's block device, similarly to the managed mount API. Once a leecher connects to the seeder, the seeder starts tracking any writes to it's mount, effectively keeping a list of dirty chunks. Once tracking has started, the leecher starts pulling chunks from the seeder to it's local cache. Once it has received a satisfactory level of locally available chunks, it asks the seeder to finalize. This then causes the seeder to suspend the app accessing the memory region on it's block device, `msync`/flushes the it, and returns a list of chunks that were changed between the point where it started tracking and the flush has occured. Upon receiving this list, the leecher marks these chunks are remotes, immediately resumes the application (which is now accessing the leecher's block device), and queues the dirty chunks to be pulled in the background.
 
-![Sequence diagram of the migration protocol (simplified)\label{migration-protocol-simplified-sequence}](./static/migration-protocol-simplified-sequence.png)
+![Sequence diagram of the migration protocol (simplified)\label{migration-protocol-simplified-sequence}](./static/migration-protocol-simplified-sequence.png){ width=400px }
 
-By splitting the migration into these two distinct phases, the overhead of having to start the deivce can be skipped and additional app initialization that doesn't depend on the app's state (i.e. memory allocation, connecting to databases, loading models etc.) can be performed before the application needs to be suspended. This combines both the pre-copy algorithm (by pulling the chunks from the seeder ahead of time) and the post-copy algorithm (by resolving dirtyc chunsk from the seeder after the VM has been migrated) into one coherent protocol. As will be discussed further in the results section, the maximum tolerable downtime can be drastically reduced, and dirty chunks don't need to be re-transmitted multiple times. Effectively, it allows dropping this downtime to the time it takes to `msync` the seeder's app state, the RTT and, if they are being accessed immediately, how long it takes to fetch the chunks that were written in between the start of it tracking and finalizing. The migration API can use the same preemptive pull system as the managed mount API and benefit from it's optimizations, but does not use the background push system.
+By splitting the migration into these two distinct phases, the overhead of having to start the deivce can be skipped and additional app initialization that doesn't depend on the app's state (i.e. memory allocation, connecting to databases, loading models etc.) can be performed before the application needs to be suspended.
+
+\newpage{}
+
+This combines both the pre-copy algorithm (by pulling the chunks from the seeder ahead of time) and the post-copy algorithm (by resolving dirtyc chunsk from the seeder after the VM has been migrated) into one coherent protocol. As will be discussed further in the results section, the maximum tolerable downtime can be drastically reduced, and dirty chunks don't need to be re-transmitted multiple times. Effectively, it allows dropping this downtime to the time it takes to `msync` the seeder's app state, the RTT and, if they are being accessed immediately, how long it takes to fetch the chunks that were written in between the start of it tracking and finalizing. The migration API can use the same preemptive pull system as the managed mount API and benefit from it's optimizations, but does not use the background push system.
 
 An interesting question to ask with this two-step migration API is when to start the finalization step. The finalization phase in the protocol is critical, and it is hard or impossible to recover from depending on the specific implementation. While the synchronization itself could be safely recovered from by simply calling `Finalize` multiple times to restart it. But since `Finalize` needs to return a list of dirty chunks, it requires the app on the seeder to be suspended before `Finalize` can return, an operation that might not be idempotent.
+
+\newpage{}
 
 ## Implementation
 
@@ -495,6 +546,8 @@ syscall.Syscall(
 
 This is abstracted into a single `Register(length int) ([]byte, UFFD, uintptr, error)` function. Once this region has been registered, the `userfaultfd` API's file descriptor and the offset is passed over a UNIX socket, where it can then be received by the handler. The handler itself receives the address that has triggered the page fault by polling the transferred file descriptor, which is then responded to by fetching the relevant chunk from a provided reader and sending it to the faulting memory region over the same socket. Similarly to the registration API, this is also wrapped into a reusable `func Handle(uffd UFFD, start uintptr, src io.ReaderAt) error` function.
 
+\newpage{}
+
 #### `userfaultfd` Backends
 
 Thanks to `userfaultfd` being mostly useful for post-copy migration, the backend can be simplifed to a simple pull-only reader interface (`ReadAt(p []byte, off int64) (n int, err error)`). This means that almost any `io.ReaderAt` can be used to provide chunks to a `userfaultfd`-registered memory region, and access to this reader is guaranteed to be aligned to system's page size, which is typically 4 KB. By having this simple backend interface, and thus only requiring read-only access, it is possible to implement the migration backend in many different ways. A simple backend can for example return a pattern to the memory region:
@@ -524,6 +577,8 @@ b, uffd, start, err := mapper.Register(int(s.Size()))
 mapper.Handle(uffd, start, f)
 ```
 
+\newpage{}
+
 ### File-Based Synchronization
 
 #### Caching Restrictions
@@ -536,11 +591,15 @@ Linux caches reads to the backing file similarly to how it does if `read` etc. a
 
 In order to actually watch for changes, at first glance, the obvious choice would be to use `inotify`, which would allow the registration of `write` or `sync` even handlers to catch writes to the memory region by registering them on the backing file. As mentioned earlier however, Linux doesn't emit these events on `mmap`ed files, so an alternative must be used; the best option here is to instead poll for either attribute changes (i.e. the "Last Modified" attribute of the backing file), or by continously hashing the file to check if it has changed. Hashing continously with this pollig method can have significant downsides, especially in a migration scenario, where it raises the guaranteed minimum latency by having to wait for at least the next polling cycle. Hashing the entire file is also a an I/O- and CPU-intensive process, because in order to compute the hash, the entire file needs to be read at some point. Within the context of the file-based synchronization approach however, it is the only option available.
 
+\newpage{}
+
 To speed up the process of hashing, instead of hashing the entire file, we can instead hash individual chunks of the file, in effect implementing a delta synchronization algorithm. This can be implemented by opening the file multiple times, hashing individual offsets using each of the opened files, and aggregating the chunks that have been changed. When picking algorithms for this chunk-based hashing algorithm, two metrics are of relevance: the algorithm's throughput with which it can calculate hashes, and the prevalence of hash collisions, where two different inputs produce the same hashes, leading to a chunk change not being detected. Furthermore, if the underlying algorithm is CPU- and not I/O-bound, using multiple open files can increase throughput substantially by allowing for better concurrent processing. Not only does this decrease the time spent on each individual hashing iteration of the polling process, but dividing the file into smaller chunks that all have their own hashes to compare with the remote's hashes can also decrease the amount of network traffic that is required to sync the changes, since a small change in the backing file leads to the transfer of a smaller chunk.
 
 #### Synchronization Protocol
 
 The delta synchronization protocol for this approach is similar to the one used by `rsync`, but simplified. It supports synchronizing multiple files at the same time by using the file names as IDs, and also supports a central forwarding hub instead of requiring peer-to-peer connectivity between all hosts, which also reduces network traffic since this central hub could also be used to forward one stream to all other peers instead of having to send it multiple times. The protocol defines three actors: The multiplexer, file advertiser and file receiver.
+
+\newpage{}
 
 #### Multiplexer Hub
 
@@ -647,15 +706,11 @@ This is the receiving component of one delta synchronization iteration. It start
 ```go
 // Local hash calculation
 localHashes, _, err := GetHashesForBlocks(parallel, path, blocksize)
-
 // Sending the hashes to the remote
-utils.EncodeJSONFixedLength(conn, localHashes)
-
 // Receiving the remote hashes and the truncation request
 blocksToFetch := []int64{}
 utils.DecodeJSONFixedLength(conn, &blocksToFetch)
 // ...
-
 cutoff := int64(0)
 utils.DecodeJSONFixedLength(conn, &cutoff)
 ```
@@ -686,22 +741,17 @@ type Fs interface {
 }
 ```
 
-The STFS project[@pojtinger2022stfs] has shown that by using this abstraction layer, seemingly incompatible, non-linear backends can still be mapped to a file system. The project is backend by a tape drive, which is inherently append-only and optimized for linear access. Thanks to the inclusion of an on-disk index and various optimization methods, the resulting file system was still performant enough for standard use, while also supporting most of the features required by the average user such as symlinks, file updates and more.
+The STFS project[@pojtinger2022stfs] has shown that by using this abstraction layer, seemingly incompatible, non-linear backends can still be mapped to a file system. The project is backed by a tape drive, which is inherently append-only and optimized for linear access. Thanks to the inclusion of an on-disk index and various optimization methods, the resulting file system was still performant enough for standard use, while also supporting most of the features required by the average user such as symlinks, file updates and more.
 
 By using a project like sile-fystem[@waibel2022silefystem], it is also possible to use any `afero.Fs` filesystem as a FUSE backend; this can signficantly reduce the required implementation overhead, as it doesn't require writing a custom adapter:
 
 ```go
 // Creating the file system
 serve := filesystem.NewFileSystem(
-  // ..
-  afero.NewOsFs(),  // afero.Fs implementation here
-  // ...
+  afero.NewOsFs(),  // afero.Fs implementation here, followed by configuration
 )
-// ...
-
 // Mounting the file system
 fuse.Mount(viper.GetString(mountpoint), serve, cfg)
-// ...
 ```
 
 While the FUSE approach to synchronization is interesting, even with these available libraries the required overhead of implementing it (as shown by prior projects like STFS) as well as other factors that will be mentioned later led to this approach not being pursued further.
@@ -748,6 +798,8 @@ type NegotiationOptionHeader struct {
 To keep the actual handshake as simple as possible, only the fixed newstyle handshake is implemented, which also makes the implementation compliant with the baseline specification as defined by the protocol[@blake2023nbd] (see figure \ref{nbd-baseline-protocol-simplified-sequence}). The negotiation starts by the server sending the negotiation header to the NBD client and ignoring the client's flags. The option negotiation phase is implemented using a simple loop, which either breaks on success or returns in the case of an error. For the Go implementation, it is possible to use the `binary` package to correctly encode and decode the NBD packets and then switching on the encoded option ID; in this handshake, the `NEGOTIATION_ID_OPTION_INFO` and `NEGOTIATION_ID_OPTION_GO` options exchange information about the chosen export (i.e. block size, export size, name and description), and if `GO` is specified, immediately continue on to the transmission phase. If an export is not found, the server aborts the connection. In order to allow for enumeration of available exports, the `NEGOTIATION_ID_OPTION_LIST` allows for returning the list of exports to the client, and `NEGOTIATION_ID_OPTION_ABORT` allows aborting handshake, which can be necessary if i.e. the `NEGOTIATION_ID_OPTION_INFO` was chosen but the client can't handle the exposed export, i.e. due to it not supporting the advertised block size.
 
 The actual transmission phase is implemented in a similar way, by reading headers in a loop, switching on the message type and handling it accordingly. `TRANSMISSION_TYPE_REQUEST_READ` forwards a read request to the selected export's backend and sends the relevant chunk to the client, `TRANSMISSION_TYPE_REQUEST_WRITE` reads the offset and chunk from the client, and writes it to the export's backend; it is here that the read-only option is implemented by sending a permission error in case of writes. Finally, the `TRANSMISSION_TYPE_REQUEST_DISC` transmission message type gracefully disconnects the client from the server and causes the backend to sync, i.e. to flush and outstanding writes to disk. This is especially important in order to support the lifecycle of the migration API.
+
+\newpage{}
 
 #### Client
 
@@ -811,13 +863,15 @@ go func() {
 
 In reality however, due to overheads in `udev`, it can be faster to use polling instead of the even system, which is why it is possible to set the `ReadyCheckUdev` option in the NBD client to `false`, which uses polling instead. Similarly to the setup lifecycle, the teardown lifecycle is also as an asynchronous operation. It works by calling three `ioctl`s (`TRANSMISSION_IOCTL_CLEAR_QUE` to complete any remaining reads/writes, `TRANSMISSION_IOCTL_DISCONNECT` to disconnect from the NBD server and `TRANSMISSION_IOCTL_CLEAR_SOCK` to disassociate the socket from the NBD device so that it can be used again) on the NBD device's file descriptor, causing it to disconnect from the server and causing the prior `DO_IT` syscall to return, which in turn causes the prior call to `Connect` to return.
 
+\newpage{}
+
 #### Optimizing Access to the Block Device
 
 When `open`ing the block devie that the client is connected to, the kernel usually provides a caching/buffer mechanism, requiring an expensive `sync` syscall to flush outstanding changes to the NBD client. As mentioend earlier, by using `O_DIRECT` it is possible to skip this caching layer and write all changes directly to the NBD client and thus the server, which is particularly useful in a case where both the client and server are on the same host, and the amount of time for `sync`ing should be minimal, as is the case for a migration scenario. Using `O_DIRECT` however does come with the downside of requiring reads/writes that are aligned to the system's page size, which is possible to implement in the specific application using the device to access a resource, but not in a generic way.
 
 #### Combining the NBD Client and Server to a Mount
 
-When both the client and server are started on the same host, it is possible to connect them in an efficient way by creating a connected UNIX socket pair, returning a file descriptor for both the server and the client respectively, after which both components can be started in a new goroutine. This highlights the benefit of not requiring a specific transport layer or `accept` semantics for the NBD library, as it is possible to skip the usually required TCP handshake for NBD.
+When both the client and server are started on the same host, it is possible to connect them in an efficient way by creating a connected UNIX socket pair, returning a file descriptor for both the server and the client respectively, after which both components can be started in a new goroutine. This highlights the benefit of not requiring a specific transport layer or `accept` semantics for the NBD library, as it is possible to skip the usually required handshakes.
 
 This form of a combined client and server on the local device, with the server's backend providing the actual resource, forms a direct path mount - where the path to the block device can be passed to the application consuming or providing the resource, which can then choose to `open`, `mmap` etc. it. In addition to this simple path-based mount, a file mount is provided. This simply opens up the path as a file, so that it can be accessed with the common `read`/`write` syscalls; the benefit over simply using the path mount and handling the access in the application consuming the resource is that common pitfalls around the lifecycle (`Close` and `Sync`) can be handled within the mount API directly.
 
@@ -826,6 +880,8 @@ The direct slice mount works similarly to the file mount, with the difference be
 ```go
 func (d *DirectSliceMount) Open() ([]byte, error)
 ```
+
+\newpage{}
 
 It is also possible to format the backend for a NBD server/mount with a filesystem and mount the underlying filesystem on the host that accesses a resource, where a file on this filesystem can then be `open`ed/`mmap`ed similarly to the FUSE approach. This is particularly useful if there are multiple memory regions which all belong to the same application to synchronize, as it removes the need to start multiple block devices and reduces the latency overhead associated with it. This solution can be implemented by i.e. calling `mkfs.ext4` on a block device directly or by formatting the NBD backend ahead of time, which does however come at the cost of storing and transferring the file system metadata as well as the potential latency overhead of mounting it.
 
@@ -843,6 +899,8 @@ type ReadWriterAt interface {
 ```
 
 This way, it is possible to forward calls to the NBD backends like `Size` and `Sync` directly to the underlying backend, but can chain the `ReadAt` and `WriteAt` methods, which carry actual data, into a pipeline of other `ReadWriterAt`s.
+
+\newpage{}
 
 #### Chunking
 
@@ -886,6 +944,8 @@ if indexedOffset == 0 && writeSize == int(a.chunkSize) {
 // ...
 ```
 
+\newpage{}
+
 If this is not the case, and only parts of a chunk need to be written, it first reads the complete chunk into a buffer, modifies the buffer with the data that was changed, and then writes the entire buffer back until all data has been written:
 
 ```go
@@ -904,6 +964,8 @@ This simple implementation can be used to efficiently allow reading and writing 
 In addition to this chunking system, there is also a `ChunkedReadWriterAt`, which ensures that the limits concerning a backend's maximum chunk size and aligned reads/writes are being respected. Some backends, i.e. a backend where each chunk is represented by a file, might only support writing to aligned offsets, but don't support checking for this behavior; in this example, if a chunk with a larger chunk size is written to the backend, depending on the implementation, this could result in this chunk file's size being extended, which could lead to a DoS attack vector. It can also be of relevance if a client instead of a server is expected to implement chunking, and the server should simply enforce that the aligned reads and writes are being provided.
 
 In order to check if a read or write is aligned, this `ReadWriterAt` checks whether an operation is done to an offset that is multiples of the chunk size, and whether the length of the slice of data is a valid chunk size.
+
+\newpage{}
 
 #### Background Pull
 
@@ -984,6 +1046,8 @@ chunks.NewSyncedReadWriterAt(m.remote, local, func(off int64) error {
 })
 ```
 
+\newpage{}
+
 Unlike the puller component, the pusher also functions as a pipeline step, and as such provides a `ReadAt` and `WriteAt` implementation. While `ReadAt` is a simple proxy forwarding the call to the next stage, `WriteAt` marks a chunk as pushable, causing it to be written back to the remote on the next writeback cycle, before writing the chunk to the next stage. If a managed mount is intended to be read-only, the pusher is simply not included in the pipeline.
 
 #### Pipeline
@@ -995,6 +1059,8 @@ Using such a pipeline system of independent stages and other components also mak
 #### Concurrent Device Initialization
 
 The background push/pull components allow pulling from the remote pipeline stage before the NBD device itself is open. This is possible because the device doesn't need to start accessing the data in a post-copy sense to start the pull, and means that the pull process can be started as the NBD client and server are still initializing. Both components typically start quickly, but the initialization might still take multiple milliseconds. Often, this amounts to roughly one RTT, meaning that making this initialization procedure concurrent can signficantly reduce the initial read latency by pre-emptively pulling data. This is because even if the first chunks are being accessed right after the device has been started, they are already available to be read from the local backend instead of the remote, since they have been pulled during the initialization and thus before the mount has even been made available to application.
+
+\newpage{}
 
 #### Device Lifecycles
 
@@ -1013,6 +1079,8 @@ type ManagedMountHooks struct {
 While the managed mount system functions as a hybrid pre- and post-copy system, optimizations are implemented that make it more viable in a WAN scenario compared to a typical pre-copy system by using a unidirectional API. Usually, a pre-copy system pushes changes to the destination host. In many WAN scenarios however, NATs prevent a direct connection. Moreover, since the source host needs to keep track of which chunks have already been pulled, the system becomes stateful on the source host and events such as network outages need to be recoverable from.
 
 By using the pull-only, unidirectional API to emulate the pre-copy setup, the destination can simply keep track of which chunks it still needs to pull itself, meaning that if there is a network outage, it can just resume pulling or decide to restart the pre-copy process. Unlike the pre-copy system used for the file synchronization/hashing approach, this also means that destination hosts don't need to subscribe to a central multiplexing hub, and adding clients to the topology is easy since their pull progress state does not need to be stored anywhere except the destination node.
+
+\newpage{}
 
 ### Live Migration
 
@@ -1062,6 +1130,8 @@ As an additional measure aside from the lockable `ReadWriterAt` is to make acces
 
 After the leecher has successfully reached 100% availability, it calls `Close` on the seeder and disconnects the leecher, causing both to shut down, after which the leecher can re-use the mount to provide a new seeder which can allow further migrations to happen in the same way.
 
+\newpage{}
+
 ### Pluggable Encryption, Authentication and Transport
 
 Compared to existing remote memory and migration solutions, r3map is designed for a new field of application: WAN. Most existing systems that provide these solutions are intended to work in high-throughput, low-latency LAN, where assumptions concerning authentication and authorization as well as scalability can be made that are not valid in a WAN deployment. For example encryption: While in trusted LAN networks, it can be a viable option to assume that there are no bad actors in the local subnet, the same can not be assumed for WAN. While depending on i.e. TLS for the APIs would have been a viable option for r3map if it were to only support WAN deployments, it should still be functional and be able to take advantage of the guarantees if it is deployed in a LAN, which is why it is transport agnostic.
@@ -1069,6 +1139,8 @@ Compared to existing remote memory and migration solutions, r3map is designed fo
 This makes adding guarantees such as encryption as simple as choosing the best solution depending on the network conditions. For low-latency, trusted networks, a protocol like the SCSI RDMA protocol (SRP) can be chosen, while for WAN, a standard internet protocol like TLS over TCP or QUIC can be used instead. Similarly to how the transport layer is interchangable, it is RPC-framework independent as well. This means that RPC frameworks such as dudirekta (which will be elaborated on later), which can work over P2P protocols like WebRTC data channels, are an option for environments with highly dynamic network topologies, where IP addresses rotate or there might be temporary loss of connectivity to recover from, as is the case with i.e. mobile networks, allowing live migration to work in completely new environments.
 
 Since r3map makes no assumptions about them, authentication and authorization can be implemented in a similar way. For LAN deployments, the typical approach of simply trusting the local subnet can be used, for public deployments mTLS certificates or dedicated authentication protocols like OIDC can be an option. In networks with high RTT, QUIC allows the use of a 0-RTT handshake, which combines the connectivity and security handshake into one; this paired with mTLS can be an interesting option to decrease the initial read latency while still providing proper authentication.
+
+\newpage{}
 
 ### Concurrent Backends
 
@@ -1118,6 +1190,8 @@ func (b *RedisBackend) WriteAt(p []byte, off int64) (n int, err error) {
 
 Using Redis is particularly interesting because it is able to handle locking the indiviudal chunks server-side in an efficient way, and thanks to it's custom protocol and fast serialization it is well-suited for high-throughput deployment scenarios. Authentication and authorization for this backend can be handled using the Redis protocol, and hosting multiple memory regions can be implemented by using multiple databases or key prefixes.
 
+\newpage{}
+
 #### Object Stores with S3
 
 While Redis is interesting for high-throughput scenarios, when it comes to making a memory region available on the public internet, it might not be the best choice due to its low-level, custom protocol and (mostly) in-memory nature. This is where S3 can be used; a S3 backend can be a good choice for mounting public information, i.e. media assets, binaries, large filesystems and more into memory. While S3 has traditionally been mostly a AWS SaaS offering, projects such as Minio have helped it become the de facto standard for accessing files over HTTP. Similarly to the directory backend, the S3 backend is chunked, with one S3 object representing one chunk; if accessing a chunk returns a 404 error, it is treated as an empty chunk in the same way as the Redis backend, and multi-tenancy can once again be implemented either by using multiple S3 buckets or a prefix:
@@ -1137,6 +1211,8 @@ func (b *S3Backend) ReadAt(p []byte, off int64) (n int, err error) {
 	// ...
 }
 ```
+
+\newpage{}
 
 #### Document Databases with ScylllaDB
 
@@ -1165,6 +1241,8 @@ func (b *CassandraBackend) WriteAt(p []byte, off int64) (n int, err error) {
 
 Support for multiple regions can be implement by using a different table or key prefix, and migrations are used to create the table itself similarly to how it would be done in SQL.
 
+\newpage{}
+
 ### Concurrent Bi-Directional RPCs with Dudirekta
 
 #### Overview
@@ -1172,6 +1250,8 @@ Support for multiple regions can be implement by using a different table or key 
 Another aspect that plays an important role in performance for real-life deployments is the choice of RPC framework and transport protocol. As mentioned before, both the mount and migration APIs are transport-independent, and as a result almost any RPC framework can be used. A RPC framework developed as part of r3map is Dudireka[@pojtinger2023dudirekta]. As such, it was designed specifically with the hybrid pre-and post-copy scenario in mind. To optimize for this, it has support for concurrent RPCs, which allows for efficient background pulls as multiple chunks can be pulled at the same time.
 
 The framework also allows for defining functions on both the client and the server, which makes it possible to initiate pre-copy migratons and transfer chnks from the source host to the destination without having the latter be `dial`able; while making the destination host available by dialing it is possible in trusted LAN deployments, NATs and security concerns make it harder in WAN deployment. As part of this bi-directional support it is possible to also pass callbacks and closures as arguments to RPCs, which makes it possible to model remote generators with yields to easily report i.e. a migration's progress as it is running, while still modelling the migration with a single, transactional RPC and a return value. In addition to this, because dudirekta is also itself transport-agnostic, it is possible to use transport protocols like QUIC in WAN deployments, which can reduce the initial latency by using the 0-RTT handshake and thus makes calling an RPC less expensive. By not requiring TCP-style client-server semantics, Dudirekta can also be used to allow for P2P migrations over a protocol such as WebRTC[@pojtinger2023dudirektawebrtc].
+
+\newpage{}
 
 #### Usage
 
@@ -1210,6 +1290,8 @@ for _, peer := range registry.Peers() {
 }
 ```
 
+\newpage{}
+
 As mentioned earlier, Dudirekta also allows for passing in closures as arguments to RPCs; since this is also handled transparently, all that is necessary is to define the signature of the closure on the client and server, and it can be passed in as though the RPC were a local call, which also works on both the client and the server side:
 
 ```go
@@ -1245,6 +1327,8 @@ for _, peer := range registry.Peers() {
 	log.Println(length) // Despite having a closure as an argument, the RPC can still return values
 }
 ```
+
+\newpage{}
 
 #### Protocol
 
@@ -1329,6 +1413,8 @@ As mentioned earlier, Dudirekta has a few limitations when it comes to the RPC s
 
 While the dudirekta RPC implementation serves as a good reference implementation of how RPC backends work, it has issues with scalability (see figure \ref{rpc-rttvar-1}). This is mostly the case because of it's JSONL-based wire format, which, while simply and easy to analyize, is quite slow to marshal and unmarshal. The bi-directional RPCs do also come at a cost, since they prevent an effective use of connection pooling; since a client `dial`ing the server multiple times would mean that server could not reference multiple client connections as one composite client, it would not be able to differentiate two client connections from two separate clients. While implementing a future pooling mechanism based on a client ID is possible in the future, bi-directional RPCs can also be completely avoided entirely by implementing the pull- instead of push-based pre-copy solution described earlier where the destination host keeps track of the pull progress, effectively making unary RPC support the only requirement for a RPC framework.
 
+\newpage{}
+
 Thanks to this narrower scope of requirements, alternative RPC frameworks can be used that do not have this limitation to their scalability. One such popular framework is gRPC, a high-performance system based on protocol buffers which is based on code generation and protocol buffers instead of reflection and JSONL. Thanks to it's support for unary RPCs, this protocol also supports connection pooling (which removes Dudirekta's main bottleneck) and is available in more language ecosystems (whereas Dudirekta currently only supports Go and TypeScript), making it possible to port the mount and migration APIs to other languages with wire protocol compatibility in the future. In order to implement the backend and seeder APIs for gRPC, they are defined in the `proto3` DSL:
 
 ```proto3
@@ -1355,13 +1441,17 @@ message ReadAtArgs {
 
 After generating the gRPC bindings from this DSL, the generated interface is implemented by using the Dudirekta RPC system's implementation struct as the abstract representation for the mount and migration gRPC adapters respectively, in order to reduce duplication.
 
+\newpage{}
+
 ### Optimizing Throughput with fRPC
 
 While gRPC tends to perform better than Dudirekta due to its support for connection pooling and more efficient binary serialization, it can be improved upon. This is particularly true for protocol buffers, which, while being faster than JSON, have issues with encoding large chunks of data, and can become a real bottleneck with large chunk sizes:
 
-![RPCs/second per client for 1 MB messages, repeated 10 times[@loopholelabs2023benchmarks]](./static/grpc-frpc-benchmarks.png)
+![RPCs/second per client for 1 MB messages, repeated 10 times[@loopholelabs2023benchmarks]](./static/grpc-frpc-benchmarks.png){ width=400px }
 
 fRPC[@loopholelabs2023frpc], a drop-in replacement for gRPC, can improve upon this by switching out the serialization layer with the faster Polyglot[@loopholelabs2023polyglot] library and a custom transport layer. It also uses the proto3 DSL and the same code generation framework as gRPC, which makes it easy to switch to by simply re-generating the code from the DSL. The implementation of the fRPC adapter functions in a very similar way as the gRPC adapter.
+
+\newpage{}
 
 ## Results
 
@@ -1379,6 +1469,8 @@ All benchmarks were conducted on a test machine with the following specification
 
 To make the results reproducible, the benchmark scripts and notebooks to plot the related visualizations can be found in the accompanying repository[@pojtinger2023memsync], and multiple runs have been conducted for each benchmark to ensure consistency.
 
+\newpage{}
+
 ### Access Methods
 
 #### Latency
@@ -1387,45 +1479,59 @@ To make the results reproducible, the benchmark scripts and notebooks to plot th
 
 Compared to disk and memory, all other network-capable access methods (`userfaultfd`, direct mounts and managed mounts) have significantly higher latencies when accessing the first chunk. The latency of `userfaultfd` is 15 times slower than the disk access time, while direct mounts and managed mounts are 28 and 40 times slower respectively. Its is however important to consider that even despite these differences, the overall latency is still below 200 µs for all access methods.
 
-![Box plot for the distribution of first chunk latency for userfaultfd, direct mounts and managed mounts (0ms RTT)\label{latency-first-chunk-rtt0-2}](./static/latency-first-chunk-rtt0-2.png)
+\newpage{}
+
+![Box plot for the distribution of first chunk latency for userfaultfd, direct mounts and managed mounts (0ms RTT)\label{latency-first-chunk-rtt0-2}](./static/latency-first-chunk-rtt0-2.png){ width=320px }
 
 When looking at the latency distribution for the network-capable access methods, the spread for the managed mount is the smallest, but there are significant outliers until more than 1 ms; direct mounts have a significantly higher spread, but less outliers, while `userfaultfd`'s latency advantage is visible here too.
 
-![Average first chunk latency for userfaultfd, direct mounts and managed mounts by RTT\label{latency-first-chunk-rttvar-1}](./static/latency-first-chunk-rttvar-1.png)
+![Average first chunk latency for userfaultfd, direct mounts and managed mounts by RTT\label{latency-first-chunk-rttvar-1}](./static/latency-first-chunk-rttvar-1.png){ width=320px }
 
 For the earlier measurements the backends were connected directly to the mount or `userfaultfd` handler respectively, resulting in an effictive 0ms RTT. If the RTT is increased, the backends behave differently; for `userfaultfd` and direct mounts, the first chunk latency grows linearly. For managed mounts however, the latency is higher than at a 0ms RTT, but even at this peak it is significantly lower than both `userfaultfd` and managed mounts; after the RTT reaches 25ms, the first chunk latency for managed mounts reach latency levels below the measured latency at 0ms RTT.
 
-![Average first chunk latency for managed workers with 0-512 workers by RTT\label{latency-first-chunk-workervar-1}](./static/latency-first-chunk-workervar-1.png)
+\newpage{}
+
+![Average first chunk latency for managed workers with 0-512 workers by RTT\label{latency-first-chunk-workervar-1}](./static/latency-first-chunk-workervar-1.png){ width=500px }
 
 A similar pattern can be seen when analysing how different worker counts for managed mounts influence latency; for zero workers, the latency grows almost linearly, while if more than 1 worker is used, the latency first has a peak, but then continues to drop until it reaches a level close to or lower than direct mounts.
 
+\newpage{}
+
 #### Read Throughput
 
-![Average throughput for memory, disk, userfaultfd, direct mounts and managed mounts (0ms RTT)\label{throughput-rtt0-1}](./static/throughput-rtt0-1.png)
+![Average throughput for memory, disk, userfaultfd, direct mounts and managed mounts (0ms RTT)\label{throughput-rtt0-1}](./static/throughput-rtt0-1.png){ width=360px }
 
 When looking at throughput compared to latency, the trends for memory, disk, `userfaultfd` and the two mount types are similar, but less drastic. Direct memory access still is the fastest option at a 20 GB/s throughput, but unlike with latency is followed not by the disk, but rather by direct mounts at 2.8 GB/s and managed mounts at 2.4 GB/s. The disk is slower than both of these methods at 2.3 GB/s, while `userfaultfd` has the lowest throughput at 450 MB/s.
 
-![Average throughput for userfaultfd, direct mounts and managed mounts (0ms RTT)\label{throughput-rtt0-2}](./static/throughput-rtt0-2.png)
+![Average throughput for userfaultfd, direct mounts and managed mounts (0ms RTT)\label{throughput-rtt0-2}](./static/throughput-rtt0-2.png){ width=350px }
 
 When looking at just the throughput for network-capable access methods, `userfaultfd` falls significantly behind both mount types, meaning that while at 0 RTT, `userfaultfd` has lower latency, but also much lower throughput.
 
-![Box plot for the throughput distribuion for userfaultfd, direct mounts and managed mounts (0ms RTT)\label{throughput-rtt0-3}](./static/throughput-rtt0-3.png)
+\newpage{}
+
+![Box plot for the throughput distribuion for userfaultfd, direct mounts and managed mounts (0ms RTT)\label{throughput-rtt0-3}](./static/throughput-rtt0-3.png){ width=350px }
 
 When it comes to throughput distribution, `userfaultfd` has the lowest spread while managed mounts has the highest, closely followed by direct mounts. Interestingly, the median throughput of direct mounts is especially high.
 
-![Average throughput for userfaultfd, direct mounts and managed mounts by RTT\label{throughput-rttvar-1}](./static/throughput-rttvar-1.png)
+![Average throughput for userfaultfd, direct mounts and managed mounts by RTT\label{throughput-rttvar-1}](./static/throughput-rttvar-1.png){ width=350px }
 
 As it is the case with latency, the access methods behave very differently as the RTT increases. Direct mounts and `userfaultfd` throughputs drop to below 10 MB/s and 1 MB/s as the RTT reaches 6 ms, and continues to drop as it increases further. The throughput for managed mounts also decreases as RTT increases, but much less drastically compared to the other methods; even at a RTT of 25ms, the throughput is still over 500 MB/s. If the RTT is lower than 10ms, a throughput of almost 1 GB/s can still be achieved with managed mounts.
 
-![Average throughput for managed mounts with 0-16384 workers by RTT\label{throughput-workervar-1}](./static/throughput-workervar-1.png)
+\newpage{}
+
+![Average throughput for managed mounts with 0-16384 workers by RTT\label{throughput-workervar-1}](./static/throughput-workervar-1.png){ width=500px }
 
 Similar results the effects of worker counts on latency can be seen when measuring throughput with different configurations as RTT increases. While low worker counts result in good throughput at 0 ms RTT, generally, the higher the worker counts, the higher the achievable throughput. For 16384 workers, throughput can be consistently kept at over 1 GB/s, even at a latency of 30 ms.
+
+\newpage{}
 
 #### Write Throughput
 
 ![Average write throughput for direct and managed mounts by RTT\label{throughput-write-rttvar-1}](./static/throughput-write-rttvar-1.png)
 
 While for a migration or mount scenario read throughput is a critical metric, it is also interesting to compare the write throughput of the different access methods. Note that for this benchmark, the underlying block device is opened with `O_DIRECT`, which causes additional overhead when writing due to it skipping the kernel buffer, but is useful for this benchmark specifically as it doesn't require a `sync`/`msync` step to flush data to the disk. As RTT increases, managed mounts show a much better write performance. Write speeds for direct mounts drop to below 1 MB/s as soon as the RTT increases to 4ms, while they are consistenly above 230 MB/s for managed mounts, independent of RTT. `userfaultfd` was not measured, as it does not allow for tracking changes to the memory regions handled by it.
+
+\newpage{}
 
 ### Initialization
 
@@ -1437,19 +1543,25 @@ When it comes to initialization for direct and managed mounts, as introduced ear
 
 Another aspect of the device initialization process is the amount of data that can be pulled pre-emptively; here again, the importance of the worker count becomes apparent. The higher the worker count is, the more data can be pulled; while for 4096 workers, almost 40 MB of data can be pulled before the device is opened at a RTT of 7 ms, this drops to 20 MB for 2048 workers, 5 MB for 512 and continues to drop as the worker count decreases. Even for a 0 ms RTT, more background pull workers result in more pre-emptively pulled data.
 
+\newpage{}
+
 ### Chunking
 
 ![Average read throughput for server-side and client-side chunking, direct mounts and managed mounts by RTT\label{chunking-local-remote-1}](./static/chunking-local-remote-1.png)
 
 Chunking can be done on either client- or server-side for both the direct and the managed mounts; looking at throughput for both options, it is clear that unless the RTT is 0 ms, managed mounts yield significantly higher throughput compared to direct mounts for both client- and server-side chunking.
 
-![Average read throughput for server-side and client-side chunking with direct mounts by RTT\label{chunking-local-remote-2}](./static/chunking-local-remote-2.png)
+\newpage{}
+
+![Average read throughput for server-side and client-side chunking with direct mounts by RTT\label{chunking-local-remote-2}](./static/chunking-local-remote-2.png){ width=350px }
 
 When looking at direct mounts specifically, server-side chunking is a very fast option for 0 ms RTT at almost 500 MB/s throughput, but drops to just 75 MB/s at a 1 ms RTT, 40 MB/s at 2 ms, and then continues to drop to just over 5 MB/s at 20 ms RTT. For client-side chunking, the throughput is much lower at just 30 MB/s even at 0 ms RTT, after which it continues to drop steadily until reaches just 4.5 MB/s at 20 ms RTT.
 
-![Average read throughput for server-side and client-side chunking with managed mounts by RTT\label{chunking-local-remote-3}](./static/chunking-local-remote-3.png)
+![Average read throughput for server-side and client-side chunking with managed mounts by RTT\label{chunking-local-remote-3}](./static/chunking-local-remote-3.png){ width=350px }
 
 For managed mounts, the measured throughput is different; throughput also decreases as RTT increases, but much less drastically. Server-side throughput also yields higher throughputs for this solution at 450 MB/s at 0 ms RTT vs. 230 MB/s at 0 ms for client-side chunking. As RTT increases, throughput for both direct and managed backends drop to 300 MB/s for managed mounts and 240 MB/s for direct mounts at a RTT of 20 ms.
+
+\newpage{}
 
 ### RPC Frameworks
 
@@ -1483,37 +1595,47 @@ When looking at the latency distribution, a significant difference in spread bet
 
 When looking at throughputs, the backends behave significantly more different compared to latency. Both the file and memory backends have consistently high throughputs; for direct mounts, file throughput is higher than memory throughput at 2081 MB/s vs. 1630 MB/s on average respectively. For managed mounts, this increases to 2372 MB/s vs. 2178 MB/s. When comparing the direct vs. managed mount measurement, ScylllaDB and the network-capable backends in general show vast differences in throughput; while ScylllaDB manages to reach almost 700 MB/s for a managed mount scenario, it falls to only 3 MB/s for a direct mount. Similarly so, for Redis and the directory backend, direct mounts are 3.5 times slower than the managed mounts.
 
-![Average throughput for Redis, S3 and ScylllaDB backends for direct mounts (0ms RTT)\label{throughput-backendvar-2}](./static/throughput-backendvar-2.png)
+![Average throughput for Redis, S3 and ScylllaDB backends for direct mounts (0ms RTT)\label{throughput-backendvar-2}](./static/throughput-backendvar-2.png){ width=320px }
 
 For the throughput of network-capable direct mounts, Redis has the highest average throughput at 114 MB/s compared to both ScylllaDB at 3 MB/s and S3 at 8 MB/s.
 
-![Kernel density estimation (with logarithmic Y axis) for the throughput distribution for Redis, S3 and ScylllaDB for direct mounts (0ms RTT)\label{throughput-backendvar-5}](./static/throughput-backendvar-5.png)
+![Kernel density estimation (with logarithmic Y axis) for the throughput distribution for Redis, S3 and ScylllaDB for direct mounts (0ms RTT)\label{throughput-backendvar-5}](./static/throughput-backendvar-5.png){ width=320px }
 
 The throughput distribution for the different backends with direct mounts shows a similarly drastic difference between Redis and the other options; a logarithmic Y axis is used to show the kernel density estimation, and while Redis does have a far larger spread compared to S3 and ScylllaDB, the throughput is also noticably higher.
 
-![Average throughput for Redis, S3 and ScylllaDB backends for managed mounts (0ms RTT)\label{throughput-backendvar-3}](./static/throughput-backendvar-3.png)
+\newpage{}
+
+![Average throughput for Redis, S3 and ScylllaDB backends for managed mounts (0ms RTT)\label{throughput-backendvar-3}](./static/throughput-backendvar-3.png){ width=320px }
 
 For managed mounts, ScylllaDB performs better than both S3 and Redis, managing 689 MB/s to 439 MB/s for Redis and 44 MB/s for S3.
 
-![Box plot for the throughput distribution for Redis, S3 and ScylllaDB for managed mounts (0ms RTT)\label{throughput-backendvar-6}](./static/throughput-backendvar-6.png)
+![Box plot for the throughput distribution for Redis, S3 and ScylllaDB for managed mounts (0ms RTT)\label{throughput-backendvar-6}](./static/throughput-backendvar-6.png){ width=320px }
 
 As for the distribution, ScylllaDB has a high spread but also the highest throughput, while Redis has the lowest spread. S3 is also noticably here with a consistently lower throughput compared to both alternatives, with an average spread.
+
+\newpage{}
 
 ![Average throughput for memory, file, directory, Redis, S3 and ScylllaDB backends for direct mounts by RTT\label{throughput-anyvar-1}](./static/throughput-anyvar-1.png)
 
 When looking at average throughput for direct mounts, all backends drop in throughput as RTT increases. Memory and file are very fast at above 1.4 GB/s at 0 ms RTT, while Redis achieves 140 MB/s as the closest network-capable alternative. The directory backend noticably has a lower throughput than Redis, despite not being network-capable. All other backends are at below 15 MB/s for direct mounts, even at 0 ms RTT, and all backends trend towards below 3 MB/s at a RTT of 40 ms for direct mounts.
 
-![Average throughput for Redis, S3 and ScylllaDB backends for direct mounts by RTT\label{throughput-anyvar-3}](./static/throughput-anyvar-3.png)
+\newpage{}
+
+![Average throughput for Redis, S3 and ScylllaDB backends for direct mounts by RTT\label{throughput-anyvar-3}](./static/throughput-anyvar-3.png){ width=500px }
 
 The network-capable backends in isolation again show the striking difference between Redis and the other backends' direct mount performance, but all generally trend towards low throughput performance as RTT increases.
 
-![Average throughput for memory, file, directory, Redis, S3 and ScylllaDB backends for managed mounts by RTT\label{throughput-anyvar-2}](./static/throughput-anyvar-2.png)
+![Average throughput for memory, file, directory, Redis, S3 and ScylllaDB backends for managed mounts by RTT\label{throughput-anyvar-2}](./static/throughput-anyvar-2.png){ width=500px }
 
 For managed mounts, the memory and file backends outperform all other options at over 2.5 GB/s, while the closest network-capable technology reaches 660 MB/s at 0 ms RTT. Similarly to the latency measurements, all technologies trend towards a similar throughput as RTT increases, with sharp drops for the memory and file backends after the RTT has reached 2 ms. Noticably, both the directory and S3 backends underperform even for managed mounts, with throughput reaching only 55 MB/s at 40 ms RTT.
+
+\newpage{}
 
 ![Average throughput for Redis, S3 and ScylllaDB backends for managed mounts by RTT\label{throughput-anyvar-4}](./static/throughput-anyvar-4.png)
 
 When looking at just the network-capable backends in isolation, S3's low throughput becomes apparent again. Both Redis and ScylllaDB start between 550-660 MB/s at 0 ms RTT, then begin to drop after 6 ms until they reach 170-180 MB/s at 40 ms, with Redis consistently having slightly higher throughputs compared to ScylllaDB.
+
+\newpage{}
 
 ## Discussion
 
@@ -1529,6 +1651,8 @@ While it has a lower first chunk latency compared to direct mounts and managed m
 
 Similarly to `userfaultfd`, the approach based on `mmap`ing a memory region to a file and then synchronizing this file also has limitations. While `userfaultfd` is only able to catch the first reads to a file, this system is only able to catch wries, making it unsuitable for post-copy migration scenarios. It makes this system write-only, and very inefficient when it comes to adding hosts to the network at a later point, since all data needs to be continously synced to all other hosts that state could potentially be migrated too.
 
+\newpage{}
+
 To work around this issue, a central forwarding hub can be used, which reduces the amount of data streams required from the host currently hosting the data, but also adds other drawbacks such as operational complexity and additional latency. Thanks to this support for the central forwarding hub, file-based synchronization might be a good choice for highly throughput-constrained networks, but the inability to do post-copy migration due to it being write-only makes it a suboptimal choice for migration scenarios.
 
 ### FUSE
@@ -1539,6 +1663,8 @@ File systems in user space provide a solution that allows for both pre- and post
 
 Direct mounts have a high spread when it comes to first chunk latency at 0 ms RTT(see figure \ref{latency-first-chunk-rtt0-2}), but are more predictable when it comes to their throughput (see figure \ref{throughput-rtt0-3}). Similarly to the drawbacks of `userfaultfd`, it's first chunk latency grows linearly as the RTT increases (see figure \ref{latency-first-chunk-rttvar-1}), due to the lack of pre-emptive pulls. Despite this, it has the highest throughput at 0 ms RTT, even higher than managed mounts (see figure \ref{throughput-rtt0-1}) due to it having less expensive internal I/O operations because of the lack of this pull system. While compared to `userfaultfd`, its read throughput doesn't drop as rapidly as RTT increases (see figure \ref{throughput-rttvar-1}). Its write speed is heavily influenced by RTT (see figure \ref{throughput-write-rttvar-1}) since writes need to be written to the remote as they happen, as there is no background push system either. These characteristics make direct mounts a good access method to choose if the internal overhead of using managed mounts is higher than the overhead caused for direct mounts by the RTT, which can be the case in LAN or other very low-latency networks.
 
+\newpage{}
+
 ### Managed Mounts
 
 Managed mounts have an internal overhead to due to the duplicate I/O operations required for background pull, resulting in a worse throughput for low RTT scenarios compared to direct mounts (esp. for 0 ms RTT; see figure \ref{throughput-rtt0-1}), as well as higher first chunk latencies (see figure \ref{latency-first-chunk-rtt0-1}). As soon as the RTT reaches levels more typical for a WAN environment however, this overhead becomes negligible compared to the benefits gained over the other access methods thanks to the background push and pull systems (see figure \ref{latency-first-chunk-rttvar-1} and \ref{throughput-rttvar-1}).
@@ -1548,6 +1674,8 @@ Tuning the background workers to the specific environment can substantially incr
 ### Chunking
 
 In general, server-side chunking should almost always be the preferred technology due to the much better throughput compared to client-side chunking (see figure \ref{chunking-local-remote-1}). For direct mounts, due to their linear/synchronous access pattern, the throughput is low for both server- and client-side chunking as RTT increases, but even with linear access server-side chunking still outperforms the alternative (see figure \ref{chunking-local-remote-2}). For managed mounts, client-side chunking can still halve the throughput of a mount compared to server-side chunking (see figure \ref{chunking-local-remote-3}). If the data chunks are smaller than the NBD block size, it reduces the number of chunks that can be fetched if the number of workers remains the same. This isn't the case with server-side chunking because it doesn't need an extra worker on the client side for each additional chunk that needs to be fetched. This allows the background pull system to fetch more, thus increasing throughput.
+
+\newpage{}
 
 ### RPC Frameworks
 
@@ -1561,6 +1689,8 @@ While gRPC offers a throughput improvement compared to Dudirekta, fRPC is able t
 
 Redis is the network-capable backend with the the lowest amount of initial chunk latency at a 0 ms RTT (see figure \ref{latency-first-chunk-backendvar-1}). When used for direct mounts, it has a lower throughput compared to managed mounts (see figure \ref{throughput-backendvar-1}), showing good support for concurrent chunk access; it also has the highest thoughput for direct mounts by a significant margin (see figure \ref{throughput-backendvar-2}) due to its optimized wire protocol and fast key lookups. It also has good throughput in managed mounts due to these optimizations (see figure \ref{throughput-backendvar-3}), making it a good choice for ephemeral data like caches, where quick access times are necessary or the direct mount API provides benefits, i.e. in LAN deployments.
 
+\newpage{}
+
 ScylllaDB has the highest throughput for 0 ms RTT deployments for managed mounts, showing a very good concurrent access performance (see figure \ref{throughput-backendvar-3}). It does however fall short when it comes to usage in direct mounts, where the performance is worse than any other backend (see figure \ref{throughput-backendvar-2}), showing the databases high read latency overhead for looking up individual chunks, which is also backed up by looking at it's initial chunk latency distribution (see figure \ref{latency-first-chunk-backendvar-2}). For managed mounts however, as the RTT increases, it shows only slightly lower performance compared to Redis (see figure \ref{throughput-anyvar-2}); as a result, it is a good choice of backend if most data will be accessed concurrently by the managed mounts background pull system, but a bad choice if chunks will be accessed outside of this due to the low direct mount throughput. Another use case where ScylllaDB can potentially be beneficial due to its configurable consistency is storing persistent data in a way that is more dependable than Redis or S3.
 
 S3 has the lowest throughput of all network-capable backends that were implemented for managed mounts (see figure \ref{throughput-backendvar-3}). Its performance is consistently low even as RTT increases (see figure \ref{throughput-anyvar-2}), presumably due to the high overhead of having to make multiple HTTP requests to retrieve individual chunks, despite performing better than ScylllaDB for a direct mount scenario (see figure \ref{throughput-backendvar-2}). S3 remains a good choice of backends if its use is required due to architectural constraints, or if the chance of persistently stored chunks being read outside of the managed mounts background pull system is high, where Casssandra has considerably worse throughput.
@@ -1568,6 +1698,8 @@ S3 has the lowest throughput of all network-capable backends that were implement
 ### Limitations
 
 While the mount APIs are functional for most use cases, there are performance and usability issues due it being implemented in Go. Go is a garbage collected language, and if the garbage collector is active, it has to stop goroutines. If the `mmap` API is used to access a managed mount or a direct mount, it is possible that the garbage collector tries to manage an object with a reference to the exposed slice, or tries to release memory as data is being copied from the NBD device. If the garbage collector then tries to access the slice, it can stop the goroutine providing the slice in the form of the NBD server, causing the deadlock. One workaround for this is to lock the `mmap`ed region into memory, but this will also cause all chunks to be fetched from the remote into memory, which leads to a high `Open()` latency; as a result, the current workaround for this is to simply start the NBD server in a separate process, so as to prevent the garbage collector from stopping the NBD server and trying to access the slice at the same time. Another workaround for this issue could be to instead use a language without a garbage collector such as Rust, which doesn't allow for the deadlock to occur in the first place.
+
+\newpage{}
 
 NBD, the underlying technology and protocol for the mount API, has proven to be fairly performant, but it still could be improved upon to get closer to the performance of other access methods, like raw memory access. One such option is `ublk`[@linux2023ublk], which has the potential to significantly improve concurrent access speeds over the socket-based connection between the client and server that NBD uses. It is similar in architecture to NBD, where a user space server provides the block device backend, and a kernel `ublk` driver creates `/dev/ublkb*` block devices not unlike the `/dev/nbd*` devices created by NBD. At the point of this thesis being written however, documentation on this emerging kernel technology is still lacking, and NBD continues to be the standard way of creating block devices in user space.
 
@@ -1590,6 +1722,8 @@ defer exec.Command("swapoff", devPath).CombinedOutput()
 
 `ram-dl` exposes two commands that achieve this. The first, `ram-ul` exposes RAM by exposing a memory, file or directory-based backend using a fRPC endpoint. `ram-dl` itself then connects to this endpoint, starts a direct mount and sets the block device up for swapping. While this system is intended mostly as a tech demo and, due to latency and throughput limitations, is not intended for critical deployments, it does show how simple using the r3map API can be, as the entire project consistents of under 300 source lines of code, most of which is argument handling and boilerplate around configuration.
 
+\newpage{}
+
 ### Mapping Tape Into Memory With `tapisk`
 
 #### Overview
@@ -1601,6 +1735,8 @@ Using a tape drive as such a backend is challenging, since they are designed for
 #### Implementation
 
 To achieve this, the background writes and reads provided by the managed mount API can be used. Using these, a faster storage backend (i.e. the disk) can be used as a caching layer, although the concurrent push/pull system can't be used due to tapes only supporting synchronous read/write operations. By using the managed mount, writes are de-duplicated and both read and write operations can become asynchronous, since both happen on the fast local backend first, and the background sync system them handles either periodic writebacks to the tape for write operations or reading a chunk from the tape if it is missing from the cache.
+
+\newpage{}
 
 Since chunking works differently for tapes than for block devices, and tapes are append-only devices where overwriting a section prior to the end would result in all following data being overwritten, too, an index must be used to simulate the offsets of the block device locations to their physical location on the tape, which the `bbolt` database is used for. In order to make non-aligned reads and writes to the tape possible, the existing `ArbitraryReadWriter` system can be used. When a chunk is then requested to be read, `tapisk` looks up the physical tape record for the requested offset, and uses the accelerated `MTSEEK` ioctl to seek to the matching record on the tape, after which the chunk is read from the tape into memory:
 
@@ -1632,45 +1768,17 @@ func (b *TapeBackend) ReadAt(p []byte, off int64) (n int, err error) {
 }
 ```
 
-Conversely, in order to write a chunk to the tape, `tapisk` seeks to the end of the tape (unless the last operation was a write already, in which case the tape must be at the end already). Once the seek has completed, the current physical record is requested from the tape drive, and stored as the record for the block that is to be written in the index, after which the chunk is written to the tape. This effectively makes it possible to overwrite existing chunks despite the tape being append-only, since subsequent writes to the same chunk result in the changes being written to the end of the file with the index referencing the new physical location, but does come at the cost of requiring defragmentation to clean up prior iterations of chunks:
+Conversely, in order to write a chunk to the tape, `tapisk` seeks to the end of the tape (unless the last operation was a write already, in which case the tape must be at the end already). Once the seek has completed, the current physical record is requested from the tape drive, and stored as the record for the block that is to be written in the index, after which the chunk is written to the tape. This effectively makes it possible to overwrite existing chunks despite the tape being append-only, since subsequent writes to the same chunk result in the changes being written to the end of the file with the index referencing the new physical location, but does come at the cost of requiring defragmentation to clean up prior iterations of chunks.
 
-```go
-func (b *TapeBackend) WriteAt(p []byte, off int64) (n int, err error) {
-	// Calculating the block for the offset
-	block := uint64(off) / b.blocksize
-
-	// Seek to the end of the tape, unless the last operation was a write
-	if b.lastOpWasRead {
-		mtop := &ioctl.Mtop{}
-		mtop.SetOp(ioctl.MTEOM)
-		mtop.SetCount(1)
-
-		syscall.Syscall(
-			syscall.SYS_IOCTL,
-			drive.Fd(),
-			ioctl.MTIOCTOP,
-			uintptr(unsafe.Pointer(mtop)),
-		)
-		// ...
-	}
-
-	// Get the current physical record
-	curr, err := b.tell(b.drive)
-
-	// Mapping the physical record to the block that is being written
-	b.index.SetLocation(block, curr)
-
-	// Writing the chunk to the tape
-	b.drive.Write(p)
-	// ...
-}
-```
+\newpage{}
 
 #### Evaluation
 
 `tapisk` is a unique application of r3map's technology, and shows how flexible it is. By using this index, the effectively becomes tape a standard `ReadWriterAt` stage (and `go-nbd` backend) with support for aligned-reads in the same way as the file or directory backends, and thanks to r3map's pipeline design, the regular chunking system could be reused, unlike in STFS were it had to be built from scratch. By re-using the universal RPC backend introduced earlier, which can give remote access to any `go-nbd` backend over a RPC library like Dudirekta, gRPC or fRPC, it is also possible to access a remote tape this way, i.e. to map a remote tape library robot's drive to a system over the network.
 
 Being able to map a tape into memory without having to read the entire contents first can have a variety of use cases. Tapes can store a large amount of data, in the case of LTO-9, up to 18TB on a single tape[@lto2020gen9]; being able to access such a large amount of data directly in memory, instead of having to work with tooling like `tar`, can significantly improve developer experience. In addition to making it much easier to access tape drives, `tapisk` can also serve as a replacement for LTFS. LTFS is a custom file system implemented as a kernel module, which allows for mounting a tape. If a `tapisk`-provided block device is formatted with a filesystem such as EXT4 or Btrfs, it can also be mounted locally, allowing the tape to be mounted as a file system as well, with the added benefit of also being able to support any filesystem that supports block devices as their backend. Compared to the LTFS approach, this results in a much more maintainable project; while LTFS is tens of thousands of kernel-level source lines of code, `tapisk` achieves effectively the same use case with just under 350.
+
+\newpage{}
 
 ### Improving Cloud Storage Clients
 
@@ -1679,6 +1787,8 @@ Being able to map a tape into memory without having to read the entire contents 
 r3map can also be used to create mountable remote filesystems with unique advantages over existing solutions. Currently, there are two main approaches to implementing cloud storage clients. Dropbox and Nextcloud are examples of a system that listens to file changes on a folder and synchronizes files as changes are detected, similarly to the file-based memory region synchronization approach discussed earlier. The big drawback of this approach is that everything that should be available needs to be stored locally; if a lot of data is stored in the cloud drive, it is common to only choose to synchronize a certain set of data to the local host, as there is no way to dynamically download files as they are being accessed. Read and write operations on such systems are however very efficient, since the system's file system is used and any changes are written to/from this file system asynchronously by the synchronization client. This approach also makes offline availability easy, as files that have been synchronized to the local system stay available even if network connectivity has been lost.
 
 The other currently used option is to use a FUSE, i.e. `s3fs`[@gaul2023s3fs], which allows for files to be fetched on demand, but comes with a heavy performance penalty. This is the case because most implementations, if a write or read request is sent from the kernel to the FUSE, remote writes or reads happen directly over the network, which makes this approach very sensitive to networks with a high RTT. Offline usage is also usually not possible with a FUSE-based approach, and features such as `inotify`, symlinks etc. are hard to implement, leaving two imperfect solutions to implementing a cloud storage client.
+
+\newpage{}
 
 #### Hybrid Approach
 
@@ -1694,6 +1804,8 @@ By combining the advantages of both approaches into a hybrid one, it is possible
 
 Another use case that r3map can be used for is accessing a remote database locally. While using a database backend (such as the ScylllaDB backend introduced earlier) is one option of storing the chunk, this use case is particularly interesting for file-based databases like SQLite that don't define a wire protocol. Using r3map, instead of having to download an entire SQLite database before being able to use it, it can instead be mounted with the mount API, which then fetches the necessary offsets from a remote backend storing the database as they are being accessed. For most queries, not all data in a database is required, especially if indexes are used; this makes it possible to potentially reduce the amount of transfered data by streaming in only what is required.
 
+\newpage{}
+
 Since reads are cached using the local backend with the managed mount API, only the first read should potentially have a performance impact (if it has not been pulled first by the background pull system); similarly so, since writes are written to the local backend first, and then asynchronously written back, the same applies to them as well. Moreover, if the location of i.e. indexes within the SQLite database is known, a pull heuristic can be specified to fetch these first to speed up initial queries. Thanks to the managed mount API providing a standard block device, no changes to SQLite are be required in order for it to support such streaming access; the SQLite file could simply be stored on a mounted file system provided by the mount's block device.
 
 #### Making Arbitrary File Formats Streamable
@@ -1704,6 +1816,8 @@ The reason for this being stored at the end is usually that the parameters requi
 
 By using r3map however, the pull heuristic function can be used to immediately pre-fetch the metadata, independently of where it is placed; the rest of the chunks can then be fetched either by using the background pull system and/or ad-hoc as they are being accessed. Similarly to the approach used to stream in remote databases, this does not require any changes to the media player being used, since the block device providing the resource can simply be mounted as a file system and thus be used transparently.
 
+\newpage{}
+
 #### Streaming App and Game Assets
 
 Another streaming use case relates to the in-place streaming of assets. Usually, a game needs to be fully downloaded before it is playable; for many modern high-budget titles, this can be hundreds of gigabytes of data, resulting in very long download times even on fast internet connections. Usually however, not all assets need to be downloaded before the game can be played; only some of them are, i.e. the launcher, UI libraries or the first level's assets. While theoritically it would be possible to design a game engine in such a way that assets are only fetched from a remote as they are being required, this would require extensive changes to most engine's architecture, and also be hard to port back to existing titles; furthermore, current transparent solutions that can fetch in assets (i.e. mounting a remote NBD drive or FUSE) are unlikely to be viable solutions considering their high sensitivity to network latency and the high network throughput required for streaming in these assets.
@@ -1711,6 +1825,8 @@ Another streaming use case relates to the in-place streaming of assets. Usually,
 By using the managed mount API to stream in the assets, the overhead of such a solution can be reduced, without requiring changes to the game or its engine. By using the background pull system, reads from chunks that have already been pulled are almost as fast as native disk reads, and by analyzing the access pattern of an existing game, a pull heuristic function can be generated which preemptively pulls the game assets that are loaded first, keeping latency spikes as low as possible. By using the callbacks for monitoring the pull progress provided by the managed mounts, the game can also be paused until a certain local chunk availability is reached in order to prevent latency spikes from missing assets that would need to be fetched directly from the remote, while still allowing for faster startup times.
 
 This concept is not limited to games however, and could also be applied to launching any application. For many systems, completely scanning a binary or script into memory isn't required for it to start execution; similarly to the situation of game engines, adding streaming support would require changes to the interpreters or VMs, since they don't provide a streaming API out of the box aside from being able to read files from the filesystem. With the managed mount API, this existing interface can be reused to add streaming support to these systems by simply pointing them to a filesystem provided by the mount's block device, or, if the interpreter/VM supports it, `mmap`ing the block device directly and executing the resulting memory region.
+
+\newpage{}
 
 ### Universal App State Mounts and Migrations
 
@@ -1721,6 +1837,8 @@ Synchronization of app state is a fairly complex problem, and even for simple sc
 #### Mounting State
 
 By allocating all structures on r3map's provided `mmap`ed byte slice, many interesting use cases become possible. For example, a TODO app could use it as its backend. Once loaded, the app mounts the TODO list as a byte slice from a remote server using the managed mount API; since authentication is pluggable and i.e. a database backend like ScylllaDB with a prefix for this user provides a way to do both authentication and authorization, such an approach can scale fairly well. Using the preemptive background pull system, when the user connects, they can start streaming in the byte slice from the remote server as the app is accessing it, but also pull the majority of the required data first by using the pull heuristic function. If the TODO list is modified by changing it in the `mmap`ed memory region, the changes are asynchronously written back to the underlying block device, and thus to the local backend, where the asynchronous writebacks can sync them back to the remote. If the local backend is persistent, i.e. file-based, such a system can even survive network outages.
+
+\newpage{}
 
 #### Migrating State
 
@@ -1734,6 +1852,8 @@ In order to keep the possibility of migrating arbitrary state, but also allow fo
 
 This capability is not limited to Wasm VMs however; rather, it is possible to add these features to almost any hypervisor or virtual machine that supports mapping an application's/virtual machine's state to a block device or memory region, essentially adding the capability to suspend/resume and migrate any application in the same way that is possible today over WAN, without requiring any or only minimal changes to the applications themselves.
 
+\newpage{}
+
 ## Summary
 
 As is evident from the discussion, there are multiple ways and configurations for implementing a solution for universally accessing, synchronizing and migration memory regions efficiently, while each configuration has different strenghts and weaknesses as shown by the benchmarks, making them each suitable for different use cases.
@@ -1741,6 +1861,8 @@ As is evident from the discussion, there are multiple ways and configurations fo
 When it comes to access methods, `userfaultfd` is an interesting API that is idiomatic to both Linux in as a first-party solution and Go due to its fairly low implementation overhead. This approach however falls short when it comes to throughput, especially when used in WAN, where other options can provide better performance. The delta synchronization method for `mmap`ed files provides a simple way of memory synchronization for specific scenarios, but does have a very significant I/O and compute overhead due to its polling and hashing requirements that make it unsuitable for most applications; similarly so, FUSE provides an extensive API for implementing a complete file system in user space, but has significant implementation overhead making it a suboptimal choice for memory synchronization. Direct mounts provide an access method for LAN deployment scenarios, where networks typically have low latency and the lack of I/O overhead compared to other methods makes it a compelling choice, while managed mounts are the preferred access method for WAN environments. This is due to their efficient use of background push and pull, making it possible for them to adapt to the high latencies typical for such deployments, despite having slightly higher internal I/O overhead compared to direct mounts. For most real-world applications, the mount and migration APIs provide a fast and reliable way of achieving a truly universal method of working with remote memory.
 
 As for RPC framework and transport choice, most production environments are well-suited for both fRPC and gRPC as a high-performance offering, where fRPC can offer slightly better average throughput, compared to gRPC's better developer tooling as a result of it's longstanding legacy. For backend choice, the file backend provides a good option for memory migration and synchronizations, as it can provide a performant, reliable and persistent way of storing a memory region without using up too much host memory. For memory access use cases, Redis shows aconsistently strong throughput in both managed and direct mount scenarios due to its concurrency optimizations, especially if ephermeral data is accessed in LAN environments, while Cassandra (and ScyllaDB) provide a good option for applications using managed mounts that need strong concurrency guarantees. These different approaches show that is possible to adapt the necessary semantics for accessing, synchronizing and migrating resources backed by memory regions to a wide variety of backends, wire protocols and APIs.
+
+\newpage{}
 
 ## Conclusion
 
@@ -1751,5 +1873,7 @@ ram-dl demonstrates how minimal the implementation overhead is by implementing a
 While there are limitations with the proposed solution's underlying technologies, these do provide future research opportunities. For example, the use of Rust as a language that is garbage collection-free could be studied as an option to further increase throughput, fix encountered deadlock issues and reduce overall resource usage, and exploring emerging alternatives for creating block devices to NBD in userspace such as ublk could help further improve the implementation presented.
 
 Despite these limitations, the promise of providing a truly universal way of working with remote memory, without having to signficantly change existing applications or hypervisors, is provided in the form of the reference implementation. It is also able to provide multiple specialized configurations for LAN and WAN environments, making it possible to use remote memory technology in completely different and much more dymanic environments than before. As a result, entirely new ways of thinking about application architecture and lifecycles become possible, which can help enable the applications of tomorrow to become both simpler to maintain and more scalable than those built today.
+
+\newpage{}
 
 ## Bibliography
