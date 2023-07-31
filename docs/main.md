@@ -478,25 +478,13 @@ uffdioAPI := constants.NewUffdioAPI(
 )
 // ...
 
-// Allocating the region
-l := int(math.Ceil(float64(length)/float64(pagesize)) * float64(pagesize))
-b, err := syscall.Mmap(
-	-1,
-	0,
-	l,
-	syscall.PROT_READ|syscall.PROT_WRITE,
-	syscall.MAP_PRIVATE|syscall.MAP_ANONYMOUS,
-)
-// ...
-
-// Registering the region
+// Registering a region
 uffdioRegister := constants.NewUffdioRegister(
 	constants.CULong(start),
 	constants.CULong(l),
 	constants.UFFDIO_REGISTER_MODE_MISSING,
 )
 // ...
-
 syscall.Syscall(
   syscall.SYS_IOCTL,
   uffd,
@@ -505,58 +493,7 @@ syscall.Syscall(
 )
 ```
 
-This is abstracted into a single `Register(length int) ([]byte, UFFD, uintptr, error)` function. Once this region has been registered, the `userfaultfd` API's file descriptor and the offset is passed over a UNIX socket:
-
-```go
-syscall.Sendmsg(int(f.Fd()), nil, syscall.UnixRights(b...), nil, 0)
-```
-
-Where it can then be received by the handler:
-
-```go
-buf := make([]byte, syscall.CmsgSpace(num*4)) // See https://github.com/ftrvxmtrx/fd/blob/master/fd.go#L51
-syscall.Recvmsg(int(f.Fd()), nil, buf, 0)
-// ..
-msgs, err := syscall.ParseSocketControlMessage(buf)
-```
-
-The handler itself receives the address that has triggered the page fault by polling the transferred file descriptor, which is then responded to by fetching the relevant chunk from a provided reader and sending it to the faulting memory region over the same socket:
-
-```go
-// Receiving the fage fault address
-unix.Poll(
-	[]unix.PollFd{{
-		Fd:     int32(uffd),
-		Events: unix.POLLIN,
-	}},
-	-1,
-)
-// ...
-pagefault := (*(*constants.UffdPagefault)(unsafe.Pointer(&arg[0])))
-addr := constants.GetPagefaultAddress(&pagefault)
-
-// Fetching the missing chunk from the provided backend
-p := make([]byte, pagesize)
-n, err := src.ReadAt(p, int64(uintptr(addr)-start))
-
-// Sending the missing chunk to the faulting memory region's `userfaultfd` API:
-cpy := constants.NewUffdioCopy(
-	p,
-	addr&^constants.CULong(pagesize-1),
-	constants.CULong(pagesize),
-	0,
-	0,
-)
-
-syscall.Syscall(
-	syscall.SYS_IOCTL,
-	uintptr(uffd),
-	constants.UFFDIO_COPY,
-	uintptr(unsafe.Pointer(&cpy)),
-)
-```
-
-Similarly to the registration API, this is also wrapped into a reusable `func Handle(uffd UFFD, start uintptr, src io.ReaderAt) error` function.
+This is abstracted into a single `Register(length int) ([]byte, UFFD, uintptr, error)` function. Once this region has been registered, the `userfaultfd` API's file descriptor and the offset is passed over a UNIX socket, where it can then be received by the handler. The handler itself receives the address that has triggered the page fault by polling the transferred file descriptor, which is then responded to by fetching the relevant chunk from a provided reader and sending it to the faulting memory region over the same socket. Similarly to the registration API, this is also wrapped into a reusable `func Handle(uffd UFFD, start uintptr, src io.ReaderAt) error` function.
 
 #### `userfaultfd` Backends
 
@@ -574,23 +511,16 @@ In Go specifically, many objects can be exposed as an `io.ReaderAt`, including a
 
 ```go
 f, err := os.OpenFile(*file, os.O_RDONLY, os.ModePerm)
-// ...
-
 b, uffd, start, err := mapper.Register(int(s.Size()))
-
 mapper.Handle(uffd, start, f)
 ```
 
 Similarly so, a remote file, i.e. one that is being stored in S3, can be used as a `userfaultfd` backend as well; here, HTTP range requests allow for fetching only the chunks that are being required by the application accessing the registered memory region, effectively making it possible to map a remote S3 object into memory:
 
 ```go
-mc, err := minio.New(*s3Endpoint, /* ... */)
-
-f, err := mc.GetObject(ctx, *s3BucketName, *s3ObjectName, minio.GetObjectOptions{})
 // ...
-
+f, err := mc.GetObject(ctx, *s3BucketName, *s3ObjectName, minio.GetObjectOptions{})
 b, uffd, start, err := mapper.Register(int(s.Size()))
-
 mapper.Handle(uffd, start, f)
 ```
 
@@ -650,152 +580,13 @@ case "dst-control":
 	wg.Wait()
 ```
 
-For the `dst` type, the multiplexer hub decodes a file name from the connection, looks for a corresponding `src-control` peer, and if it has found a matching one, it creates and sends a new ID for this connection to the `src-control` peer. After this, it waits until a `src-control` peer has connected to the hub with this ID as well as a new `src-data` peer by listening for broadcasts of `src-data` peer IDs. After this has occured, it spawns two new goroutines that copy data to and from this newly created synchronization connection and the connection of the `dst` peer, effectively relaying all packets between the two. For the `src-data` peer type, it decodes the ID for the peer, and broadcasts the ID, which allows the `dst` peer to continue operating:
+For the `dst` type, the multiplexer hub decodes a file name from the connection, looks for a corresponding `src-control` peer, and if it has found a matching one, it creates and sends a new ID for this connection to the `src-control` peer. After this, it waits until a `src-control` peer has connected to the hub with this ID as well as a new `src-data` peer by listening for broadcasts of `src-data` peer IDs. After this has occured, it spawns two new goroutines that copy data to and from this newly created synchronization connection and the connection of the `dst` peer, effectively relaying all packets between the two. For the `src-data` peer type, it decodes the ID for the peer, and broadcasts the ID, which allows the `dst` peer to continue operating.
 
-```go
-case "dst":
-  // Decoding the file name
-  file := ""
-  utils.DecodeJSONFixedLength(conn, &file)
+#### File Advertisement and Receiver
 
-  // Finding the `src-control` peer
-  controlConn, ok := syncerSrcControlConns[file]
-  // ...
+The file advertisement system connects to the multiplexer hub and registers itself a `src-control` peer, after which it sends the advertised file name. It starts a loop that handles `dst` peer types, which, as mentioned earlier, send an ID. Once such an ID is received, it spawns a new goroutine, which connects to the hub again and registers itself as a `src-data` peer, and sends the ID it has received earlier to allow connecting it to the matching `dst` peer. After this initial handshake is complete, the main synchronization loop is started, which initiates the file transmission to the `dst` peer through the multiplexer hub. In order to allow for termination, it checks if a flag has been set by a context cancellation which case it returns. If this is not the case, it waits for the specified polling interval, after which it restarts the transmission.
 
-  // Sending the ID and waiting for a data connection
-  id := uuid.NewString()
-  utils.EncodeJSONFixedLength(controlConn, id)
-
-  l := dataConnsBroadcaster.Listener(0)
-
-  var dataConn net.Conn
-  for candidate := range l.Ch() {
-  	if candidate.id == id {
-  		dataConn = candidate.conn
-
-  		l.Close()
-
-  		break
-  	}
-  }
-
-  // Copying data between both connections
-  go func() {
-  	io.Copy(dataConn, conn)
-    // ...
-  }()
-
-  go func() {
-  	io.Copy(conn, dataConn)
-    // ...
-  }()
-
-case "src-data":
-  // Receiving the ID
-  id := ""
-  utils.DecodeJSONFixedLength(conn, &id)
-
-  // Broadcasting the ID
-  dataConnsBroadcaster.Broadcast(connWithID{id, conn})
-  // ...
-```
-
-#### File Advertisement
-
-The file advertisement system connects to the multiplexer hub and registers itself a `src-control` peer, after which it sends the advertised file name. It starts a loop that handles `dst` peer types, which, as mentioned earlier, send an ID. Once such an ID is received, it spawns a new goroutine, which connects to the hub again and registers itself as a `src-data` peer, and sends the ID it has received earlier to allow connecting it to the matching `dst` peer:
-
-```go
-// ...
-f, err := os.OpenFile(src, os.O_RDONLY, os.ModePerm)
-
-utils.EncodeJSONFixedLength(dataConn, "src-data")
-
-utils.EncodeJSONFixedLength(dataConn, id)
-// ...
-```
-
-After this initial handshake is complete, the main synchronization loop is started, which initiates the file transmission to the `dst` peer through the multiplexer hub. In order to allow for termination, it checks if the `syncStopped` flag has been set by a context cancellation which case it returns:
-
-```go
-syncStopped := false
-go func() {
-	<-ctx.Done() // Context is supplied by the caller
-
-	syncStopped = true
-}()
-```
-
-If this is not the case, it waits for the specified polling interval, after which it restarts the transmission:
-
-```go
-done := false
-for {
-	if done {
-		// ...
-		return
-	}
-
-	if syncStopped {
-    // Finish the synchronization
-		SendFile(parallel, f, src, blocksize, dataConn, verbose)
-    //  ...
-		done = true
-	}
-
-  // Start the synchronization
-	SendFile(parallel, f, src, blocksize, dataConn, verbose)
-
-  // Wait until the next polling cycle starts
-	time.Sleep(pollDuration)
-}
-```
-
-#### File Receiver
-
-The file receiver also connects to the multiplexer hub, this time registering itself as a `dst-control` peer. After it has received a file name from the multiplexer hub, it connects to the multiplexer hub again - this time registering itself as a `dst` peer, which creates leading directories, opens up the destination file and registers itself:
-
-```go
-// Connection and registration
-syncerConn, err := d.DialContext(ctx, "tcp", syncerRaddr)
-// ...
-utils.EncodeJSONFixedLength(syncerConn, "dst-control")
-
-for {
-  file := ""
-  utils.DecodeJSONFixedLength(syncerConn, &file)
-
-  go func() {
-    // Connection and registration
-  	dataConn, err := d.DialContext(ctx, "tcp", syncerRaddr)
-    // ..
-    utils.EncodeJSONFixedLength(dataConn, "dst")
-
-    // Destination directory and file setup
-  	dst := getDstPath(file)
-  	os.MkdirAll(filepath.Dir(dst), os.ModePerm)
-
-  	f, err := os.OpenFile(dst, os.O_WRONLY|os.O_CREATE, os.ModePerm)
-    // ...
-  }()
-}
-```
-
-The file name is now sent to the multiplexer again, causing it to look for a peer that advertises the requested file. If such a peer is found, it starts the file receiver process in a loop, exiting only once the file has been completely synced:
-
-```go
-// Sending the file name
-utils.EncodeJSONFixedLength(dataConn, file)
-
-for {
-  // Receiving one set of delta changes
-  ReceiveFile(parallel, f, dst, blocksize, dataConn, verbose)
-
-  // Termination
-  if once(file) {
-  	return
-  }
-}
-```
+The file receiver also connects to the multiplexer hub, this time registering itself as a `dst-control` peer. After it has received a file name from the multiplexer hub, it connects to the multiplexer hub again - this time registering itself as a `dst` peer, which creates leading directories, opens up the destination file and registers itself. The file name is then sent to the multiplexer again, causing it to look for a peer that advertises the requested file. If such a peer is found, it starts the file receiver process in a loop, exiting only once the file has been completely synced.
 
 #### File Transmission
 
@@ -813,14 +604,7 @@ localHashes, cutoff, err := GetHashesForBlocks(parallel, path, blocksize)
 // Comparing the hashes
 blocksToSend := []int64{}
 for i, localHash := range localHashes {
-	j := int64(i)
-
-	if len(remoteHashes) <= i {
-		blocksToSend = append(blocksToSend, j)
-
-		continue
-	}
-
+	//  ...
 	if localHash != remoteHashes[i] {
 		blocksToSend = append(blocksToSend, j)
 
@@ -832,37 +616,11 @@ for i, localHash := range localHashes {
 utils.EncodeJSONFixedLength(conn, blocksToSend)
 ```
 
-If the remote has sent less hashes than were calculated locally, it asks the remote to truncate it's file to the size of the local file that is being synchronized, after which it sends the updated data for the file in the order that the changed hashes were sent:
-
-```go
-// Local file is empty, truncate remote file to zero
-if len(remoteHashes) > 0 && len(localHashes) <= 0 {
-	utils.EncodeJSONFixedLength(conn, -1)
-
-  return // ...
-}
-
-// Grow/shrink remote file
-utils.EncodeJSONFixedLength(conn, cutoff)
-
-// Read changed chunks from file and copy them to the remote connection
-for i, blockToSend := range blocksToSend {
-	backset := int64(0)
-	if i == len(blocksToSend)-1 {
-		backset = cutoff
-	}
-
-	b := make([]byte, blocksize-backset)
-	file.ReadAt(b, blockToSend*(blocksize))
-
-	m, err := conn.Write(b)
-  // ...
-}
-```
+If the remote has sent less hashes than were calculated locally, it asks the remote to truncate it's file to the size of the local file that is being synchronized, after which it sends the updated data for the file in the order that the changed hashes were sent.
 
 #### Hash Calculation
 
-The hash calculation implements the concurrent hashing of both the file transmitter and receiver. It uses a semaphore to limit the amount of concurrent access to the file that is being hashed, and a wait group to detect that the calculation has finished:
+The hash calculation implements the concurrent hashing of both the file transmitter and receiver. It uses a semaphore to limit the amount of concurrent access to the file that is being hashed, and a wait group to detect that the calculation has finished. Worker goroutines acquire a lock of this semaphore and calculate a CRC32 hash, which is a weak but fast hashing algorithm. For easier transmission, the hashes are hex-encoded and collected:
 
 ```go
 // The lock and semaphore
@@ -880,27 +638,6 @@ for i := int64(0); i < blocks; i++ {
 	go calculateHash(j)
 }
 wg.Wait()
-```
-
-Worker goroutines acquire a lock of this semaphore and calculate a CRC32 hash, which is a weak but fast hashing algorithm. For easier transmission, the hashes are hex-encoded and collected:
-
-```go
-calculateHash := func(j int64) {
-	_ = lock.Acquire(context.Background(), 1)
-	// ...
-
-	checkFile, err := os.Open(file)
-
-
-  // Hash calculation of the specific chunk
-	hash := crc32.NewIEEE()
-	io.CopyN(hash, io.NewSectionReader(checkFile, j*(blocksize), blocksize), blocksize)
-	// ...
-
-  // Hash encoding
-	hashes[j] = hex.EncodeToString(hash.Sum(nil))
-  // ...
-}
 ```
 
 #### File Reception
@@ -923,47 +660,7 @@ cutoff := int64(0)
 utils.DecodeJSONFixedLength(conn, &cutoff)
 ```
 
-If the remote detected that the file needs to be cleared (by sending a negative cutoff value), the receiver truncates the file; similarly so, if it has detected that the file has grown or shrunk since the last synchronization cycle, it shortens or extends it, after which the chunks are read from the connection and written to the local file:
-
-```go
-// Clearing the file
-if cutoff == -1 {
-	file.Truncate(0)
-
-	return nil
-}
-/// ...
-
-// Shrinking or growing the file
-s, err := os.Stat(path)
-
-newSize := (((blocksToFetch[len(blocksToFetch)-1] + 1) * blocksize) - cutoff)
-diff := s.Size() - newSize
-
-if diff > 0 {
-	// If the file on the server got smaller, truncate the local file accordingly
-	file.Truncate(newSize)
-} else {
-	// If the file on the server grew, grow the local file accordingly
-	file.Seek(0, 2)
-
-	io.CopyN(file, nopReader{}, -diff)
-}
-
-for i, blockToFetch := range blocksToFetch {
-	backset := int64(0)
-	if i == len(blocksToFetch)-1 {
-		backset = cutoff
-	}
-
-  // Receiving the chunk
-	b := make([]byte, blocksize-backset)
-	io.ReadFull(conn, b)
-
-  // Writing the chunk to the local file
-	file.WriteAt(b, blockToFetch*(blocksize))
-}
-```
+If the remote detected that the file needs to be cleared (by sending a negative cutoff value), the receiver truncates the file; similarly so, if it has detected that the file has grown or shrunk since the last synchronization cycle, it shortens or extends it, after which the chunks are read from the connection and written to the local file.
 
 ### FUSE Implementation in Go
 
@@ -1028,29 +725,7 @@ type Backend interface {
 }
 ```
 
-The key difference between this backend design and the one used for `userfaultfd-go` is that they also support writes and other operations that would typically be expected for a complete block device, such as flushing data with `Sync()`. An example implementation of this backend is the file backend; since a file is conceptually similar to a block device, the overhead of creating the backend is minimal:
-
-```go
-func (b *FileBackend) ReadAt(p []byte, off int64) (n int, err error) {
-	n, err = b.file.ReadAt(p, off)
-}
-
-func (b *FileBackend) WriteAt(p []byte, off int64) (n int, err error) {
-	n, err = b.file.WriteAt(p, off)
-}
-
-func (b *FileBackend) Size() (int64, error) {
-	stat, err := b.file.Stat()
-	// ..
-	return stat.Size(), nil
-}
-
-func (b *FileBackend) Sync() error {
-	return b.file.Sync()
-}
-```
-
-In order to serve such a backend, `go-nbd` exposes `Handle` function:
+The key difference between this backend design and the one used for `userfaultfd-go` is that they also support writes and other operations that would typically be expected for a complete block device, such as flushing data with `Sync()`. An example implementation of this backend is the file backend; since a file is conceptually similar to a block device, the overhead of creating the backend is minimal. In order to serve such a backend, `go-nbd` exposes `Handle` function:
 
 ```go
 func Handle(conn net.Conn, exports []Export, options *Options) error
@@ -1058,20 +733,7 @@ func Handle(conn net.Conn, exports []Export, options *Options) error
 
 By not depending on a specific transport layer and instead only depending on a generic `net.Conn`, it is possible to easily integrate `go-nbd` in existing client/server systems or to switch out the typical TCP transport layer with i.e. QUIC. By not requiring `dial/accept` semantics it is also possible to use a P2P communication layer for peer-to-peer NBD such as WebRTC with weron[@pojtinger2023weron], which also provides the necessary `net.Conn` interface.
 
-In addition to this `net.Conn`, options can be provided to the server; these include the ability to make the server read-only by blocking write operations, or to set the preferred block size. The actual backend is linked to the server through the concept of an export:
-
-```go
-type Export struct {
-	Name        string
-	Description string
-
-	Backend backend.Backend
-}
-```
-
-This allows a single server to expose multiple backends that are identified with a name and description, which can, in the memory synchronization scenario, be used to identify multiple shared memory regions.
-
-To make the implementation of the NBD protocol easier, negotation and transmission phase headers and and other structured data is modelled using Go structs:
+In addition to this `net.Conn`, options can be provided to the server; these include the ability to make the server read-only by blocking write operations, or to set the preferred block size. The actual backend is linked to the server through the concept of an export; this allows a single server to expose multiple backends that are identified with a name and description, which can, in the memory synchronization scenario, be used to identify multiple shared memory regions. To make the implementation of the NBD protocol easier, negotation and transmission phase headers and and other structured data is modelled using Go structs:
 
 ```go
 // ...
@@ -1080,121 +742,22 @@ type NegotiationOptionHeader struct {
 	ID          uint32
 	Length      uint32
 }
-
-type NegotiationReplyHeader struct {
-	ReplyMagic uint64
-	ID         uint32
-	Type       uint32
-	Length     uint32
-}
 // ...
 ```
 
-In order to keep the actual handshake as simple as possible, only the fixed newstyle handshake is implemented, which also makes the implementation compliant with the baseline specification as defined by the protocol[@blake2023nbd] (see figure \ref{nbd-baseline-protocol-simplified-sequence}). The negotiation starts by the server sending the negotiation header to the NBD client and ignoring the client's flags:
+To keep the actual handshake as simple as possible, only the fixed newstyle handshake is implemented, which also makes the implementation compliant with the baseline specification as defined by the protocol[@blake2023nbd] (see figure \ref{nbd-baseline-protocol-simplified-sequence}). The negotiation starts by the server sending the negotiation header to the NBD client and ignoring the client's flags. The option negotiation phase is implemented using a simple loop, which either breaks on success or returns in the case of an error. For the Go implementation, it is possible to use the `binary` package to correctly encode and decode the NBD packets and then switching on the encoded option ID; in this handshake, the `NEGOTIATION_ID_OPTION_INFO` and `NEGOTIATION_ID_OPTION_GO` options exchange information about the chosen export (i.e. block size, export size, name and description), and if `GO` is specified, immediately continue on to the transmission phase. If an export is not found, the server aborts the connection. In order to allow for enumeration of available exports, the `NEGOTIATION_ID_OPTION_LIST` allows for returning the list of exports to the client, and `NEGOTIATION_ID_OPTION_ABORT` allows aborting handshake, which can be necessary if i.e. the `NEGOTIATION_ID_OPTION_INFO` was chosen but the client can't handle the exposed export, i.e. due to it not supporting the advertised block size.
 
-```go
-// Sending the negotiation header
-binary.Write(conn, binary.BigEndian, protocol.NegotiationNewstyleHeader{
-	OldstyleMagic:  protocol.NEGOTIATION_MAGIC_OLDSTYLE,
-	OptionMagic:    protocol.NEGOTIATION_MAGIC_OPTION,
-	HandshakeFlags: protocol.NEGOTIATION_HANDSHAKE_FLAG_FIXED_NEWSTYLE,
-})
-
-// Discard client flags (uint32)
-_, err := io.CopyN(io.Discard, conn, 4)
-// ...
-```
-
-The option negotiation phase is implemented using a simple loop, which either breaks on success or returns in the case of an error. For the Go implementation, it is possible to use the `binary` package to correctly encode and decode the NBD packets and then switching on the encoded option ID:
-
-```go
-for {
-	// Read the header
-	var optionHeader protocol.NegotiationOptionHeader
-	binary.Read(conn, binary.BigEndian, &optionHeader)
-
-	//  Validate the packet
-	if optionHeader.OptionMagic != protocol.NEGOTIATION_MAGIC_OPTION {
-		return ErrInvalidMagic
-	}
-
-	// Handle the option by it's ID
-	switch optionHeader.ID {
-		// ...
-	}
-}
-```
-
-In this handshake, the `NEGOTIATION_ID_OPTION_INFO` and `NEGOTIATION_ID_OPTION_GO` options exchange information about the chosen export (i.e. block size, export size, name and description), and if `GO` is specified, immediately continue on to the transmission phase. If an export is not found, the server aborts the connection. In order to allow for enumeration of available exports, the `NEGOTIATION_ID_OPTION_LIST` allows for returning the list of exports to the client, and `NEGOTIATION_ID_OPTION_ABORT` allows aborting handshake, which can be necessary if i.e. the `NEGOTIATION_ID_OPTION_INFO` was chosen but the client can't handle the exposed export, i.e. due to it not supporting the advertised block size.
-
-The actual transmission phase is implemented in a similar way, by reading headers in a loop, switching on the message type and handling it accordingly. `TRANSMISSION_TYPE_REQUEST_READ` forwards a read request to the selected export's backend and sends the relevant chunk to the client, `TRANSMISSION_TYPE_REQUEST_WRITE` reads the offset and chunk from the client, and writes it to the export's backend:
-
-```go
-// Reading the chunk to be written from the client's connection
-n, err := io.ReadAtLeast(conn, b[:requestHeader.Length], int(requestHeader.Length))
-// ...
-
-// Writing it to the backend
-export.Backend.WriteAt(b[:n], int64(requestHeader.Offset))
-
-// Acknowledging the write to the client
-binary.Write(conn, binary.BigEndian, protocol.TransmissionReplyHeader{
-	ReplyMagic: protocol.TRANSMISSION_MAGIC_REPLY,
-	Error:      0,
-	Handle:     requestHeader.Handle,
-})
-```
-
-It is here that the read-only option is implemented by sending a permission error in case of writes:
-
-```go
-if options.ReadOnly {
-	// Discard the write command's data
-	_, err := io.CopyN(io.Discard, conn, int64(requestHeader.Length))
-
-	// Sending the error reply
-	binary.Write(conn, binary.BigEndian, protocol.TransmissionReplyHeader{
-		ReplyMagic: protocol.TRANSMISSION_MAGIC_REPLY,
-		Error:      protocol.TRANSMISSION_ERROR_EPERM,
-		Handle:     requestHeader.Handle,
-	})
-
-	break
-}
-```
-
-Finally, the `TRANSMISSION_TYPE_REQUEST_DISC` transmission message type gracefully disconnects the client from the server and causes the backend to sync, i.e. to flush and outstanding writes to disk. This is especially important in order to support the lifecycle of the migration API.
+The actual transmission phase is implemented in a similar way, by reading headers in a loop, switching on the message type and handling it accordingly. `TRANSMISSION_TYPE_REQUEST_READ` forwards a read request to the selected export's backend and sends the relevant chunk to the client, `TRANSMISSION_TYPE_REQUEST_WRITE` reads the offset and chunk from the client, and writes it to the export's backend; it is here that the read-only option is implemented by sending a permission error in case of writes. Finally, the `TRANSMISSION_TYPE_REQUEST_DISC` transmission message type gracefully disconnects the client from the server and causes the backend to sync, i.e. to flush and outstanding writes to disk. This is especially important in order to support the lifecycle of the migration API.
 
 #### Client
 
-Unlike the server, the client is implemented by using both the kernel's NBD client and a userspace component. In order to use the kernel NBD client, it is necessary to first find a free NBD device (`/dev/nbd*`); these devices are allocated by the kernel NBD module and can be specified with the `nbds_max` parameter[@linux2023nbd]. In order to find a free device, we can either specify it manually, or check `sysfs` for a NBD device that reports a zero size:
-
-```go
-// Using a glob on sysfs for the NBD device size
-statPaths, err := filepath.Glob(path.Join("/sys", "block", "nbd*", "size"))
-// ...
-
-// Finding the first device that reports a zero zsize
-for _, statPath := range statPaths {
-	rsize, err := os.ReadFile(statPath)
-	// ...
-
-	size, err := strconv.ParseInt(strings.TrimSpace(string(rsize)), 10, 64)
-	// ...
-
-	if size == 0 {
-		return filepath.Join("/dev", filepath.Base(filepath.Dir(statPath))), nil
-	}
-}
-```
-
-After a free NBD device has been found, the client can be started by calling `Connect` with a `net.Conn` and options, similarly to the server:
+Unlike the server, the client is implemented by using both the kernel's NBD client and a userspace component. In order to use the kernel NBD client, it is necessary to first find a free NBD device (`/dev/nbd*`); these devices are allocated by the kernel NBD module and can be specified with the `nbds_max` parameter[@linux2023nbd]. In order to find a free device, we can either specify it manually, or check `sysfs` for a NBD device that reports a zero size. After a free NBD device has been found, the client can be started by calling `Connect` with a `net.Conn` and options, similarly to the server.
 
 ```go
 func Connect(conn net.Conn, device *os.File, options *Options) error
 ```
 
-This time, the options can define additonal information such as the client's preferred blocksize, connection timeouts or requested export name, which, in this scenario, can be used to refer to a specific memory region. The kernel's NBD device is then configured to use the connection; the relevant `ioctl` constants are extracted by using CGo, or hard-coded values if CGo is not available:
+The options can define additonal information such as the client's preferred blocksize, connection timeouts or requested export name, which, in this scenario, can be used to refer to a specific memory region. The kernel's NBD device is then configured to use the connection; the relevant `ioctl` constants are extracted by using CGo, or hard-coded values if CGo is not available:
 
 ```go
 // Only use CGo if it is available
@@ -1214,76 +777,7 @@ const (
 )
 ```
 
-The handshake for the NBD client is negotiated in userspace by Go. Similarly to the server, the client only supports the "fixed newstyle" negotiatiation and aborts otherwise. The negotiation is once again implemented as a simple loop similarly to the server with it switching on the type; on `NEGOTIATION_TYPE_REPLY_INFO`, the client receives the export size, and with `NEGOTIATION_TYPE_INFO_BLOCKSIZE` it receives the used block size, which it then valides to be within the specified bounds and as a valid power of two, falling back to the preffered block size supplied by the options if possible:
-
-```go
-// Falling back to the client's prefered block size if none is provided, and checking if the server's advertised size is within the clients's bounds as supplied by the options
-if options.BlockSize == 0 {
-	chosenBlockSize = info.PreferredBlockSize
-} else if options.BlockSize >= info.MinimumBlockSize && options.BlockSize <= info.MaximumBlockSize {
-	chosenBlockSize = options.BlockSize
-} else {
-	return ErrUnsupportedServerBlockSize
-}
-
-// Validating upper and lower supported bounds set by the kernel's NBD client
-if chosenBlockSize > MaximumBlockSize {
-	return ErrMaximumBlockSize
-} else if chosenBlockSize < MinimumBlockSize {
-	return ErrMinimumBlockSize
-}
-
-// Validating that the chosen block size is a power of two
-if !((chosenBlockSize > 0) && ((chosenBlockSize & (chosenBlockSize - 1)) == 0)) {
-	return ErrBlockSizeNotPowerOfTwo
-}
-```
-
-After this relevant metadata has been fetched from the server, the kernel NBD client is further configured with these values using `ioctl`, after which the `DO_IT` `ioctl` number is used to asynchronously start the kernel's NBD client:
-
-```go
-syscall.Syscall(
-	syscall.SYS_IOCTL,
-	device.Fd(),
-	ioctl.NEGOTIATION_IOCTL_SET_BLOCKSIZE,
-	uintptr(chosenBlockSize),
-)
-
-// ...
-
-go func() {
-	syscall.Syscall(
-		syscall.SYS_IOCTL,
-		device.Fd(),
-		ioctl.NEGOTIATION_IOCTL_DO_IT,
-		0,
-	)
-	// ...
-}()
-```
-
-In addition to being able to configure the client itself, the client library can also be used to list the exports of a server; for this, another handshake is initiated, but this time the `NEGOTIATION_ID_OPTION_LIST` option is provided, after which the client reads the export information from the server and disconnects:
-
-```go
-exportNames := []string{}
-for {
-	// Reading the export name's length
-	var exportNameLength uint32
-	if err := binary.Read(info, binary.BigEndian, &exportNameLength); err != nil {
-		// All the exports have been received
-		if errors.Is(err, io.EOF) {
-			break
-		}
-		// ...
-	}
-
-	// Reading the export name
-	exportName := make([]byte, exportNameLength)
-	io.ReadFull(info, exportName)
-
-	exportNames = append(exportNames, string(exportName))
-}
-```
+The handshake for the NBD client is negotiated in userspace by Go. Similarly to the server, the client only supports the "fixed newstyle" negotiatiation and aborts otherwise. The negotiation is once again implemented as a simple loop similarly to the server with it switching on the type; on `NEGOTIATION_TYPE_REPLY_INFO`, the client receives the export size, and with `NEGOTIATION_TYPE_INFO_BLOCKSIZE` it receives the used block size, which it then valides to be within the specified bounds and as a valid power of two, falling back to the preffered block size supplied by the options if possible. After this relevant metadata has been fetched from the server, the kernel NBD client is further configured with these values using `ioctl`, after which the `DO_IT` `ioctl` number is used to asynchronously start the kernel's NBD client. In addition to being able to configure the client itself, the client library can also be used to list the exports of a server; for this, another handshake is initiated, but this time the `NEGOTIATION_ID_OPTION_LIST` option is provided, after which the client reads the export information from the server and disconnects.
 
 #### Client Lifecycle
 
@@ -1315,57 +809,7 @@ go func() {
 }()
 ```
 
-In reality however, due to overheads in `udev`, it can be faster to use polling instead of the even system, which is why it is possible to set the `ReadyCheckUdev` option in the NBD client to `false`, which uses polling instead:
-
-```go
-// Opening up the NBD device's size file in `sysfs`
-sizeFile, err := os.Open(filepath.Join("/sys", "block", filepath.Base(device.Name()), "size"))
-
-for {
-	// Reading the size file and parsing it's contents as a number
-	sizeFile.Seek(0, io.SeekStart)
-	io.ReadAll(sizeFile)
-	size, err := strconv.ParseInt(strings.TrimSpace(string(rsize)), 10, 64)
-
-	// If the size is no longer reported as zero, return
-	if size > 0 {
-		options.OnConnected()
-
-		return
-	}
-
-	// If the device is not yet ready, sleep until the next polling cycle
-	time.Sleep(options.ReadyCheckPollInterval)
-}
-```
-
-Similarly to the setup lifecycle, the teardown lifecycle is also as an asynchronous operation. It works by calling three `ioctl`s on the NBD device's file descriptor, causing it to disconnect from the server and causing the prior `DO_IT` syscall to return, which in turn causes the prior call to `Connect` to return:
-
-```go
-// Complete any remaining reads/writes
-syscall.Syscall(
-	syscall.SYS_IOCTL,
-	device.Fd(),
-	ioctl.TRANSMISSION_IOCTL_CLEAR_QUE,
-	0,
-)
-
-// Disconnect from the NBD server
-syscall.Syscall(
-	syscall.SYS_IOCTL,
-	device.Fd(),
-	ioctl.TRANSMISSION_IOCTL_DISCONNECT,
-	0,
-)
-
-// Disassociate the socket from the NBD device so that it can be used again
-syscall.Syscall(
-	syscall.SYS_IOCTL,
-	device.Fd(),
-	ioctl.TRANSMISSION_IOCTL_CLEAR_SOCK,
-	0,
-)
-```
+In reality however, due to overheads in `udev`, it can be faster to use polling instead of the even system, which is why it is possible to set the `ReadyCheckUdev` option in the NBD client to `false`, which uses polling instead. Similarly to the setup lifecycle, the teardown lifecycle is also as an asynchronous operation. It works by calling three `ioctl`s (`TRANSMISSION_IOCTL_CLEAR_QUE` to complete any remaining reads/writes, `TRANSMISSION_IOCTL_DISCONNECT` to disconnect from the NBD server and `TRANSMISSION_IOCTL_CLEAR_SOCK` to disassociate the socket from the NBD device so that it can be used again) on the NBD device's file descriptor, causing it to disconnect from the server and causing the prior `DO_IT` syscall to return, which in turn causes the prior call to `Connect` to return.
 
 #### Optimizing Access to the Block Device
 
@@ -1373,41 +817,7 @@ When `open`ing the block devie that the client is connected to, the kernel usual
 
 #### Combining the NBD Client and Server to a Mount
 
-When both the client and server are started on the same host, it is possible to connect them in an efficient way by creating a connected UNIX socket pair, returning a file descriptor for both the server and the client respectively, after which both components can be started in a new goroutine:
-
-```go
-// Creating the socket pair
-fds, err := syscall.Socketpair(syscall.AF_UNIX, syscall.SOCK_STREAM, 0)
-// ..
-
-// Starting the server on file descriptor 1
-go func() {
-	sf := os.NewFile(uintptr(fds[0]), "server")
-
-	c, err := net.FileConn(sf)
-
-	sc := c.(*net.UnixConn)
-
-	server.Handle(
-		d.sc,
-		// ...
-	)
-}()
-
-// Starting the client on file descriptor 1
-go func() {
-	cf := os.NewFile(uintptr(fds[1]), "client")
-
-	c, err := net.FileConn(cf)
-
-	cc := c.(*net.UnixConn)
-	// ...
-
-	client.Connect(d.cc, /* ... */)
-}()
-```
-
-This once again shows the benefit of not requiring a specific transport layer or `accept` semantics for the NBD library, as this makes it possible to skip the usually required TCP handshake for NBD.
+When both the client and server are started on the same host, it is possible to connect them in an efficient way by creating a connected UNIX socket pair, returning a file descriptor for both the server and the client respectively, after which both components can be started in a new goroutine. This highlights the benefit of not requiring a specific transport layer or `accept` semantics for the NBD library, as it is possible to skip the usually required TCP handshake for NBD.
 
 This form of a combined client and server on the local device, with the server's backend providing the actual resource, forms a direct path mount - where the path to the block device can be passed to the application consuming or providing the resource, which can then choose to `open`, `mmap` etc. it. In addition to this simple path-based mount, a file mount is provided. This simply opens up the path as a file, so that it can be accessed with the common `read`/`write` syscalls; the benefit over simply using the path mount and handling the access in the application consuming the resource is that common pitfalls around the lifecycle (`Close` and `Sync`) can be handled within the mount API directly.
 
@@ -1493,21 +903,7 @@ This simple implementation can be used to efficiently allow reading and writing 
 
 In addition to this chunking system, there is also a `ChunkedReadWriterAt`, which ensures that the limits concerning a backend's maximum chunk size and aligned reads/writes are being respected. Some backends, i.e. a backend where each chunk is represented by a file, might only support writing to aligned offsets, but don't support checking for this behavior; in this example, if a chunk with a larger chunk size is written to the backend, depending on the implementation, this could result in this chunk file's size being extended, which could lead to a DoS attack vector. It can also be of relevance if a client instead of a server is expected to implement chunking, and the server should simply enforce that the aligned reads and writes are being provided.
 
-In order to check if a read or write is aligned, this `ReadWriterAt` checks whether an operation is done to an offset that is multiples of the chunk size, and whether the length of the slice of data is a valid chunk size:
-
-```go
-// Check if provided data is valid
-if off%c.chunkSize != 0 || int64(len(p)) != c.chunkSize {
-	return 0, ErrInvalidOffset
-}
-
-// Check if offset is valid
-if off < 0 || off >= int64(c.chunkSize*c.chunks) {
-	return 0, ErrInvalidReadSize
-}
-
-// Continues with the operation
-```
+In order to check if a read or write is aligned, this `ReadWriterAt` checks whether an operation is done to an offset that is multiples of the chunk size, and whether the length of the slice of data is a valid chunk size.
 
 #### Background Pull
 
@@ -1640,61 +1036,11 @@ type SeederRemote struct {
 
 Unlike the remote backend, the seeder also exposes a mount through the familiar path, file or slice APIs, meaning that even as the migration is in progress, the underlying resource can still be accessed by the application on the source host. This fixes the architectural constraint of the mount API when used for the migration, where only the destination is able to expose a mount, while the source simply serves data without accessing it.
 
-The tracking support is implemented in the same modular and composable way as the syncer, by providing a new pipeline stage, the `TrackingReadWriter`. Once activated by the `Track` RPC, the tracker intecepts all `WriteAt` calls and adds them to a local map before calling the next stage:
-
-```go
-// If tracking is enabled, mark the chunk as dirty
-if c.tracking {
-	c.dirtyOffsetsIndex[off] = struct{}{}
-	// ...
-}
-
-// Call the next stage
-return c.backend.WriteAt(p, off)
-```
-
-Once the `Sync` RPC is called by the destination host, these dirty offsets are returned and the map is cleared. A benefit of the protocol being defined in such a way that only the client ever calls an RPC, thus making the protocol uni-directional, is that both the transport layer and RPC system are completely interchangeable. This works by returning a simple abstract `service` utility struct from `Open`, which can then be used as the implementation for any RPC framework, i.e. with the actual gRPC service simply functioning as an adapter:
-
-```go
-type SeederGrpc struct {
-	v1.UnimplementedSeederServer
-
-	svc *Seeder
-}
-
-// ...
-
-func (s *SeederGrpc) ReadAt(ctx context.Context, args *v1.ReadAtArgs) (*v1.ReadAtReply, error) {
-	res, err := s.svc.ReadAt(ctx, int(args.GetLength()), args.GetOff())
-	// ...
-
-	return &v1.ReadAtReply{
-		N: int32(res.N),
-		P: res.P,
-	}, nil
-}
-```
+The tracking support is implemented in the same modular and composable way as the syncer, by providing a new pipeline stage, the `TrackingReadWriter`. Once activated by the `Track` RPC, the tracker intecepts all `WriteAt` calls and adds them to a local map before calling the next stage. Once the `Sync` RPC is called by the destination host, these dirty offsets are returned and the map is cleared. A benefit of the protocol being defined in such a way that only the client ever calls an RPC, thus making the protocol uni-directional, is that both the transport layer and RPC system are completely interchangeable. This works by returning a simple abstract `service` utility struct from `Open`, which can then be used as the implementation for any RPC framework, i.e. with the actual gRPC service simply functioning as an adapter.
 
 #### Leecher
 
-The leecher then takes this abstract service struct provided by the seeder, which is implemented by a RPC framework. Using this, as soon as the leecher is opened, it calls `Track()` in the background and starts the NBD device in parallel to achieve a similar reduction in initial read latency as the mount API. The leecher introduces a new pipeline stage, the `LockableReadWriterAt`. This component simply blocks all read and write operations to/from the NBD device until `Finalize` has been called by using a `sync.Cond`. This is required becaused otherwise, stale data (before `Finalize` marked the chunks as dirty) could have poisoned the kernel's file cache if the application read data before finalization:
-
-```go
-// For `ReadAt/WriteAt`: Waits for finalization, then calls the actual read/write operation
-a.lock.L.Lock()
-if a.locked {
-	a.lock.Wait()
-}
-a.lock.L.Unlock()
-
-// Unlocks the `sync.Cond` and broadcasts the new unlocked state to all previously blocked `ReadAt`/`WriteAt` operations
-func (a *LockableReadWriterAt) Unlock() {
-	a.lock.L.Lock()
-	a.locked = false
-	a.lock.Broadcast()
-	a.lock.L.Unlock()
-}
-```
+The leecher then takes this abstract service struct provided by the seeder, which is implemented by a RPC framework. Using this, as soon as the leecher is opened, it calls `Track()` in the background and starts the NBD device in parallel to achieve a similar reduction in initial read latency as the mount API. The leecher introduces a new pipeline stage, the `LockableReadWriterAt`. This component simply blocks all read and write operations to/from the NBD device until `Finalize` has been called by using a `sync.Cond`. This is required becaused otherwise, stale data (before `Finalize` marked the chunks as dirty) could have poisoned the kernel's file cache if the application read data before finalization.
 
 Once the leecher has started the device, it sets up a syncer in the same way as the mount API. A callback can again be used to monitor the pull progress, and once the reported availability is satisfactory, `Finalize` can be called. This then handles the critical migration phase, in which the remote application consuming the resource must be suspended; to do this, `Finalize` calls `Sync` on the seeder, causing it to return the dirty chunks and suspending the remote application, while the leecher marks the dirty chunks as remote and schedules them to be pulled immediately in the background to optimize for temporal locality:
 
@@ -1740,29 +1086,7 @@ func (b *FileBackend) ReadAt(p []byte, off int64) (n int, err error) {
 }
 ```
 
-This can quickly become a bottleneck in the pipeline. One option that tries to solve this is the directory backend; instead of using just one backing file, the directory backend is a chunked backend that uses a directory of files, with each file representing a chunk. By using multiple files, this backend can lock each file (and thus chunk) individually, speeding up concurrent access. The same also applies to writees, where even concurrent writes to different chunks can safely be done at the same time as they are all backend by a separate file. This backend keeps track of these chunks by using an internal map of locks, and a queue to keep track of the order in which chunks' corresponding files were opened; when a chunk is first accessed, a new file is created for the chunk, and if the first operation is `ReadAt`, it is also truncated to exactly one chunk length. In order not to exceed the maximum number of open files for the backend process, a simple LRU algorithm is used to to close an open file if the limit would be exceeded:
-
-```go
-// Open files limit exceedd
-if int64(len(b.filesQueue)) == b.maxOpenFiles {
-	// Find the least recently used offset and corresponding file
-	lruOff := b.filesQueue[0]
-	lruFl := b.files[lruOff]
-
-	// Close and nil it
-	if lruFl.file != nil {
-		if err := lruFl.file.Close(); err != nil {
-			return nil, err
-		}
-
-		lruFl.file = nil
-	}
-
-	// Remove it from the list and map of open files
-	delete(b.files, lruOff)
-	b.filesQueue = b.filesQueue[1:]
-}
-```
+This can quickly become a bottleneck in the pipeline. One option that tries to solve this is the directory backend; instead of using just one backing file, the directory backend is a chunked backend that uses a directory of files, with each file representing a chunk. By using multiple files, this backend can lock each file (and thus chunk) individually, speeding up concurrent access. The same also applies to writees, where even concurrent writes to different chunks can safely be done at the same time as they are all backend by a separate file. This backend keeps track of these chunks by using an internal map of locks, and a queue to keep track of the order in which chunks' corresponding files were opened; when a chunk is first accessed, a new file is created for the chunk, and if the first operation is `ReadAt`, it is also truncated to exactly one chunk length. In order not to exceed the maximum number of open files for the backend process, a simple LRU algorithm is used to to close an open file if the limit would be exceeded.
 
 ### Remote Stores as Backends
 
@@ -1870,46 +1194,7 @@ func (s *local) Println(ctx context.Context, msg string) error {
 }
 ```
 
-In order to call these RPCs from the client/server respectively, the remote functions defined earlier are also created as placeholder structs that will be implemented by Dudirekta at runtime using reflection and are added to registry, which provides a handler that links a connection to the RPC implementation:
-
-```go
-// Server
-type remote struct {
-	Println func(ctx context.Context, msg string) error
-}
-
-registry := rpc.NewRegistry(
-	&local{},
-	remote{},
-	// ...
-)
-
-// Client
-type remote struct {
-	Increment func(ctx context.Context, delta int64) (int64, error)
-}
-
-registry := rpc.NewRegistry(
-	&local{},
-	remote{},
-	// ...
-)
-```
-
-This handler can then be linked to a connection provided by any transport layer, i.e. TCP:
-
-```go
-// Server: Create a TCP listener, wait for a connection, and link it to the registry
-lis, err := net.Listen("tcp", "localhost:1337")
-conn, err := lis.Accept()
-registry.Link(conn)
-
-// Client: Connect to the TCP listener and link it to the registry
-conn, err := net.Dial("tcp", *addr)
-registry.Link(conn)
-```
-
-After both registries have been linked to the transport, it is possible to call the RPCs exposed by the remote peers from both the server and the client, which makes bi-directional communication possible:
+In order to call these RPCs from the client/server respectively, the remote functions defined earlier are also created as placeholder structs that will be implemented by Dudirekta at runtime using reflection and are added to registry, which provides a handler that links a connection to the RPC implementation. This handler can then be linked to a any transport layer, i.e. TCP. After both registries have been linked to the transport, it is possible to call the RPCs exposed by the remote peers from both the server and the client, which makes bi-directional communication possible:
 
 ```go
 // Server: Calls the `Println` RPC exposed by the client
@@ -1979,61 +1264,9 @@ Here, the message is marked as a return value in the first element, the ID is pa
 
 #### RPC Providers
 
-If an RPC (such as `ReadAt` in the case of the mount API) is called, a method with the provided RPC's name is looked up on the provided implementation struct and if it is found, the provided argument's types are validated against those of the implementation by unmarshalling them into their native natives:
+If an RPC (such as `ReadAt` in the case of the mount API) is called, a method with the provided RPC's name is looked up on the provided implementation struct and if it is found, the provided argument's types are validated against those of the implementation by unmarshalling them into their native natives. After the call has been validated by the RPC provider, the actual RPC implementation is executed in a new goroutine to allow for concurrent RPCs, the return and error value of which is then marshalled into JSON and sent back the caller.
 
-```go
-// Unmarshalling the function name and args from the protocol
-var functionName string
-json.Unmarshal(res[2], &functionName)
-
-var functionArgs []json.RawMessage
-json.Unmarshal(res[3], &functionArgs)
-
-// Looking up the field on the local struct
-function := reflect.
-	ValueOf(r.local.wrappee).
-	MethodByName(functionName)
-
-// Only continue if the field can be called
-if function.Kind() != reflect.Func {
-	return ErrCannotCallNonFunction
-}
-
-// Validation of the argument count
-if function.Type().NumIn() != len(functionArgs)+1 {
-	return ErrInvalidArgs
-}
-
-// Validation of the arguments' types; if an argument can not be unmarshalled, the call is cancelled
-args := []reflect.Value{}
-for i := 0; i < function.Type().NumIn(); i++ {
-	functionType := function.Type().In(i)
-
-	arg := reflect.New(functionType)
-	if err := json.Unmarshal(functionArgs[i-1], arg.Interface()); err != nil {
-		return err
-	}
-
-	args = append(args, arg.Elem())
-}
-```
-
-After the call has been validated by the RPC provider, the actual RPC implementation is executed in a new goroutine to allow for concurrent RPCs, the return and error value of which is then marshalled into JSON and sent back the caller.
-
-In addition to the RPCs created by analyzing the implementation struct through reflection, to be able to support closures, a virtual `CallClosure` RPC is also exposed. This RPC is provided by a separate closure management component, which handles storing references to remote closure implementations:
-
-```go
-func (m *closureManager) CallClosure(ctx context.Context, closureID string, args []interface{}) (interface{}, error) {
-	// Looking up a reference to the closure's implementation by it's call ID
-	closure, ok := m.closures[closureID]
-	// ...
-
-	// Calling the closure
-	return closure(args...)
-}
-```
-
-It also garbage collects those references after a RPC that has provided a closure has returned:
+In addition to the RPCs created by analyzing the implementation struct through reflection, to be able to support closures, a virtual `CallClosure` RPC is also exposed. This RPC is provided by a separate closure management component, which handles storing references to remote closure implementations; it also garbage collects those references after a RPC that has provided a closure has returned.
 
 ```go
 // If a closure is provided as an argument, handle it differently
@@ -2048,41 +1281,7 @@ if arg.Kind() == reflect.Func {
 
 #### RPC Calls
 
-As mentioned earlier, on the caller's side, a placeholder struct representing the callee's available RPCs is provided to the registry. Once the registry is linked to a connection, the placeholder struct's methods are iterated over and the signatures are validated for compatibility with Dudirekta's limitations. They are then implemented using and set using reflection:
-
-```go
-// Iterating over the fields of the struct
-for i := 0; i < remote.NumField(); i++ {
-	functionField := remote.Type().Field(i)
-	functionType := functionField.Type
-	// ...
-
-	// Validating that the requirements for the return values are met
-	if functionType.NumOut() <= 0 || functionType.NumOut() > 2 {
-		return ErrInvalidReturn
-	}
-	// ...
-
-	// Validating that the requirements for the arguments are met
-	if functionType.NumIn() < 1 {
-		return ErrInvalidArgs
-	}
-	// ...
-
-	// Using reflection to set the method's implementations
-	remote.
-		FieldByName(functionField.Name).
-		Set(r.makeRPC( // Creating the actual RPC implementation
-			functionField.Name,
-			functionType,
-			errs,
-			conn,
-			responseResolver,
-		))
-}
-```
-
-These implementations simply marshal and unmarshal the function calls into Dudirekta's JSONL protocol upon being called, effectively functioning as transparent proxies to the remote implementations; it is at this point that unique call IDs are generated in order to be able to support concurrent RPCs:
+As mentioned earlier, on the caller's side, a placeholder struct representing the callee's available RPCs is provided to the registry. Once the registry is linked to a connection, the placeholder struct's methods are iterated over and the signatures are validated for compatibility with Dudirekta's limitations. They are then implemented using using reflection; these implementations simply marshal and unmarshal the function calls into Dudirekta's JSONL protocol upon being called, effectively functioning as transparent proxies to the remote implementations; it is at this point that unique call IDs are generated in order to be able to support concurrent RPCs:
 
 ```go
 // Creating the implementation method
@@ -2104,31 +1303,7 @@ reflect.MakeFunc(functionType, func(args []reflect.Value) (results []reflect.Val
 })
 ```
 
-Once the remote has responded with a message containing the unique call ID, it unmarshals the return values, and returns from the implemented method:
-
-```go
-// Spawning a new goroutine to handle the RPC return values
-res := make(chan response)
-go func() {
-	for {
-		// Waiting for a message with the correct call ID to be received over a broadcaster channel
-		msg := <-l.Ch()
-		if msg.id == callID {
-			res <- msg
-
-			return
-		}
-	}
-}()
-// ...
-
-// Receiving the raw return values
-rawReturnValue := <-res:
-
-// Unmarshalling, validating and returning the return values
-```
-
-Closures are implemented similarly to this. If a closure is provided as a function argument, instead of marshing the argument and sending it as JSONL, the function is implemented by creating a "proxy" closure that calls the remote `CallClosure` RPC, while reusing the same marshalling/unmarshalling logic as regular RPCs. Calling this virtual `CallClosure` RPC is possible from both the client and the server because the protocol is bi-directional:
+Once the remote has responded with a message containing the unique call ID, it unmarshals the return values, and returns from the implemented method. Closures are implemented similarly to this. If a closure is provided as a function argument, instead of marshing the argument and sending it as JSONL, the function is implemented by creating a "proxy" closure that calls the remote `CallClosure` RPC, while reusing the same marshalling/unmarshalling logic as regular RPCs. Calling this virtual `CallClosure` RPC is possible from both the client and the server because the protocol is bi-directional:
 
 ```go
 // If an argument is a function instead of a JSON-serializable value, handle it differently
@@ -2148,34 +1323,7 @@ if functionType.Kind() == reflect.Func {
 }
 ```
 
-#### Adapter for Mounts and Migrations
-
-As mentioned earlier, Dudirekta has a few limitations when it comes to the RPC signatures that are supported. This means that mount or migration backends can't be provided directly to the registry and need to be wrapped using an adapter. To not have to duplicate this translation for the different backends, a generic adapter between the Dudirekta API and the `go-nbd` backend (as well as the) interfaces exists:
-
-```go
-func NewRPCBackend(
-	ctx context.Context, // Global context to be used for Dudirekta calls
-	remote *services.BackendRemote, // Dudirekta placeholder struct that is implemented by the registry
-) *RPCBackend {
-	return &RPCBackend{ctx, remote}
-}
-
-func (b *RPCBackend) ReadAt(p []byte, off int64) (n int, err error) {
-	// Calling the RPC
-	r, err := b.remote.ReadAt(b.ctx, len(p), off)
-	if err != nil {
-		return -1, err
-	}
-
-	// Making the result compatible with the `go-nbd` backend interface
-	n = r.N
-	copy(p, r.P)
-
-	return
-}
-
-// Same for all other mount/migration API methods
-```
+As mentioned earlier, Dudirekta has a few limitations when it comes to the RPC signatures that are supported. This means that mount or migration backends can't be provided directly to the registry and need to be wrapped using an adapter. To not have to duplicate this translation for the different backends, a generic adapter between the Dudirekta API and the `go-nbd` backend (as well as the) interfaces exists.
 
 ### Connection Pooling with gRPC
 
@@ -2205,28 +1353,7 @@ message ReadAtArgs {
 // ... Rest of the message definitions
 ```
 
-After generating the gRPC bindings from this DSL, the generated interface is implemented by using the Dudirekta RPC system's implementation struct as the abstract representation for the mount and migration gRPC adapters respectively, in order to reduce duplication:
-
-```go
-type SeederGrpc struct {
-	v1.UnimplementedSeederServer // Generated gRPC interface
-
-	svc *Seeder // Dudirekta RPC implementation
-}
-
-func (s *SeederGrpc) ReadAt(ctx context.Context, args *v1.ReadAtArgs) (*v1.ReadAtReply, error) {
-	// Forwarding the call to the service implementation from Dudirekta
-	res, err := s.svc.ReadAt(ctx, int(args.GetLength()), args.GetOff())
-	// ...
-
-	// Making the result compatible with gRPC's generated interface
-	return &v1.ReadAtReply{
-		N: int32(res.N),
-		P: res.P,
-	}, nil
-}
-// ... Same for the rest of the RPCs
-```
+After generating the gRPC bindings from this DSL, the generated interface is implemented by using the Dudirekta RPC system's implementation struct as the abstract representation for the mount and migration gRPC adapters respectively, in order to reduce duplication.
 
 ### Optimizing Throughput with fRPC
 
@@ -2234,26 +1361,7 @@ While gRPC tends to perform better than Dudirekta due to it's support for connec
 
 ![RPCs/second per client for 1 MB messages, repeated 10 times[@loopholelabs2023benchmarks]](./static/grpc-frpc-benchmarks.png)
 
-fRPC[@loopholelabs2023frpc], a drop-in replacement for gRPC, can improve upon this by switching out the serialization layer with the faster Polyglot[@loopholelabs2023polyglot] library and a custom transport layer. It also uses the proto3 DSL and the same code generation framework as gRPC, which makes it easy to switch to by simply re-generating the code from the DSL. The implementation of the fRPC adapter functions in a very similar way as the gRPC adapter:
-
-```go
-type SeederFrpc struct {
-	svc *Seeder // Dudirekta RPC implementation
-}
-
-func (s *SeederFrpc) ReadAt(ctx context.Context, args *v1.ComPojtingerFelicitasR3MapMigrationV1ReadAtArgs) (*v1.ComPojtingerFelicitasR3MapMigrationV1ReadAtReply, error) {
-	// Forwarding the call to the service implementation from Dudirekta
-	res, err := s.svc.ReadAt(ctx, int(args.Length), args.Off)
-	// ...
-
-	// Making the result compatible with fRPC's generated interface
-	return &v1.ComPojtingerFelicitasR3MapMigrationV1ReadAtReply{
-		N: int32(res.N),
-		P: res.P,
-	}, nil
-}
-// ... Same for the rest of the RPCs
-```
+fRPC[@loopholelabs2023frpc], a drop-in replacement for gRPC, can improve upon this by switching out the serialization layer with the faster Polyglot[@loopholelabs2023polyglot] library and a custom transport layer. It also uses the proto3 DSL and the same code generation framework as gRPC, which makes it easy to switch to by simply re-generating the code from the DSL. The implementation of the fRPC adapter functions in a very similar way as the gRPC adapter.
 
 ## Results
 
