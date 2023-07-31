@@ -1,3 +1,9 @@
+commit 1e5acbd6b9a96404d405dedc07173be60b29505b
+Author: Felicitas Pojtinger <felicitas@pojtinger.com>
+Date:   Mon Jul 31 02:57:04 2023 +0200
+
+    refactor: Prune boilerplate source code from implementation section
+
 commit 908cc04460cbdaae2adf7cdb63886ad7aa007fb4
 Author: Felicitas Pojtinger <felicitas@pojtinger.com>
 Date:   Mon Jul 31 01:59:57 2023 +0200
