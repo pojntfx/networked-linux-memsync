@@ -127,7 +127,7 @@ Tertiary storage, including optical disks and tape, is slow but very cost-effect
 
 Depending on the technical choices for each of the hierarchy's layers, these latency differences can be quite significant, ranging from below a nanosecond for registers to multiple milliseconds for a HDD:
 
-![Latency profile of different memory technologies[@maruf2023memory]](./static/memory-hierarchy-latency-profile.png){ width=400px }
+![Latencies for different memory technologies showing, from lowest to highest latency, registers, cache, main memory, CXL memory, network-attached memory, SSDs and HDDs [@maruf2023memory]](./static/memory-hierarchy-latency-profile.png){ width=400px }
 
 The memory hierarchy is not static but evolves with technological advancements, leading to some blurring of these distinct layers. For instance, Non-Volatile Memory Express (NVMe) storage technologies can rival the speed of RAM while offering greater storage capacities[@maruf2023memory]. Similarly, some research, such as the work presented in this thesis, further challenges traditional hierarchies by exposing tertiary or secondary storage with the same interface as main memory.
 
@@ -223,7 +223,7 @@ QUIC, a modern UDP-based transport layer protocol, was originally created by Goo
 
 Delta synchronization is a technique that allows for efficient synchronization of files between hosts, aiming to transfer only those parts of the file that have undergone changes instead of the entire file in order to reduce network and I/O overhead. Perhaps the most recognized tool employing this method of synchronization is `rsync`, an open-source data synchronization utility in Unix-like operating systems.
 
-![Design flow chart of WebRsync[@xiao2018rsync]](./static/webrsync-sequence-diagram.png){ width=300px }
+![Design flow chart of WebRsync, showing the messages sent between and operations done for server and client in a single synchronization cycle[@xiao2018rsync]](./static/webrsync-sequence-diagram.png){ width=300px }
 
 While there are many applications of such an algorithm, it typically starts on file block division, dissecting the file on the destination side into fixed-size blocks. For each of these blocks, a quick albeit weak checksum calculation is performed, and these checksums are transferred to the source system.
 
@@ -272,7 +272,7 @@ These callbacks would then be added to the FUSE operations struct and passed to 
 
 When a user then performs a file system operation on a mounted FUSE file system, the kernel module sends a request for executing that operation to the userspace program. This is followed by the userspace program returning a response, which the FUSE kernel module conveys back to the user. As such, FUSE circumvents the complexity of implementing the file system implementation directly in the kernel. This architecture enhances safety, preventing entire kernel crashes due to errors within the implementation being limited to user instead of kernel space:
 
-![Structural diagramm of Filesystem in Userspace[@commons2023fusestructure]](./static/fuse-structure.png){ width=400px }
+![Structural diagramm of Filesystem in Userspace, showing the userspace components handled by the C library and the FUSE library as well as the kernel components such as the Linux VFS and the FUSE kernel module[@commons2023fusestructure]](./static/fuse-structure.png){ width=400px }
 
 Another benefit of a file system implemented as a FUSE is its inherent portability. Unlike a file system created as a kernel module, its interaction with the FUSE module rather than the kernel itself creates a stronger contract between the two, and allows shipping the file system as a plain binary instead of a binary kernel module, which typically need to be built from source on the target machine unless they are vendored by a distribution. Despite these benefits of FUSE, there is a noticeable performance overhead associated with it. This is largely due to the context switching between the kernel and the userspace that occurs during its operation[@vangoor2017fuse].
 
@@ -284,7 +284,7 @@ FUSE is widely utilized to mount high-level external services as file systems. F
 
 Network Block Device (NBD) is a protocol for connecting to a remote Linux block device. It typically works by communicating between a user space-provided server and a Kernel-provided client. Though potentially deployable over Wide Area Networks (WAN), it is primarily designed for Local Area Networks (LAN) or localhost usage. The protocol is divided into two phases: the handshake and the transmission[@blake2023nbd]:
 
-![Sequence diagram of the baseline NBD protocol (simplified)\label{nbd-baseline-protocol-simplified-sequence}](./static/nbd-baseline-protocol-simplified-sequence.png){ width=500px }
+![Sequence diagram of the baseline NBD protocol (simplified), showing the handshake, transmission and disconnect phases\label{nbd-baseline-protocol-simplified-sequence}](./static/nbd-baseline-protocol-simplified-sequence.png){ width=500px }
 
 \newpage{}
 
@@ -396,7 +396,7 @@ Despite these robust capabilities, Cassandra does come with certain limitations.
 
 In response to the perceived shortcomings of Cassandra, ScyllaDB was released in 2015. It shares design principles with Cassandra, such as compatibility with Cassandra's API and data model, but has architectural differences intended to overcome Cassandra's limitations. It's primarily written in C++, contrary to Cassandra's Java-based code. This contributes to ScyllaDB's shared-nothing architecture, a design that aims to minimize contention and enhance performance.
 
-![The 90- and 99-percentile latencies of UPDATE queries, as measured on three i3.4xlarge machines (48 vCPUs in total) in a range of load rates[@grabowski2021scylladb]](./static/cassanda-scylladb-latencies.png){ width=400px }
+![90- and 99-percentile latency measurements of UPDATE queries for different load levels and different versions of Cassandra and ScyllaDB[@grabowski2021scylladb]](./static/cassanda-scylladb-latencies.png){ width=400px }
 
 ScyllaDB was particularly engineered to address one shortcoming of Cassandra - issues around latency, specifically the 99th percentile latency that impacts system reliability and predictability. ScyllaDB's design improvements and performance gains over Cassandra have been endorsed by benchmarking studies[@grabowski2021scylladb].
 
@@ -497,9 +497,9 @@ To improve on this the pull-based migration API, the migration process is split 
 
 The migration protocol that allows for this defines two new actors: The seeder and the leecher. A seeder represents a resource that can be migrated from or a host that exposes a migrabtable resource, while the leecher represents a client that intents to migrate a resource to itself. The protocol starts by running an application with the application's state on the region `mmap`ed to the seeder's block device, similarly to the managed mount API. Once a leecher connects to the seeder, the seeder starts tracking any writes to it's mount, effectively keeping a list of dirty chunks. Once tracking has started, the leecher starts pulling chunks from the seeder to it's local cache. Once it has received a satisfactory level of locally available chunks, it asks the seeder to finalize. This then causes the seeder to suspend the app accessing the memory region on it's block device, `msync`/flushes the it, and returns a list of chunks that were changed between the point where it started tracking and the flush has occured. Upon receiving this list, the leecher marks these chunks are remotes, immediately resumes the application (which is now accessing the leecher's block device), and queues the dirty chunks to be pulled in the background.
 
-![Sequence diagram of the migration protocol (simplified)\label{migration-protocol-simplified-sequence}](./static/migration-protocol-simplified-sequence.png){ width=400px }
+![Sequence diagram of the migration protocol (simplified), showing the two protocol phases between the application that is being migrated, the seeder and the leecher components\label{migration-protocol-simplified-sequence}](./static/migration-protocol-simplified-sequence.png){ width=400px }
 
-By splitting the migration into these two distinct phases, the overhead of having to start the deivce can be skipped and additional app initialization that doesn't depend on the app's state (i.e. memory allocation, connecting to databases, loading models etc.) can be performed before the application needs to be suspended.
+By splitting the migration into these two distinct phases, the overhead of having to start the device does not count towards downtime, and additional app initialization that doesn't depend on the app's state (i.e. memory allocation, connecting to databases etc.) can happen before the application needs to be suspended.
 
 \newpage{}
 
@@ -1447,7 +1447,7 @@ After generating the gRPC bindings from this DSL, the generated interface is imp
 
 While gRPC tends to perform better than Dudirekta due to its support for connection pooling and more efficient binary serialization, it can be improved upon. This is particularly true for protocol buffers, which, while being faster than JSON, have issues with encoding large chunks of data, and can become a real bottleneck with large chunk sizes:
 
-![RPCs/second per client for 1 MB messages, repeated 10 times[@loopholelabs2023benchmarks]](./static/grpc-frpc-benchmarks.png){ width=400px }
+![Amount of remote calls/second carrying 1 MB of data for fRPC and gRPC, repeated 10 times[@loopholelabs2023benchmarks]](./static/grpc-frpc-benchmarks.png){ width=400px }
 
 fRPC[@loopholelabs2023frpc], a drop-in replacement for gRPC, can improve upon this by switching out the serialization layer with the faster Polyglot[@loopholelabs2023polyglot] library and a custom transport layer. It also uses the proto3 DSL and the same code generation framework as gRPC, which makes it easy to switch to by simply re-generating the code from the DSL. The implementation of the fRPC adapter functions in a very similar way as the gRPC adapter.
 
@@ -1467,7 +1467,7 @@ All benchmarks were conducted on a test machine with the following specification
 | CPU          | 12th Gen Intel i7-1280P (20) @ 4.700GHz |
 | Memory       | 31687MiB LPDDR5, 6400 MT/s              |
 
-To make the results reproducible, the benchmark scripts and notebooks to plot the related visualizations can be found in the accompanying repository[@pojtinger2023memsync], and multiple runs have been conducted for each benchmark to ensure consistency.
+To make the results reproducible, the benchmark scripts with additional configuration details and notebooks to plot the related visualizations can be found in the accompanying repository[@pojtinger2023memsync], and multiple runs have been conducted for each benchmark to ensure consistency.
 
 \newpage{}
 

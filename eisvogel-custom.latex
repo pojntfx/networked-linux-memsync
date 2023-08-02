@@ -1078,6 +1078,7 @@ $endif$
  \acro{SSD}{Solid State Drive}
  \acro{HDD}{Hard Disk Drive}
  \acro{CXL}{Compute Express Link}
+ \acro{VFS}{Virtual File System}
  \acro{UUID}{Universally Unique Identifier}
  \acro{CRC32}{Cyclic Redundancy Check 32-Bit}
  \acro{LRU}{Least Recently Used}
