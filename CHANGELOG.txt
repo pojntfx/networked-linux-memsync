@@ -1,3 +1,9 @@
+commit 522186a4aa561dbceb52075cfd70d1081ad7991f
+Author: Felicitas Pojtinger <felicitas@pojtinger.com>
+Date:   Wed Aug 2 23:53:00 2023 +0200
+
+    refactor: Apply spell checking until background push- and pull
+
 commit 22bd2acc5fe087672c10424a356bcd401a56ee8a
 Author: Felicitas Pojtinger <felicitas@pojtinger.com>
 Date:   Wed Aug 2 23:13:46 2023 +0200
