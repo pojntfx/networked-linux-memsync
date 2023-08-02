@@ -377,7 +377,9 @@ Depending on the technical choices for each of the hierarchy’s layers,
 these latency differences can be quite significant, ranging from below a
 nanosecond for registers to multiple milliseconds for a HDD:
 
-[Latency profile of different memory technologies[12]]
+[Latencies for different memory technologies showing, from lowest to
+highest latency, registers, cache, main memory, CXL memory,
+network-attached memory, SSDs and HDDs [12]]
 
 The memory hierarchy is not static but evolves with technological
 advancements, leading to some blurring of these distinct layers. For
@@ -658,7 +660,9 @@ in order to reduce network and I/O overhead. Perhaps the most recognized
 tool employing this method of synchronization is rsync, an open-source
 data synchronization utility in Unix-like operating systems.
 
-[Design flow chart of WebRsync[25]]
+[Design flow chart of WebRsync, showing the messages sent between and
+operations done for server and client in a single synchronization
+cycle[25]]
 
 While there are many applications of such an algorithm, it typically
 starts on file block division, dissecting the file on the destination
@@ -737,7 +741,9 @@ system implementation directly in the kernel. This architecture enhances
 safety, preventing entire kernel crashes due to errors within the
 implementation being limited to user instead of kernel space:
 
-[Structural diagramm of Filesystem in Userspace[27]]
+[Structural diagramm of Filesystem in Userspace, showing the userspace
+components handled by the C library and the FUSE library as well as the
+kernel components such as the Linux VFS and the FUSE kernel module[27]]
 
 Another benefit of a file system implemented as a FUSE is its inherent
 portability. Unlike a file system created as a kernel module, its
@@ -764,7 +770,8 @@ deployable over Wide Area Networks (WAN), it is primarily designed for
 Local Area Networks (LAN) or localhost usage. The protocol is divided
 into two phases: the handshake and the transmission[31]:
 
-[Sequence diagram of the baseline NBD protocol (simplified)]
+[Sequence diagram of the baseline NBD protocol (simplified), showing the
+handshake, transmission and disconnect phases]
 
 The NBD protocol involves multiple participants, notably one or several
 clients, a server, and the concept of an export. It starts with a client
@@ -1098,9 +1105,9 @@ written in C++, contrary to Cassandra’s Java-based code. This
 contributes to ScyllaDB’s shared-nothing architecture, a design that
 aims to minimize contention and enhance performance.
 
-[The 90- and 99-percentile latencies of UPDATE queries, as measured on
-three i3.4xlarge machines (48 vCPUs in total) in a range of load
-rates[48]]
+[90- and 99-percentile latency measurements of UPDATE queries for
+different load levels and different versions of Cassandra and
+ScyllaDB[48]]
 
 ScyllaDB was particularly engineered to address one shortcoming of
 Cassandra - issues around latency, specifically the 99th percentile
@@ -1386,13 +1393,15 @@ the leecher marks these chunks are remotes, immediately resumes the
 application (which is now accessing the leecher’s block device), and
 queues the dirty chunks to be pulled in the background.
 
-[Sequence diagram of the migration protocol (simplified)]
+[Sequence diagram of the migration protocol (simplified), showing the
+two protocol phases between the application that is being migrated, the
+seeder and the leecher components]
 
 By splitting the migration into these two distinct phases, the overhead
-of having to start the deivce can be skipped and additional app
-initialization that doesn’t depend on the app’s state (i.e. memory
-allocation, connecting to databases, loading models etc.) can be
-performed before the application needs to be suspended.
+of having to start the device does not count towards downtime, and
+additional app initialization that doesn’t depend on the app’s state
+(i.e. memory allocation, connecting to databases etc.) can happen before
+the application needs to be suspended.
 
 This combines both the pre-copy algorithm (by pulling the chunks from
 the seeder ahead of time) and the post-copy algorithm (by resolving
@@ -2946,7 +2955,8 @@ improved upon. This is particularly true for protocol buffers, which,
 while being faster than JSON, have issues with encoding large chunks of
 data, and can become a real bottleneck with large chunk sizes:
 
-[RPCs/second per client for 1 MB messages, repeated 10 times[63]]
+[Amount of remote calls/second carrying 1 MB of data for fRPC and gRPC,
+repeated 10 times[63]]
 
 fRPC[40], a drop-in replacement for gRPC, can improve upon this by
 switching out the serialization layer with the faster Polyglot[42]
@@ -2971,10 +2981,10 @@ specifications:
   CPU            12th Gen Intel i7-1280P (20) @ 4.700GHz
   Memory         31687MiB LPDDR5, 6400 MT/s
 
-To make the results reproducible, the benchmark scripts and notebooks to
-plot the related visualizations can be found in the accompanying
-repository[64], and multiple runs have been conducted for each benchmark
-to ensure consistency.
+To make the results reproducible, the benchmark scripts with additional
+configuration details and notebooks to plot the related visualizations
+can be found in the accompanying repository[64], and multiple runs have
+been conducted for each benchmark to ensure consistency.
 
 Access Methods
 

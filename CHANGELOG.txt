@@ -1,3 +1,9 @@
+commit 26e15add19dac33e19679d4bcd6e32b9c02bad06
+Author: Felicitas Pojtinger <felicitas@pojtinger.com>
+Date:   Wed Aug 2 21:42:27 2023 +0200
+
+    refactor: Add better graphics descriptions
+
 commit ced1d661987c1415f29136895076cc29423510fe
 Author: Felicitas Pojtinger <felicitas@pojtinger.com>
 Date:   Wed Aug 2 20:51:41 2023 +0200
