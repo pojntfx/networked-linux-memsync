@@ -1072,12 +1072,12 @@ $endif$
 \begin{acronym}
  \acro{API}{Application Programming Interface}
  \acro{I/O}{Input/Output}
- \acro{IO}{Input/Output}
  \acro{OS}{Operating System}
  \acro{CPU}{Central Processing Unit}
  \acro{RAM}{Random Access Memory}
  \acro{SSD}{Solid State Drive}
  \acro{HDD}{Hard Disk Drive}
+ \acro{CXL}{Compute Express Link}
  \acro{UUID}{Universally Unique Identifier}
  \acro{CRC32}{Cyclic Redundancy Check 32-Bit}
  \acro{LRU}{Least Recently Used}
