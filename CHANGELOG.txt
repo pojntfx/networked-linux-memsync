@@ -1,3 +1,9 @@
+commit 22bd2acc5fe087672c10424a356bcd401a56ee8a
+Author: Felicitas Pojtinger <felicitas@pojtinger.com>
+Date:   Wed Aug 2 23:13:46 2023 +0200
+
+    feat: Add abstract that puts more focus on the problem that is solved by thesis, as well as how it is being solved
+
 commit 26e15add19dac33e19679d4bcd6e32b9c02bad06
 Author: Felicitas Pojtinger <felicitas@pojtinger.com>
 Date:   Wed Aug 2 21:42:27 2023 +0200
