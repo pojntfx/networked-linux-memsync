@@ -361,9 +361,9 @@ Main Memory, i.e. Random Access Memory (RAM), provides larger storage
 capacity than cache but operates at a slower speed. It typically stores
 running programs and open files.
 
-Below main memory, we find secondary storage devices such as Solid State
-Drives (SSD) or Hard Disk Drives (HDD). Although slower than RAM, these
-devices can store larger amounts of data and typically contain the
+Below main memory, secondary storage devices such as Solid State Drives
+(SSD) or Hard Disk Drives (HDD) can be found. Although slower than RAM,
+these devices can store larger amounts of data and typically contain the
 operating system and application binary files. Importantly, they are
 persistent, meaning they retain data even after power is cut[9].
 
@@ -1121,66 +1121,64 @@ userfaultfd is a technology that allows for the implementation of a
 post-copy migration scenario. In this setup, a memory region is created
 on the destination host. When the migrated application starts to read
 from this remote region after it was resumed, it triggers a page fault,
-which we want to resolve by fetching the relevant offset from the
-remote.
+which can be resolved by fetching the relevant offset from the remote.
 
 Typically, page faults are resolved by the kernel. While this makes
 sense for use cases where they can be resolved by loading a local
-resource into memory, here we want to handle the page faults using a
-user space program instead. Traditionally, this was possible by
-registering a signal handler for the SIGSEGV handler, and then
-responding to fault from the program. This however is a fairly
-complicated and inefficient process; instead, we can now use the
-userfaultfd system to register a page fault handler directly without
-having to go through a signal first.
+resource into memory, here page faults are handled using a user space
+program instead. Traditionally, this was possible by registering a
+signal handler for the SIGSEGV handler, and then responding to fault
+from the program. This however is a fairly complicated and inefficient
+process; instead, the userfaultfd system can be used to register a page
+fault handler directly without having to go through a signal first.
 
-With userfaultfd, we first register the memory region that we want to
-handle page faults in and start a handler in user space that fetches the
-missing offsets from the source host in-demand whenever a page fault
-occurs. This handler is connected to the registered region’s userfaultfd
-API through a file descriptor. To enable sharing the file descriptor
-between processes, a UNIX socket can be used.
+With userfaultfd, the memory region that page faults should be handled
+for is registered first, and a handler is started in user space which
+fetches the missing offsets from the source host in-demand whenever a
+page fault occurs. This handler is connected to the registered region’s
+userfaultfd API through a file descriptor. To enable sharing the file
+descriptor between processes, a UNIX socket can be used.
 
 Push-Based Synchronization With mmap and Hashing
 
 As mentioned before, mmap allows mapping a memory region to a file.
-Similarly to how we used a region registered with userfaultfd before to
-store the state or application that is being migrated, we can use this
-region to do the same. Because the region is linked to a file, when
-writes happen to the region, they will also be written to the
-corresponding file. If we’re able to detect these writes and copy the
-changes to the destination host, we can use this setup to implement a
-pre-copy migration system.
+Similarly to how region a registered with userfaultfd can be used to
+store the state or application which is being migrated, mmap can be used
+to do the same. Since the region is linked to a file, when writes happen
+to the region, they will also be written to the corresponding file. If
+it is possible to detect these writes and copy the changes to the
+destination host, this setup can be used to implement a pre-copy
+migration system.
 
 While writes done to a mmaped region are eventually being written back
 to the underlying file, this is not the case immediately, since the
 kernel still uses caching on a mmaped region in order to speed up
-reads/writes. As a workaround, we can use the msync syscall, which works
-similarly to the sync syscall by flushing any remaining changes from the
-cache to the backing file.
+reads/writes. As a workaround, the msync syscall can be used, which
+works similarly to the sync syscall by flushing any remaining changes
+from the cache to the backing file.
 
 In order to actually detect the changes to the underlying file, an
 obvious solution might be to use inotify. This however isn’t possible
 for mmaped files, as the file corresponds to a memory region, and
 traditional write etc. evens are not emitted. Instead of using inotify
-or a similar event-based system to track changes, we can instead use a
-polling system. This has drawbacks - namely latency and computation
-load - that were attempted to be worked around in the following
-implementation, but are inherent to this approach.
+or a similar event-based system to track changes, a polling system can
+be used instead. This has drawbacks, namely latency and computational
+load, which the implementation intents to address, but are somewhat
+inherent to the approach.
 
 Push-Pull Synchronization with FUSE
 
 Using a file system in user space (FUSE) can serve as the basis for
 implementing either a pre- or a post-copy live migration system.
-Similarly to the file-based pre-copy approach, we can use mmap to map
+Similarly to the file-based pre-copy approach, mmap can be used to map
 the migrated resource’s memory region to a file. Instead of storing this
 file on the system’s default file system however, a custom file system
 is implemented, which allows dropping the expensive polling system.
 Since a custom file system allows us to catch reads (for a post-copy
 migration scenario, were reads would be responded to by fetching from
 the remote), writes (for a pre-copy scenario, where writes would be
-forwarded to the destination) and other operations by the kernel, we no
-longer need to use inotify.
+forwarded to the destination) and other operations by the kernel, the
+use of inotify is no longer required.
 
 While implementing such a custom file system in the kernel is possible,
 it is a complex task that requires writing a custom kernel module, using
@@ -1190,9 +1188,10 @@ Furthermore, since networking would be required to resolve reads/forward
 writes from/to the source/destination host, a job that would usually be
 done by user space applications, a user space component would probably
 also need to be developed in order to support this part of the
-synchronization system. Instead of implementing it in the kernel, we can
-use the FUSE API. This makes it possible to write the entire file system
-in user space, can significantly reduce the complexity of this approach.
+synchronization system. Instead of implementing it in the kernel, the
+FUSE API can be used. This makes it possible to write the entire file
+system in user space, can significantly reduce the complexity of this
+approach.
 
 Mounts with NBD
 
@@ -1200,14 +1199,14 @@ Another mmap-based approach for both pre- and post-copy migration is to
 mmap a block device instead of a file. This block device can be provided
 through a variety of APIs, for example NBD.
 
-By providing a NBD device through the kernel’s NBD client, we can
-connect the device to a remote NBD server, which in turn hosts the
-resource as a memory region. Any reads/writes from/to the mmaped memory
-region are resolved by the NBD device, which forwards it to the client,
-which then resolves them using the remote server; as such, this approach
-is less so a synchronization (as the memory region is never actually
-copied to the destination hist), but rather a mount of a remote memory
-region over the NBD protocol.
+By providing a NBD device through the kernel’s NBD client, the device
+can be connected to a remote NBD server, which hosts the resource as a
+memory region. Any reads/writes from/to the mmaped memory region are
+resolved by the NBD device, which forwards it to the client, which then
+resolves them using the remote server; as such, this approach is less so
+a synchronization (as the memory region is never actually copied to the
+destination hist), but rather a mount of a remote memory region over the
+NBD protocol.
 
 From an initial overview, the biggest benefit of mmaping such a block
 device instead of a file on a custom file system is the reduced
@@ -1244,9 +1243,9 @@ split into a separate remote and local component, referred to as a
 “mount”, and is implemented as part of the r3map library (remote
 mmap)[49].
 
-By combining the NBD server and client into this reusable unit, we can
-connect the server to a new backend component with a protocol which is
-better suited for WAN usage than NBD. This also allows the
+By combining the NBD server and client into this reusable unit, the
+server can be connected to a new backend component with a protocol,
+which is better suited for WAN usage than NBD. This also allows the
 implementation of asynchronous background push/pull strategies instead
 of simply directly writing to/from the network (called “Managed
 Mounts”). The simplest form of the mount API is the direct mount API; it
@@ -1430,14 +1429,14 @@ Userfaults in Go with userfaultfd
 
 Registration and Handlers
 
-By listening to page faults, we can know when a process wants to access
-a specific offset of memory that is not yet available. As mentioned
-before, we can use this event to then fetch this chunk of memory from
-the remote, mapping it to the offset on which the page fault occurred,
-thus effectively only fetching data when it is required. Instead of
-registering signal handlers, we can use the userfaultfd system
-introduced with Linux 4.3[50] to handle these faults in user space in a
-more idiomatic way.
+By listening to page faults, it is possible to know if a process wants
+to access a specific offset of memory that is not yet available. As
+mentioned before, this event can be used to then fetch this chunk of
+memory from the remote, mapping it to the offset on which the page fault
+occurred, thus effectively only fetching data when it is required.
+Instead of registering signal handlers, can use the userfaultfd system
+introduced with Linux 4.3[50] can also be used to handle these faults in
+user space in a more idiomatic way.
 
 In the Go implementation created for this thesis, userfaultfd-go[51],
 userfaultfd works by first creating a region of memory, e.g. by using
@@ -1565,7 +1564,7 @@ at some point. Within the context of the file-based synchronization
 approach however, it is the only option available.
 
 To speed up the process of hashing, instead of hashing the entire file,
-we can instead hash individual chunks of the file, in effect
+it is possible to instead hash individual chunks of the file, in effect
 implementing a delta synchronization algorithm. This can be implemented
 by opening the file multiple times, hashing individual offsets using
 each of the opened files, and aggregating the chunks that have been
@@ -1924,10 +1923,10 @@ NBD client and a user space component. In order to use the kernel NBD
 client, it is necessary to first find a free NBD device (/dev/nbd*);
 these devices are allocated by the kernel NBD module and can be
 specified with the nbds_max parameter[59]. In order to find a free
-device, we can either specify it manually, or check sysfs for a NBD
-device that reports a zero size. After a free NBD device has been found,
-the client can be started by calling Connect with a net.Conn and
-options, similarly to the server.
+device, it can be specified manually, or check sysfs for a NBD device
+that reports a zero size. After a free NBD device has been found, the
+client can be started by calling Connect with a net.Conn and options,
+similarly to the server.
 
     func Connect(conn net.Conn, device *os.File, options *Options) error
 
@@ -3862,10 +3861,10 @@ when to synchronize state and when to start pulling from the remote need
 to be made manually, resulting in a database on a third host being used
 even for simple migrations from one host to another. Almost all of these
 data structures can ultimately be represented by a byte array; by
-allocating them from a slice mmaped by r3map, we can use the managed
-mount, direct mount or migration APIs to implement a universal way of
-both synchronization and migration of application state, without having
-to implement a custom protocol.
+allocating them from a slice mmaped by r3map, it is possible to use the
+managed mount, direct mount or migration APIs to implement a universal
+way of both synchronization and migration of application state, without
+having to implement a custom protocol.
 
 Mounting State
 

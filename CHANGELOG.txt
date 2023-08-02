@@ -1,3 +1,9 @@
+commit 4e5c45456541f7568893b635f3bfa98c227a88d1
+Author: Felicitas Pojtinger <felicitas@pojtinger.com>
+Date:   Thu Aug 3 01:12:38 2023 +0200
+
+    refactor: Drop all uses of "we"
+
 commit 7dce1e12c9e82847491b55007afc2b3d10df6aaa
 Author: Felicitas Pojtinger <felicitas@pojtinger.com>
 Date:   Thu Aug 3 00:55:06 2023 +0200
