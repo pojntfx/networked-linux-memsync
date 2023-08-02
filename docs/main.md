@@ -1,54 +1,3 @@
----
-author: [Felicitas Pojtinger]
-institute: Hochschule der Medien Stuttgart
-date: "2023-08-04"
-subject: Efficient Synchronization of Linux Memory Regions over a Network
-subtitle: A Comparative Study and Implementation
-keywords:
-  - linux
-  - memory-synchronization
-  - memory-hierarchy
-  - remote-memory
-  - mmap
-  - delta-synchronization
-  - fuse
-  - nbd
-  - live-migration
-lang: en-US
-abstract: |
-  ## Erklärung der Urheberschaft {.unnumbered .unlisted}
-
-  \noindent{Hiermit versichere ich, Felicitas Pojtinger, ehrenwörtlich, dass ich die vorliegende Bachelorarbeit mit dem Titel: "Efficient Synchronization of Linux Memory Regions over a Network: A Comparative Study and Implementation" selbstständig und ohne fremde Hilfe verfasst und keine anderen als die angegebenen Hilfsmittel benutzt habe. Die Stellen der Arbeit, die dem Wortlaut oder dem Sinn nach anderen Werken entnommen wurden, sind in jedem Fall unter Angabe der Quelle kenntlich gemacht. Ebenso sind alle Stellen, die mit Hilfe eines KI-basierten Schreibwerkzeugs erstellt oder überarbeitet wurden, kenntlich gemacht. Die Arbeit ist noch nicht veröffentlicht oder in anderer Form als Prüfungsleistung vorgelegt worden.}
-  \newline{}
-
-  \noindent{Ich habe die Bedeutung der ehrenwörtlichen Versicherung und die prüfungsrechtlichen Folgen (§ 24 Abs. 2 Bachelor-SPO, § 23 Abs. 2 Master-SPO (Vollzeit)) einer unrichtigen oder unvollständigen ehrenwörtlichen Versicherung zur Kenntnis genommen.}
-  \newline{}
-
-  ![](./static/signature.png){ width=125px }
-
-  \noindent{Stuttgart, 04.08.2023}
-
-  \newpage{}
-
-  ## \abstractname{} {.unnumbered .unlisted}
-
-  Current solutions for access, synchronization and migration of resources over a network are characterized by application-specific protocols and interfaces, which result in fragmentation and barriers to adoption. This thesis aims to address these issues by presenting a universal approach that enables direct operation on a memory region, circumventing the need for custom-built solutions. Various methods to achieve this are evaluated on parameters such as implementation overhead, initialization time, latency and throughput, and an outline of each method's architectural constraints and optimizations is provided. The proposed solution is suitable for both LAN and WAN environments, thanks to a novel approach based on block devices in user space with background push and pull mechanisms. It offers a unified API that enables mounting and migration of nearly any state over a network with minimal changes to existing applications. Illustrations of real-world use cases, configurations and backends are provided, together with a production-ready reference implementation of the full mount and migration APIs via the open-source r3map (remote mmap) library.
-
-  ## Kurzfassung {.unnumbered .unlisted}
-
-  Aktuelle Lösungen für den Zugriff auf Ressourcen sowie deren Synchronisation und Migration über ein Netzwerk zeichnen sich durch anwendungsspezifische Protokolle und Schnittstellen aus, was zu Fragmentierung und Barrieren bei der Einführung führt. Diese Bachelor-Thesis stellt einen neuen, universellen Ansatz vor, der darauf ausgerichtet ist, diese Probleme zu lösen, indem er direkt mit Speicherbereichen interagiert und somit die Notwendigkeit für individuell erstellte Lösungen umgeht. Verschiedene Methoden zur Erreichung dieses Ziels werden anhand von Parametern wie Implementierungsaufwand, Initialisierungszeit, Latenz und Durchsatz bewertet, und es wird ein Überblick über die architektonischen Einschränkungen und Optimierungen jeder Methode gegeben. Dank eines neuartigen Ansatzes, der auf Block Devices in Userspace basiert und asynchrone Push- und Pull-Mechanismen verwendet, ist die vorgeschlagene Lösung sowohl für LAN- als auch für WAN-Umgebungen geeignet. Sie bietet eine einheitliche API, die das Einbinden und Migrieren von nahezu jedem Zustand über ein Netzwerk mit minimalen Änderungen an bestehenden Anwendungen ermöglicht. Zusätzlich werden Beispiele für Anwendungsfälle, Konfigurationen und Backends aus der Praxis bereitgestellt, zusammen mit einer Referenzimplementierung der vollständigen Schnittstelle über die dafür entwickelte Open-Source-Bibliothek r3map (remote mmap).
-
-  \newpage{}
-bibliography: static/references.bib
-csl: static/ieee.csl
-lof: true
-colorlinks: false
-mainfont: "Latin Modern Roman"
-sansfont: "Latin Modern Roman"
-monofont: "Latin Modern Mono"
-code-block-font-size: \scriptsize
----
-
 # Efficient Synchronization of Linux Memory Regions over a Network
 
 \newpage{}
@@ -67,7 +16,7 @@ In light of these limitations, this thesis explores alternative strategies to cr
 
 ### User Space and Kernel Space
 
-The kernel represents the core of an operating system. It directly interacts with hardware, manages system resources such as CPU time, memory and others, and enforces security policies. In addition to this, it is also responsible for progress scheduling, memory management, drivers and many more resposibilities depending on the implementation. Kernel space refers to the memory region that this system is stored and executed in[@maurer2008professional].
+The kernel represents the core of an operating system. It directly interacts with hardware, manages system resources such as CPU time, memory and others, and enforces security policies. In addition to this, it is also responsible for progress scheduling, memory management, drivers and many more responsibilities depending on the implementation. Kernel space refers to the memory region that this system is stored and executed in[@maurer2008professional].
 
 User space on the other hand is the portion of system memory where user applications execute. Applications can't directly access hardware or kernel memory; instead they use APIs to access them[@tanenbaum2006operating]. This API is provided in the form of syscalls, which serve as a bridge between user and kernel space. Well-known syscalls are `open()`, `read()`, `write()`, `close()` and `ioctl()`. While most syscalls have a specific purpose, `ioctl` serves as a more generic, universal one based on file descriptors and a data struct. Using it, it is possible to implement device-specific actions that can't be expressed with regular system calls. Despite their utility, they can be an implementation hurdle for language development due to their use of numerical constants and other typing issues[@devault2022hareioctl].
 
@@ -75,11 +24,11 @@ User space on the other hand is the portion of system memory where user applicat
 
 The Linux kernel was released by Linus Torvalds in 1991. Developed primarily in the C language, it has recently seen the addition of Rust as an approved option for further expansion and development, esp. for drivers[@linux2023docs]. The kernel powers millions of devices across the globe, including servers, desktop computers, mobile phones, and embedded devices. As a kernel, it serves as an intermediary between hardware and applications. It is engineered for compatibility with a wide array of architectures, such as ARM, x86, RISC-V, and others. The open-source nature of the Linux kernel makes it especially interesting for academic exploration and usage. It offers transparency, allowing anyone to inspect the source code in depth. Furthermore, it encourages collaboration by enabling anyone to modify and contribute to the source code.
 
-The kernel does not function as a standalone operating system in itself; rather, this role is fulfilled by distributions, which build upon the Linux kernel to create fully-fledged operating systems. Distributions supplement the kernel with additional userspace tools, examples being GNU coreutils or BusyBox. Depending on their target audience, they further enhance functionality by integrating desktop environments and other software.
+The kernel does not function as a standalone operating system in itself; rather, this role is fulfilled by distributions, which build upon the Linux kernel to create fully-fledged operating systems. Distributions supplement the kernel with additional user space tools, examples being GNU coreutils or BusyBox. Depending on their target audience, they further enhance functionality by integrating desktop environments and other software.
 
 \newpage{}
 
-Linux is extensible, but not a microkernel. Despite it's monolithic nature, it allows for the integration of kernel modules. These modules are small pieces of kernel-level code that can be dynamically incorporated into the kernel, presenting the advantage of extending kernel functionality without necessitating system reboot, helping to keep the kernel size both manageable and maintainable. Kernel modules are developed using the C or Rust programming languages, like the kernel itself, ensuring compatibility and consistent performance. They interact with the kernel via APIs (Application Programming Interfaces). Despite their utility, since they run in kernel space, modules do carry a potential risk. If not written with careful attention to detail, they can introduce significant instability into the kernel, negatively affecting the overall system performance and reliability[@love2010linux].
+Linux is extensible, but not a microkernel. Despite its monolithic nature, it allows for the integration of kernel modules. These modules are small pieces of kernel-level code that can be dynamically incorporated into the kernel, presenting the advantage of extending kernel functionality without necessitating system reboot, helping to keep the kernel size both manageable and maintainable. Kernel modules are developed using the C or Rust programming languages, like the kernel itself, ensuring compatibility and consistent performance. They interact with the kernel via APIs (Application Programming Interfaces). Despite their utility, since they run in kernel space, modules do carry a potential risk. If not written with careful attention to detail, they can introduce significant instability into the kernel, negatively affecting the overall system performance and reliability[@love2010linux].
 
 Modules can be managed and controlled at different stages, starting from boot time, and be manipulated dynamically when the system is already running. This is facilitated by utilities like `modprobe` and `rmmod`. In the lifecycle of a kernel module, two key functions are of significance: initialization and cleanup. The initialization function is responsible for setting up the module when it's loaded into the kernel. Conversely, the cleanup function is used to safely remove the module from the kernel, freeing up any resources it previously consumed. These lifecycle functions, along with other such hooks, provide a more structured approach to module development[@maurer2008professional].
 
@@ -95,7 +44,7 @@ To customize how a process should react upon receiving a specific signal, handle
 
 It is however important to note that signals are not typically utilized as a primary inter-process communication (IPC) mechanism. This is due to their limitation in carrying additional data; while signals effectively alert a process of an event, they are not designed to convey further information related to that event, and as result they are best used in scenarios where simple event-based notifications are sufficient, rather than for more complex data exchange requirements. To work around this, sockets allow processes within the same host system to communicate with each other. Unlike UNIX signals, much like TCP sockets, they can easily be used for IPC by allowing not only to submit additional data for an event, and are particularly popular on Linux.
 
-Stream sockets use TCP to provide reliable, two-way, connection-based byte streams, making them optimal for use in applications which require strong consistency guarantees. Datagram sockets on the other hand use UDP, which allows for fast, connection-less communication with less guarantees. In addition to these two different types of sockets, named and unnamed sockets exist. Named sockets are represented by a special file type on the file system and can be identified by a path, which allows for easy communication between unrelated processes. Unnamed sockets exist only in memory and disappear after the creating process terminates, making them a better choice for subsystems of applications to communicate with each other. In addition to this, UNIX sockets can pass a file descriptor between processes, which allows for interesting approaches to sharing resources with technologies such as `userfaultfd`[@stevens2003unixnet].
+Stream sockets use TCP to provide reliable, two-way, connection-based byte streams, making them optimal for use in applications which require strong consistency guarantees. Datagram sockets on the other hand use UDP, which allows for fast, connection-less communication with fewer guarantees. In addition to these two different types of sockets, named and unnamed sockets exist. Named sockets are represented by a special file type on the file system and can be identified by a path, which allows for easy communication between unrelated processes. Unnamed sockets exist only in memory and disappear after the creating process terminates, making them a better choice for subsystems of applications to communicate with each other. In addition to this, UNIX sockets can pass a file descriptor between processes, which allows for interesting approaches to sharing resources with technologies such as `userfaultfd`[@stevens2003unixnet].
 
 ### Memory Optimization
 
@@ -119,13 +68,13 @@ Following registers in the hierarchy is cache memory, typically divided into L1,
 
 Main Memory, i.e. Random Access Memory (RAM), provides larger storage capacity than cache but operates at a slower speed. It typically stores running programs and open files.
 
-Below main memory, we find secondary storage devices such as Solid State Drives (SSD) or Hard Disk Drives (HDD). Although slower than RAM, these devices can store larger amounts of data and typically contain the operating system and application binary fies. Importantly, they are persistent, meaning they retain data even after power is cut[@stallings2010architecture].
+Below main memory, we find secondary storage devices such as Solid State Drives (SSD) or Hard Disk Drives (HDD). Although slower than RAM, these devices can store larger amounts of data and typically contain the operating system and application binary files. Importantly, they are persistent, meaning they retain data even after power is cut[@stallings2010architecture].
 
 Tertiary storage, including optical disks and tape, is slow but very cost-effective. Tape storage can store very large amounts of data for long periods of time. These types of storage are typically used for archiving or physically transporting data, such as importing data from personal infrastructure to a service like AWS[@barr2021offline].
 
 \newpage{}
 
-Depending on the technical choices for each of the hierarchy's layers, these latency differences can be quite significant, ranging from below a nanosecond for registers to multiple milliseconds for a HDD:
+Depending on the technical choices for each of the hierarchy's layers, these latency differences can be quite significant, ranging from below a nanosecond for registers to multiple milliseconds for an HDD:
 
 ![Latencies for different memory technologies showing, from lowest to highest latency, registers, cache, main memory, CXL memory, network-attached memory, SSDs and HDDs [@maruf2023memory]](./static/memory-hierarchy-latency-profile.png){ width=400px }
 
@@ -137,7 +86,7 @@ The memory hierarchy is not static but evolves with technological advancements, 
 
 Memory management forms a cornerstone of any kernel, serving as a critical buffer between applications and physical memory; it can be considered one of the fundamental purposes of a kernel itself. This system helps maintain system stability and provides security guarantees, such as ensuring that only a specific process can access its allocated memory.
 
-Within the context of Linux, memory management is divided into two afore-mentioned major segments of kernel space and user space. The kernel memory module is responsible for managing kernel space. Slab allocation is a technique employed in managing this segment; the technique groups objects of the same size into caches, enhancing memory allocation speed and reducing fragmentation of memory[@bonwick1994slaballoc]. User space is the memory segment where applications and certain drivers store their memory in Linux. User space memory management involves a paging system, offering each application its unique private virtual address space.
+Within the context of Linux, memory management is divided into two aforementioned major segments of kernel space and user space. The kernel memory module is responsible for managing kernel space. Slab allocation is a technique employed in managing this segment; the technique groups objects of the same size into caches, enhancing memory allocation speed and reducing fragmentation of memory[@bonwick1994slaballoc]. User space is the memory segment where applications and certain drivers store their memory in Linux. User space memory management involves a paging system, offering each application its unique private virtual address space.
 
 This virtual address space is divided into units known as pages, each typically 4 KB in size. Pages can be mapped to any location in physical memory, providing flexibility and optimizing memory utilization. The use of this virtual address space further adds a layer of abstraction between the application and physical memory, enhancing the security and isolation of processes[@gorman2004linuxmem].
 
@@ -159,7 +108,7 @@ Page faults are instances in which a process attempts to access a page that is n
 
 They can be broadly categorized into two types: minor and major. Minor page faults occur when the desired page resides in memory but isn't linked to the process that requires it. On the other hand, a major page fault takes place when the page has to be loaded from secondary storage, a process that typically takes more time and resources.
 
-To minimize the occurrence of page faults, memory management algorithms such as the afore-mentioned LRU and the more straightforward clock algorithm are often used. These algorithms effectively manage the order and priority of memory pages, helping to ensure that frequently used pages are readily available in primary memory[@maurer2008professional].
+To minimize the occurrence of page faults, memory management algorithms such as the aforementioned LRU and the more straightforward clock algorithm are often used. These algorithms effectively manage the order and priority of memory pages, helping to ensure that frequently used pages are readily available in primary memory[@maurer2008professional].
 
 Handling page faults involves certain techniques to ensure smooth operation. One such technique is prefetching, which anticipates future page requests and proactively loads these pages into memory. Another approach involves page compression, where inactive pages are compressed and stored in memory preemptively. This reduces the likelihood of major page faults by conserving memory space, allowing more pages to reside in primary memory[@silberschatz2018operating].
 
@@ -169,7 +118,7 @@ Handling page faults involves certain techniques to ensure smooth operation. One
 
 One standout feature of `mmap` is its ability to create what is essentially a direct memory mapping between a file and a region of memory[@choi2017mmap]. This connection means that read operations performed on the mapped memory region directly correspond to reading the file and vice versa, enhancing efficiency as the amount of expensive context switches (compared to i.e. the `read` or `write` system calls) can be reduced.
 
-The key advantage that `mmap` provides is it's ability to do zero-copy operations. In practical terms, this means that data can be accessed directly as if it were positioned in memory, eliminating the need to copy it from the disk first. This direct memory access saves time and reduces processing requirements, offering substantial performance improvements.
+The key advantage that `mmap` provides is its ability to do zero-copy operations. In practical terms, this means that data can be accessed directly as if it were positioned in memory, eliminating the need to copy it from the disk first. This direct memory access saves time and reduces processing requirements, offering substantial performance improvements.
 
 \newpage{}
 
@@ -179,7 +128,7 @@ This speed improvement does however come with a notable drawback: It bypasses th
 
 `inotify` is an event-driven notification system of the Linux kernel, designed to monitor the file system for different events, such as modifications and accesses, among others. Its particularly useful because it can be configured to watch only write operations on certain files, i.e. only `write` operations. This level of control can offer considerable benefits in cases where there is a need to focus system resources on certain file system events, and not on others.
 
-Naturally, `inotify` comes with some recognizable advantages. Significantly, it reduces overhead and resource use when compared to polling strategies. Polling is an I/O-heavy approach as it continuously checks the status of the file system, regardless of whether any changes have occurred. In contrast, `inotify` works in a more event-driven way, where it only takes action when a specific event actually occurs. This is usually more efficient, reducing overhead especially where there are infrequent changes to the file system.
+Naturally, `inotify` comes with some recognizable advantages. Significantly, it reduces overhead and resource use when compared to polling strategies. Polling is a I/O-heavy approach as it continuously checks the status of the file system, regardless of whether any changes have occurred. In contrast, `inotify` works in a more event-driven way, where it only takes action when a specific event actually occurs. This is usually more efficient, reducing overhead especially where there are infrequent changes to the file system.
 
 Thanks to its efficiency and flexibility, `inotify` is used across many applications, especially in file synchronization services. In this use case, the ability to instantly notify the system of file changes aids in instant synchronization of files, demonstrating how critical its role can be in real-time or near real-time systems that are dependent on keeping data up-to-date. However, as is the case with many system calls, there is a limit to its scalability. `inotify` is constrained by a limit on how many watches can be established; this limitation can pose challenges in intricate systems where there is a high quantity of files or directories to watch for changes in, and might warrant additional management or fallback to heavier polling mechanisms for some parts of the system[@prokop2010inotify].
 
@@ -187,7 +136,7 @@ Thanks to its efficiency and flexibility, `inotify` is used across many applicat
 
 ### Linux Kernel Caching
 
-Disk caching in Linux is a strategic method that temporarily stores frequently accessed data in RAM. It is implemented through the page cache subsystem, and operates under the assumption that data situated near data that has already been accessed will be needed soon. By retaining data close to the CPU where it can be quickly accessed without expensive disk reads can significatly reduce overall access time. The data within the cache is also managed using the LRU algorithm, which prunes the least recently used items first when space is needed. Linux also caches file system metadata in specialized structures known as the `dentry` and `inode` caches. This metadata contains information such as file names, attributes, and locations. The key benefit of this is that it speeds up the resolution of path names and file attributes, such as tracking when files were last changed for polling.
+Disk caching in Linux is a strategic method that temporarily stores frequently accessed data in RAM. It is implemented through the page cache subsystem, and operates under the assumption that data situated near data that has already been accessed will be needed soon. By retaining data close to the CPU where it can be quickly accessed without expensive disk reads can significantly reduce overall access time. The data within the cache is also managed using the LRU algorithm, which prunes the least recently used items first when space is needed. Linux also caches file system metadata in specialized structures known as the `dentry` and `inode` caches. This metadata contains information such as file names, attributes, and locations. The key benefit of this is that it speeds up the resolution of path names and file attributes, such as tracking when files were last changed for polling.
 
 While such caching mechanisms can improve performance, they also introduce complexities. One such complexity is maintaining data consistency between the disk and cache through writebacks; aggressive writebacks, where data is copied back to disk frequently, can lead to reduced performance, while excessive delays may risk data loss if the system crashes before data has been saved.
 
@@ -197,17 +146,17 @@ Another complexity stems from the necessity to release cached data under memory 
 
 #### RTT, LAN and WAN
 
-Round-trip time (RTT) represents the time data takes to travel from a source to a destination and back. It provides a valuable insight into application latency, and can varying according to many factors such as network type, system load and physical distance. Local area networks (LAN) are geographically small networks characterised by having a low RTT, resulting in a low latency due to the short distance (typically no more than across an office or data center) that data needs to travel. As a result of their small geographical size and isolation, perimeter security is often applied to such networks, meaning that the LAN is viewed as a trusted network that doesn't necessarily require authentication or encryption between internal systems, resulting in a potentially lower overhead.
+Round-trip time (RTT) represents the time data takes to travel from a source to a destination and back. It provides a valuable insight into application latency, and can varying according to many factors such as network type, system load and physical distance. Local area networks (LAN) are geographically small networks characterized by having a low RTT, resulting in a low latency due to the short distance (typically no more than across an office or data center) that data needs to travel. As a result of their small geographical size and isolation, perimeter security is often applied to such networks, meaning that the LAN is viewed as a trusted network that doesn't necessarily require authentication or encryption between internal systems, resulting in a potentially lower overhead.
 
 \newpage{}
 
-Wide area networks (WAN) on the other hand typically span a large geographical area, with the internet being an example that operates on a planetary scale. Due to the physical distance between source and destination, as well as the number of hops required for data to reach the destination, these networks typically have higher RTT and thus latency, and are also vulnerable to wire tapping and packet inspection, meaning that in order to securely transmit data on them, encryption and authentication is required[@tanenbaum2003net].
+Wide area networks (WAN) on the other hand typically span a large geographical area, with the internet being an example that operates on a planetary scale. Due to the physical distance between source and destination, as well as the number of hops required for data to reach the destination, these networks typically have higher RTT and thus latency, and are also vulnerable to wire-tapping and packet inspection, meaning that in order to securely transmit data on them, encryption and authentication is required[@tanenbaum2003net].
 
 #### TCP, UDP, TLS and QUIC
 
-TCP (Transmission Control Protocol), UDP (User Datagram Protocol), and QUIC (Quick UDP Internet Connections) are three key communication protocols utilized in the internet today.
+TCP (Transmission Control Protocol), UDP (User Datagram Protocol), and QUIC (Quick UDP Internet Connections) are three key communication protocols utilized on the internet today.
 
-TCP has long been the reliable backbone for internet communication due to its connection-oriented nature. It ensures the guaranteed delivery of data packets and their correct order, rendering it a highly dependable means for data transmission. Significantly, TCP incorporates error checking, allowing the detection and subsequent retransmission of lost packets. TCP also includes a congestion control mechanism to manage data transmission seamlessly during high traffic. Due to to these features and it's long legacy, TCP is widely used to power the majority of the web where reliable, ordered, and error-checked data transmission is required[@postel1981tcp].
+TCP has long been the reliable backbone for internet communication due to its connection-oriented nature. It ensures the guaranteed delivery of data packets and their correct order, rendering it a highly dependable means for data transmission. Significantly, TCP incorporates error checking, allowing the detection and subsequent retransmission of lost packets. TCP also includes a congestion control mechanism to manage data transmission seamlessly during high traffic. Due to these features and it's long legacy, TCP is widely used to power the majority of the web where reliable, ordered, and error-checked data transmission is required[@postel1981tcp].
 
 UDP is a connectionless protocol that does not make the same guarantees about the reliability or ordered delivery of data packets. This lends UDP a speed advantage over TCP, resulting in less communication overhead. Although it lacks TCP's robustness in handling errors and maintaining data order, UDP finds use in applications where speed and latency take precedence over reliability. This includes online gaming, video calls, and other real-time communication modes where quick data transmission is crucial even if temporary packet loss occurs.[@postel1980udp]
 
@@ -233,11 +182,11 @@ Once the altered blocks are identified, the source proceeds to send the offset o
 
 \newpage{}
 
-### File Systems In Userspace (FUSE)
+### File Systems In User space (FUSE)
 
-File Systems in Userspace (FUSE) is a software interface that enables the creation of custom file systems in the userspace, as opposed to developing them as kernel modules. This reduces the need for the low-level kernel development skills that are usually associated with creating new file systems.
+File Systems in User space (FUSE) is a software interface that enables the creation of custom file systems in the user space, as opposed to developing them as kernel modules. This reduces the need for the low-level kernel development skills that are usually associated with creating new file systems.
 
-The FUSE APIs are available on various platforms; though mostly deployed on Linux, it can also be found on macOS and FreeBSD. In FUSE, a userspace program registers itself with the FUSE kernel module and provides callbacks for the file system operations. A simple read-only FUSE can for example implement the following callbacks:
+The FUSE APIs are available on various platforms; though mostly deployed on Linux, it can also be found on macOS and FreeBSD. In FUSE, a user space program registers itself with the FUSE kernel module and provides callbacks for the file system operations. A simple read-only FUSE can for example implement the following callbacks:
 
 The `getattr` function is responsible for getting the attributes of a file. For a real file system, this would include things like the file's size, its permissions, when it was last accessed or modified, and so forth:
 
@@ -270,11 +219,11 @@ These callbacks would then be added to the FUSE operations struct and passed to 
 
 \newpage{}
 
-When a user then performs a file system operation on a mounted FUSE file system, the kernel module sends a request for executing that operation to the userspace program. This is followed by the userspace program returning a response, which the FUSE kernel module conveys back to the user. As such, FUSE circumvents the complexity of implementing the file system implementation directly in the kernel. This architecture enhances safety, preventing entire kernel crashes due to errors within the implementation being limited to user instead of kernel space:
+When a user then performs a file system operation on a mounted FUSE file system, the kernel module sends a request for executing that operation to the user space program. This is followed by the user space program returning a response, which the FUSE kernel module conveys back to the user. As such, FUSE circumvents the complexity of implementing the file system implementation directly in the kernel. This architecture enhances safety, preventing entire kernel crashes due to errors within the implementation being limited to user instead of kernel space:
 
-![Structural diagramm of Filesystem in Userspace, showing the userspace components handled by the C library and the FUSE library as well as the kernel components such as the Linux VFS and the FUSE kernel module[@commons2023fusestructure]](./static/fuse-structure.png){ width=400px }
+![Structural diagram of FUSE, showing the user space components handled by the C library and the FUSE library as well as the kernel components such as the Linux VFS and the FUSE kernel module[@commons2023fusestructure]](./static/fuse-structure.png){ width=400px }
 
-Another benefit of a file system implemented as a FUSE is its inherent portability. Unlike a file system created as a kernel module, its interaction with the FUSE module rather than the kernel itself creates a stronger contract between the two, and allows shipping the file system as a plain binary instead of a binary kernel module, which typically need to be built from source on the target machine unless they are vendored by a distribution. Despite these benefits of FUSE, there is a noticeable performance overhead associated with it. This is largely due to the context switching between the kernel and the userspace that occurs during its operation[@vangoor2017fuse].
+Another benefit of a file system implemented as a FUSE is its inherent portability. Unlike a file system created as a kernel module, its interaction with the FUSE module rather than the kernel itself creates a stronger contract between the two, and allows shipping the file system as a plain binary instead of a binary kernel module, which typically need to be built from source on the target machine unless they are vendored by a distribution. Despite these benefits of FUSE, there is a noticeable performance overhead associated with it. This is largely due to the context switching between the kernel and the user space that occurs during its operation[@vangoor2017fuse].
 
 FUSE is widely utilized to mount high-level external services as file systems. For instance, it can be used to mount remote AWS S3 buckets with `s3fs`[@gaul2023s3fs] or to mount a remote system's disk via Secure Shell (SSH) with SSHFS [@libfuse2022sshfs].
 
@@ -292,7 +241,7 @@ The NBD protocol involves multiple participants, notably one or several clients,
 
 After receiving this, the server sends the size of the export and other metadata. The client acknowledges this data, completing the handshake. Post handshake, the client and server exchange commands and replies. A command can correspond to any of the basic actions needed to access a block device, for instance read, write or flush. These commands might also contain data such as a chunk for writing, offsets, and lengths among other elements. Replies may contain error messages, success status, or data contingent on the reply type.
 
-While powerful in many regards, NBD has some limitations. Its maximum message size is capped at 32 MB[@clements2013nbd], and the maximum block or chunk size supported by the Kernel's NBD client is a mere 4KB[@verhelst2023nbdclient]. Thus, it might not be the most optimal protocol for WAN usage, especially in scenarios with high latency.
+While powerful in many regards, NBD has some limitations. Its maximum message size is capped at 32 MB[@clements2013nbd], and the maximum block or chunk size supported by the Kernel's NBD client is a mere 4 KB[@verhelst2023nbdclient]. Thus, it might not be the most optimal protocol for WAN usage, especially in scenarios with high latency.
 
 NBD, being a protocol with a long legacy, comes with its own set of operational quirks such as multiple different handshake versions and legacy features. As a result, it is advisable to only implement the latest recommended versions and the foundational feature set when considering NBD for a narrow use case.
 
@@ -308,7 +257,7 @@ Virtual machine live migration involves moving a virtual machine, its state, and
 
 The primary characteristic of pre-copy migration is its "run-while-copy" nature, meaning that the copying of data from the source to the destination occurs concurrently while the VM continues to operate. This method is also applicable in a generic migration context where an application or another data state is being updated.
 
-In the case of a VM, the pre-copy migration procedure starts with transfering the initial state of VM's memory to the destination host. During this operation, if modifications occur to any chunks of data, they are flagged as dirty. These dirty chunks of data are then transferred to the destination until only a small number remain - an amount small enough to stay within the allowable maximum downtime criteria. Following this, the VM is suspended at the source, enabling the synchronization of the remaining chunks of data to the destination without having to continue tracking dirty chunks. Once this synchronization process is completed, the VM is resumed at the destination host.
+In the case of a VM, the pre-copy migration procedure starts with transferring the initial state of VM's memory to the destination host. During this operation, if modifications occur to any chunks of data, they are flagged as dirty. These dirty chunks of data are then transferred to the destination until only a small number remain - an amount small enough to stay within the allowable maximum downtime criteria. Following this, the VM is suspended at the source, enabling the synchronization of the remaining chunks of data to the destination without having to continue tracking dirty chunks. Once this synchronization process is completed, the VM is resumed at the destination host.
 
 The pre-copy migration process is fairly robust, especially in instances where there might be network disruption during synchronization. This is because of fact that, at any given point during migration, the VM is readily available in full either at the source or the destination. A limitation to the approach however is that, if the VM or application alters too many chunks on the source during migration, it may not be possible to meet the maximum acceptable downtime criteria. Maximum permissible downtime is also inherently restricted by the available round-trip time (RTT)[@he2016migration].
 
@@ -348,7 +297,7 @@ Another familiar implementation is observed in UNIX pipes, a fundamental part of
 
 ### Go
 
-Go is a statically typed, compiled open-source programming language released by Google in 2009. It is typically known for its simplicity, and was developed to address the unsuitability of many traditional languages for modern distrbuted systems development. Thanks to input from many people affiliated with UNIX, such as Rob Pike and Ken Thomposon, as well as good support for concurrency, Go is particulary popular for the development of cloud services and other types of network programming. The headline feature of Go is "Goroutines", a lightweight feature that allows for concurrent function execution that is similar to threads, but more scalable to support millions of Goroutines per program. Synchronization between different Goroutines is provided by using channels, which are type- and concurrency-safe conduits for data[@donovan2015go].
+Go is a statically typed, compiled open-source programming language released by Google in 2009. It is typically known for its simplicity, and was developed to address the unsuitability of many traditional languages for modern distributed systems development. Thanks to input from many people affiliated with UNIX, such as Rob Pike and Ken Thompson, as well as good support for concurrency, Go is particularly popular for the development of cloud services and other types of network programming. The headline feature of Go is "Goroutines", a lightweight feature that allows for concurrent function execution that is similar to threads, but more scalable to support millions of Goroutines per program. Synchronization between different Goroutines is provided by using channels, which are type- and concurrency-safe conduits for data[@donovan2015go].
 
 ### RPC Frameworks
 
@@ -362,7 +311,7 @@ One of the strengths of the gRPC framework is its support for various types of R
 
 #### fRPC and Polyglot
 
-fRPC is an open-source RPC framework released by Loophole labs in 2022. It is proto3-compatible, meaning that it can be used as a drop-in replacement for gRPC, promising better performance characteristics. A unique feature is it's ability to stop the RPC system to rerieve an underlying connection, which makes it possible to re-use connections for different purposes[@loopholelabs2023frpc]. Internally, it uses Frisbee as it's messaging framework to implement the request-response semantics[@loopholelabs2022frisbee], and Polyglot, a high-performance serialization framework, as it's Protobuf equivalent. Polyglot achieves a similar goal as Protobuf, which is to encode data structures in a platform-independent way, but does so with less legacy code and a simpler wire format. It is also language-independent, with implementations for Go, Rust and TypeScript[@loopholelabs2023polyglot].
+fRPC is an open-source RPC framework released by Loophole labs in 2022. It is proto3-compatible, meaning that it can be used as a drop-in replacement for gRPC, promising better performance characteristics. A unique feature is its ability to stop the RPC system to retrieve an underlying connection, which makes it possible to re-use connections for different purposes[@loopholelabs2023frpc]. Internally, it uses Frisbee as it's messaging framework to implement the request-response semantics[@loopholelabs2022frisbee], and Polyglot, a high-performance serialization framework, as it's Protobuf equivalent. Polyglot achieves a similar goal as Protobuf, which is to encode data structures in a platform-independent way, but does so with less legacy code and a simpler wire format. It is also language-independent, with implementations for Go, Rust and TypeScript[@loopholelabs2023polyglot].
 
 ### Data Stores
 
@@ -380,21 +329,19 @@ Redis also includes a publish-subscribe (pub-sub) system. This enables it to fun
 
 S3 is a scalable object storage service, especially designed for large-scale applications with frequent reads and writes. It is one of the prominent services offered by Amazon Web Services. S3's design allows for global distribution, which means the data can be stored across multiple geographically diverse servers. This permits fast access times from virtually any location on the globe, crucial for globally distributed services or applications with users spread across different continents.
 
-It offers a variety of storage classes for to different needs, i.e. for whether the requirement is for frequent data access, infrequent data retrieval, or long-term archival. This ensures that it can meet a wide array of demands through the same API. S3 also comes equipped with comprehensive security features, including authentication and authorization mechanisms. Communication with S3 is done through a HTTP API. Users and applications can interact with the stored data - including files and folders - via this API.[@aws2023s3].
+It offers a variety of storage classes for different needs, i.e. for whether the requirement is for frequent data access, infrequent data retrieval, or long-term archival. This ensures that it can meet a wide array of demands through the same HTTP API. S3 also comes equipped with comprehensive security features, including authentication and authorization mechanisms. Access to objects and directories stored in S3 is done with HTTP[@aws2023s3].
 
 Minio is an open-source storage server that is compatible Amazon S3's API. Due to it being written in the Go programming language, Minio is very lightweight and even ships as single static binary. Unlike with AWS S3, which is only offered as a service, Minio's open-source nature means that users have the ability to view, modify, and distribute Minio's source code, allowing community-driven development and innovation.
 
-The main feature of Minio is its suitability for on-premises hosting, making it a good option for organizations with specific security regulations, those preferring to maintain direct control over their data and developers prefering to work on the local system. It also supports horizontal scalability, designed to distribute large quantities of data across multiple nodes, meaning that it can be used in large-scale deployments similarly to AWS S3[@minio2023coreadmin].
+The main feature of Minio is its suitability for on-premises hosting, making it a good option for organizations with specific security regulations, those preferring to maintain direct control over their data and developers preferring to work on the local system. It also supports horizontal scalability, designed to distribute large quantities of data across multiple nodes, meaning that it can be used in large-scale deployments similarly to AWS S3[@minio2023coreadmin].
 
 #### Cassandra and ScylllaDB
 
 Apache Cassandra is a wide-column NoSQL database tailored for large-scale, distributed data management tasks. It is known for its scalability, designed to handle vast amounts of data spread across numerous servers. Unique to Cassandra is the absence of a single point of failure, thus ensuring continuous availability and robustness, which is critical for systems requiring high uptime.
 
-Cassandra's consistency model is tunable according to needs, ranging from eventual to strong consistency. It does not employing master nodes due to its usage of a peer-to-peer protocol and a distributed hash ring design; these design choices eradicate the bottleneck and failure risks associated with master nodes[@lakshman2010cassandra].
+Cassandra's consistency model is tunable according to needs, ranging from eventual to strong consistency. It does not require master nodes due to its usage of a peer-to-peer protocol and a distributed hash ring design; these design choices eradicate the bottleneck and failure risks associated with other archictures[@lakshman2010cassandra].
 
-Despite these robust capabilities, Cassandra does come with certain limitations. Under heavy load, it experiences high latency that can negatively affect system performance. Besides this, it also demands complex configuration and fine-tuning to peform optimally.
-
-In response to the perceived shortcomings of Cassandra, ScyllaDB was released in 2015. It shares design principles with Cassandra, such as compatibility with Cassandra's API and data model, but has architectural differences intended to overcome Cassandra's limitations. It's primarily written in C++, contrary to Cassandra's Java-based code. This contributes to ScyllaDB's shared-nothing architecture, a design that aims to minimize contention and enhance performance.
+Despite these robust capabilities, Cassandra does come with certain limitations. Under heavy load, it experiences high latency that can negatively affect system performance. Besides this, it also demands complex configuration and fine-tuning to perform optimally. In response to the perceived shortcomings of Cassandra, ScyllaDB was released in 2015. It shares design principles with Cassandra, such as compatibility with Cassandra's API and data model, but has architectural differences intended to overcome Cassandra's limitations. It's primarily written in C++, contrary to Cassandra's Java-based code. This contributes to ScyllaDB's shared-nothing architecture, a design that aims to minimize contention and enhance performance.
 
 ![90- and 99-percentile latency measurements of UPDATE queries for different load levels and different versions of Cassandra and ScyllaDB[@grabowski2021scylladb]](./static/cassanda-scylladb-latencies.png){ width=400px }
 
@@ -408,7 +355,7 @@ ScyllaDB was particularly engineered to address one shortcoming of Cassandra - i
 
 `userfaultfd` is a technology that allows for the implementation of a post-copy migration scenario. In this setup, a memory region is created on the destination host. When the migrated application starts to read from this remote region after it was resumed, it triggers a page fault, which we want to resolve by fetching the relevant offset from the remote.
 
-Typically, page faults are resolved by the kernel. While this makes sense for use cases where they can be resolved by loading a local resource into memory, here we want to handle the page faults using a user space program instead. Traditionally, this was possible by registering a signal handler for the `SIGSEGV` handler, and then responding to fault from the program. This however is a fairly complicated and inefficient process. Instead, we can now use the `userfaultfd` system to register a page fault handler directly without having to go through a signal first.
+Typically, page faults are resolved by the kernel. While this makes sense for use cases where they can be resolved by loading a local resource into memory, here we want to handle the page faults using a user space program instead. Traditionally, this was possible by registering a signal handler for the `SIGSEGV` handler, and then responding to fault from the program. This however is a fairly complicated and inefficient process; instead, we can now use the `userfaultfd` system to register a page fault handler directly without having to go through a signal first.
 
 With `userfaultfd`, we first register the memory region that we want to handle page faults in and start a handler in user space that fetches the missing offsets from the source host in-demand whenever a page fault occurs. This handler is connected to the registered region's `userfaultfd` API through a file descriptor. To enable sharing the file descriptor between processes, a UNIX socket can be used.
 
@@ -416,7 +363,7 @@ With `userfaultfd`, we first register the memory region that we want to handle p
 
 As mentioned before, `mmap` allows mapping a memory region to a file. Similarly to how we used a region registered with `userfaultfd` before to store the state or application that is being migrated, we can use this region to do the same. Because the region is linked to a file, when writes happen to the region, they will also be written to the corresponding file. If we're able to detect these writes and copy the changes to the destination host, we can use this setup to implement a pre-copy migration system.
 
-While writes done to a `mmap`ed region are eventually being written back to the underlying file, this is not the case immediately, since the kernel still uses caching on an `mmap`ed region in order to speed up reads/writes. As a workaround, we can use the `msync` syscall, which works similarly to the `sync` syscall by flushing any remaining changes from the cache to the backing file.
+While writes done to a `mmap`ed region are eventually being written back to the underlying file, this is not the case immediately, since the kernel still uses caching on a `mmap`ed region in order to speed up reads/writes. As a workaround, we can use the `msync` syscall, which works similarly to the `sync` syscall by flushing any remaining changes from the cache to the backing file.
 
 \newpage{}
 
@@ -424,7 +371,7 @@ In order to actually detect the changes to the underlying file, an obvious solut
 
 ### Push-Pull Synchronization with FUSE
 
-Using a file system in user space (FUSE) can serve as the basis for implementing either a pre- or a post-copy live migration system. Similarly to the file-based pre-copy approach, we can use `mmap` to map the migrated resource's memory region to a file. Instead of storing this file on the system's default filesystem however, a custom file system is implemented, which allows dropping the expensive polling system. Since a custom file system allows us to catch reads (for a post-copy migration scenario, were reads would be responded to by fetching from the remote), writes (for a pre-copy scenario, where writes would be forwarded to the destination) and other operations by the kernel, we no longer need to use `inotify`.
+Using a file system in user space (FUSE) can serve as the basis for implementing either a pre- or a post-copy live migration system. Similarly to the file-based pre-copy approach, we can use `mmap` to map the migrated resource's memory region to a file. Instead of storing this file on the system's default file system however, a custom file system is implemented, which allows dropping the expensive polling system. Since a custom file system allows us to catch reads (for a post-copy migration scenario, were reads would be responded to by fetching from the remote), writes (for a pre-copy scenario, where writes would be forwarded to the destination) and other operations by the kernel, we no longer need to use `inotify`.
 
 While implementing such a custom file system in the kernel is possible, it is a complex task that requires writing a custom kernel module, using a supported language by the kernel (mostly C or a limited subset of Rust), and in general having significant knowledge of kernel internals. Furthermore, since networking would be required to resolve reads/forward writes from/to the source/destination host, a job that would usually be done by user space applications, a user space component would probably also need to be developed in order to support this part of the synchronization system. Instead of implementing it in the kernel, we can use the FUSE API. This makes it possible to write the entire file system in user space, can significantly reduce the complexity of this approach.
 
@@ -434,23 +381,23 @@ While implementing such a custom file system in the kernel is possible, it is a 
 
 Another `mmap`-based approach for both pre- and post-copy migration is to `mmap` a block device instead of a file. This block device can be provided through a variety of APIs, for example NBD.
 
-By providing a NBD device through the kernel's NBD client, we can connect the device to a remote NBD server, which in turn hosts the migratable resource as a memory region. Any reads/writes from/to the `mmap`ed memory region are resolved by the NBD device, which forwards it to the client, which then resolves them using the remote server; as such, this approach is less so a synchronization (as the memory region is never actually copied to the destination hist), but rather a mount of a remote memory region over the NBD protocol.
+By providing a NBD device through the kernel's NBD client, we can connect the device to a remote NBD server, which in turn hosts the resource as a memory region. Any reads/writes from/to the `mmap`ed memory region are resolved by the NBD device, which forwards it to the client, which then resolves them using the remote server; as such, this approach is less so a synchronization (as the memory region is never actually copied to the destination hist), but rather a mount of a remote memory region over the NBD protocol.
 
-From an initial overview, the biggest benefit of `mmap`ing such a block device instead of a file on a custom file system is the reduced complexity. For the narrow use case of memory synchronization, not all of the features provided by a full file system are be required, which means that the implementation of a NBD server and client, as well as the accompanying protocols, is significantly less complex and can also reduce the overhead of the system as a whole.
+From an initial overview, the biggest benefit of `mmap`ing such a block device instead of a file on a custom file system is the reduced complexity. For the narrow use case of memory synchronization, not all the features provided by a full file system are required, which means that the implementation of a NBD server and client, as well as the accompanying protocols, is significantly less complex and can also reduce the overhead of the system as a whole.
 
 ### Push-Pull Synchronization with Mounts
 
 #### Overview
 
-This approach also leverages `mmap` and NBD to handle reads and writes to the migratable resource's memory region, similar to the prior approaches, but differs from mounts with NBD in a few significant ways.
+This approach also leverages `mmap` and NBD to handle reads and writes to the resource's memory region, similar to the prior approaches, but differs from mounts with NBD in a few significant ways.
 
 Usually, the NBD server and client don't run on the same system, but are instead separated over a network. This network commonly is LAN, and the NBD protocol was designed to access a remote hard drive in this network. As a result of the protocol being designed for this low-latency, high-throughput type of network, there are a few limitations of the NBD protocol when it is being used in a WAN that can not guarantee the same.
 
-While most wire security issues with the protocol can be worked around by simply using TLS, the big issue of it's latency sensitivity remains. Usually, individual blocks would only be fetched as they are being accessed, resulting in a ready latency per block that is at least the RTT. In order to work around this issue, instead of directly connecting a NBD client to a remote NBD server, a layer of indirection (called "Mount") is created. This component consists of both a client and a server, both of which are running on the local system instead of being split into a separate remote and local component, referred to as a "mount", and is implemented as part of the r3map library ("re**m**ote **mm**ap)[@pojtinger2023r3map].
+While most wire security issues with the protocol can be worked around by simply using TLS, the big issue of its latency sensitivity remains. Usually, individual blocks would only be fetched as they are being accessed, resulting in a ready latency per block that is at least the RTT. In order to work around this issue, instead of directly connecting a NBD client to a remote NBD server, a layer of indirection (called "Mount") is created. This component consists of both a client and a server, both of which are running on the local system instead of being split into a separate remote and local component, referred to as a "mount", and is implemented as part of the r3map library (re**m**ote **mm**ap)[@pojtinger2023r3map].
 
 \newpage{}
 
-By combining the NBD server and client into this reusabable unit, we can connect the server to a new backend component with a protocol which is better suited for WAN usage than NBD. This also allows the implementation of asynchronous background push/pull strategies instead of simpliy directly writing to/from the network (called "Managed Mounts"). The simplest form of the mount API is the direct mount API; it simply swaps out NBD for a transport-independent RPC framework, but does not do additional optimizations. It has two simple actors: The client and the server. Only unidirectional RPCs from the client to the server are required for this to work, and the required backend service's interface is simple:
+By combining the NBD server and client into this reusable unit, we can connect the server to a new backend component with a protocol which is better suited for WAN usage than NBD. This also allows the implementation of asynchronous background push/pull strategies instead of simply directly writing to/from the network (called "Managed Mounts"). The simplest form of the mount API is the direct mount API; it simply swaps out NBD for a transport-independent RPC framework, but does not do additional optimizations. It has two simple actors: The client and the server. Only unidirectional RPCs from the client to the server are required for this to work, and the required backend service's interface is simple:
 
 ```go
 type BackendRemote struct {
@@ -465,9 +412,9 @@ The protocol is stateless, as there is only a simple remote reader and writer in
 
 #### Chunking
 
-An additional issue that was mentioned before that this approach can approve upon is better chunking support. While it is possible to specify the NBD protocol's chunk size by configuring the NBD client and server, this is limited to only 4KB in the case of Linux's implementation. If the RTT between the backend and the NBD server however is large, it might be preferable to use a much larger chunk size; this used to not be possible by using NBD directly, but thanks to this layer of indirection it can be implemented.
+An additional issue that was mentioned before that this approach can approve upon is better chunking support. While it is possible to specify the NBD protocol's chunk size by configuring the NBD client and server, this is limited to only 4 KB in the case of Linux's implementation. If the RTT between the backend and the NBD server however is large, it might be preferable to use a much larger chunk size; this used to not be possible by using NBD directly, but thanks to this layer of indirection it can be implemented.
 
-Similarly to the Linux kernel's NBD client, backends themselves might also have constraints that prevent them from working without a specific chunk size, or otherwise require aligned reads. This is for example the case for tape drives, where reads and writes must occur with a fixed block size and on aligned offsets; furthermore, these linear storage devices work best if chunks are multiple MBs instead KBs.
+Similarly to the Linux kernel's NBD client, backends themselves might also have constraints that prevent them from working without a specific chunk size, or otherwise require aligned reads. This is for example the case for tape drives, where reads and writes must occur with a fixed block size and on aligned offsets; furthermore, these linear storage devices work the best if chunks are multiple MB instead of KB.
 
 It is possible to do this chunking in two places: On the mount API's side (meaning the NBD server), or on the (potentially remote) backend's side. While this will be discussed further in the results section, chunking on the backend's side is usually preferred as doing it client-side can significantly increase latency due to a read being required if a non-aligned write occurs, esp. in the case of a WAN deployment with high RTT.
 
@@ -477,13 +424,13 @@ But even if the backend does not require any kind of chunking to be accessed - i
 
 #### Background Pull and Push
 
-A pre-copy migration system for the managed API is realized in the form of pre-emptive pulls that run asynchronously in the background. In order to optimize for spatial locality, a pull priority heuristic was introduced; this is used to determine the order in which chunks should be pulled. Many applications and other migratable resources commonly access certain parts of their memory first, so if a resources should be accessible locally as quickly as possible (so that reads go to the local cache filled by the pre-emptive pulls, instead of having to wait at least one RTT to fetch it from the remote), knowing this access pattern and fetching these sections first can improve latency and throughput signficantly.
+A pre-copy migration system for the managed API is realized in the form of preemptive pulls that run asynchronously in the background. In order to optimize for spatial locality, a pull priority heuristic was introduced; this is used to determine the order in which chunks should be pulled. Many applications and other resources commonly access certain parts of their memory first, so if a resource should be accessible locally as quickly as possible (so that reads go to the local cache filled by the preemptive pulls, instead of having to wait at least one RTT to fetch it from the remote), knowing this access pattern and fetching these sections first can improve latency and throughput significantly.
 
-And example of this can be data that consists of one or multiple headers followed by raw data. If this structure is known, rather than fetching everything linearly in the background, the headers can be fetched first in order to allow for i.e. metadata to be displayed before the rest of the data has been fetched. Similarly so, if a file system is being synchronized, and the superblocks of a file system are being stored in a known pattern or known fixed locations, these can be pulled first, significantly speeding up operations such as directory listings that don't require the actual inode's data to be available.
+And example of this can be data that consists of one or multiple headers followed by raw data. If this structure is known, rather than fetching everything linearly in the background, the headers can be fetched first in order to allow for i.e. metadata to be displayed before the rest of the data has been fetched. Similarly so, if a file system is being synchronized, and the super blocks of a file system are being stored in a known pattern or known fixed locations, these can be pulled first, significantly speeding up operations such as directory listings that don't require the actual inode's data to be available.
 
-Post-copy migration conversly is implemented using asynchronous background push. This push system is started in parallel with the pull system. It keeps track of which chunks were written to, de-duplicates remote writes, and periodically writes back these dirty chunks to the remote backend. This can significantly improve write performance compared to forwarding writes directly to the remote by being able to catch multiple writes without having to block for at least the RTT until the remote write has finished before continuing to the next write.
+Post-copy migration conversely is implemented using asynchronous background push. This push system is started in parallel with the pull system. It keeps track of which chunks were written to, de-duplicates remote writes, and periodically writes back these dirty chunks to the remote backend. This can significantly improve write performance compared to forwarding writes directly to the remote by being able to catch multiple writes without having to block for at least the RTT until the remote write has finished before continuing to the next write.
 
-For the managed mount API, the pre- and post-copy live migration paradigms are combined to form a hybrid solution. Due to reasons elaborated on in more detail in the discussion section, the managed mount API however is primarly intended for efficiently reading from a remote resource and synching back changes eventually, rather than migrating a resource between two hosts. For the migration use case, the migration API, which will be introduced in the following section, provides a better solution by building on similar concepts as the managed mounts API.
+For the managed mount API, the pre- and post-copy live migration paradigms are combined to form a hybrid solution. Due to reasons elaborated on in more detail in the discussion section, the managed mount API however is primarily intended for efficiently reading from a remote resource and synching back changes eventually, rather than migrating a resource between two hosts. For the migration use case, the migration API, which will be introduced in the following section, provides a better solution by building on similar concepts as the managed mounts API.
 
 ### Pull-Based Synchronization with Migrations
 
@@ -515,7 +462,7 @@ An interesting question to ask with this two-step migration API is when to start
 
 #### Registration and Handlers
 
-By listening to page faults, we can know when a process wants to access a specific offset of memory that is not yet available. As mentioned before, we can use this event to then fetch this chunk of memory from the remote, mapping it to the offset on which the page fault occured, thus effectively only fetching data when it is required. Instead of registering signal handlers, we can use the `userfaultfd` system introduced with Linux 4.3[@corbet2015linux43] to handle these faults in userspace in a more idiomatic way.
+By listening to page faults, we can know when a process wants to access a specific offset of memory that is not yet available. As mentioned before, we can use this event to then fetch this chunk of memory from the remote, mapping it to the offset on which the page fault occured, thus effectively only fetching data when it is required. Instead of registering signal handlers, we can use the `userfaultfd` system introduced with Linux 4.3[@corbet2015linux43] to handle these faults in user space in a more idiomatic way.
 
 In the Go implementation created for this thesis, `userfaultfd-go`[@loopholelabs2022userfaultfdgo], `userfaultfd` works by first creating a region of memory, e.g. by using `mmap`, which is then registered with the `userfaultfd` API:
 
@@ -764,7 +711,7 @@ Due to a lack of existing, lean and maintained NBD libraries for Go, a custom pu
 
 #### Server
 
-The NBD server is implemented completely in userspace, and there are no kernel components involved. The backend interface that is expected by the server is very simple and only requires four methods to be implemented; `ReadAt`, `WriteAt`, `Size` and `Sync`:
+The NBD server is implemented completely in user space, and there are no kernel components involved. The backend interface that is expected by the server is very simple and only requires four methods to be implemented; `ReadAt`, `WriteAt`, `Size` and `Sync`:
 
 ```go
 type Backend interface {
@@ -803,7 +750,7 @@ The actual transmission phase is implemented in a similar way, by reading header
 
 #### Client
 
-Unlike the server, the client is implemented by using both the kernel's NBD client and a userspace component. In order to use the kernel NBD client, it is necessary to first find a free NBD device (`/dev/nbd*`); these devices are allocated by the kernel NBD module and can be specified with the `nbds_max` parameter[@linux2023nbd]. In order to find a free device, we can either specify it manually, or check `sysfs` for a NBD device that reports a zero size. After a free NBD device has been found, the client can be started by calling `Connect` with a `net.Conn` and options, similarly to the server.
+Unlike the server, the client is implemented by using both the kernel's NBD client and a user space component. In order to use the kernel NBD client, it is necessary to first find a free NBD device (`/dev/nbd*`); these devices are allocated by the kernel NBD module and can be specified with the `nbds_max` parameter[@linux2023nbd]. In order to find a free device, we can either specify it manually, or check `sysfs` for a NBD device that reports a zero size. After a free NBD device has been found, the client can be started by calling `Connect` with a `net.Conn` and options, similarly to the server.
 
 ```go
 func Connect(conn net.Conn, device *os.File, options *Options) error
@@ -829,7 +776,7 @@ const (
 )
 ```
 
-The handshake for the NBD client is negotiated in userspace by Go. Similarly to the server, the client only supports the "fixed newstyle" negotiatiation and aborts otherwise. The negotiation is once again implemented as a simple loop similarly to the server with it switching on the type; on `NEGOTIATION_TYPE_REPLY_INFO`, the client receives the export size, and with `NEGOTIATION_TYPE_INFO_BLOCKSIZE` it receives the used block size, which it then valides to be within the specified bounds and as a valid power of two, falling back to the preffered block size supplied by the options if possible. After this relevant metadata has been fetched from the server, the kernel NBD client is further configured with these values using `ioctl`, after which the `DO_IT` `ioctl` number is used to asynchronously start the kernel's NBD client. In addition to being able to configure the client itself, the client library can also be used to list the exports of a server; for this, another handshake is initiated, but this time the `NEGOTIATION_ID_OPTION_LIST` option is provided, after which the client reads the export information from the server and disconnects.
+The handshake for the NBD client is negotiated in user space by Go. Similarly to the server, the client only supports the "fixed newstyle" negotiatiation and aborts otherwise. The negotiation is once again implemented as a simple loop similarly to the server with it switching on the type; on `NEGOTIATION_TYPE_REPLY_INFO`, the client receives the export size, and with `NEGOTIATION_TYPE_INFO_BLOCKSIZE` it receives the used block size, which it then valides to be within the specified bounds and as a valid power of two, falling back to the preffered block size supplied by the options if possible. After this relevant metadata has been fetched from the server, the kernel NBD client is further configured with these values using `ioctl`, after which the `DO_IT` `ioctl` number is used to asynchronously start the kernel's NBD client. In addition to being able to configure the client itself, the client library can also be used to list the exports of a server; for this, another handshake is initiated, but this time the `NEGOTIATION_ID_OPTION_LIST` option is provided, after which the client reads the export information from the server and disconnects.
 
 #### Client Lifecycle
 
@@ -1870,7 +1817,7 @@ The proposed solution consisting of the direct mount, managed mount and migratio
 
 ram-dl demonstrates how minimal the implementation overhead is by implementing a system to share and mount a remote system's memory in under 300 source lines of code, while tapisk shows that the APIs can be used to efficiently map almost any resource, including a linear-access tape drive, to the concepts provided. Aside from these examples, the solution also makes many entirely new use cases that were previously thought of as extraodinarly hard to achieve possible, such as file synchronization that can combine the benefits of NBD with those of existing cloud storage clients, allowing to stream remote databases without requiring changes to their architecture, making arbitrary file formats streamable and optimizing app and game asset downloading processes.
 
-While there are limitations with the proposed solution's underlying technologies, these do provide future research opportunities. For example, the use of Rust as a language that is garbage collection-free could be studied as an option to further increase throughput, fix encountered deadlock issues and reduce overall resource usage, and exploring emerging alternatives for creating block devices to NBD in userspace such as ublk could help further improve the implementation presented.
+While there are limitations with the proposed solution's underlying technologies, these do provide future research opportunities. For example, the use of Rust as a language that is garbage collection-free could be studied as an option to further increase throughput, fix encountered deadlock issues and reduce overall resource usage, and exploring emerging alternatives for creating block devices to NBD in user space such as ublk could help further improve the implementation presented.
 
 Despite these limitations, the promise of providing a truly universal way of working with remote memory, without having to signficantly change existing applications or hypervisors, is provided in the form of the reference implementation. It is also able to provide multiple specialized configurations for LAN and WAN environments, making it possible to use remote memory technology in completely different and much more dymanic environments than before. As a result, entirely new ways of thinking about application architecture and lifecycles become possible, which can help enable the applications of tomorrow to become both simpler to maintain and more scalable than those built today.
 
