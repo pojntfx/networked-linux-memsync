@@ -1116,6 +1116,7 @@ $endif$
  \acro{QUIC}{Quick UDP Internet Connections}
  \acro{WebRTC}{Web Real-Time Communication}
  \acro{Wasm}{WebAssembly}
+ \acro{WASI}{WebAssembly System Interface}
  \acro{IETF}{Internet Engineering Task Force}
  \acro{OIDC}{OpenID Connect}
  \acro{AWS}{Amazon Web Services}
