@@ -1,3 +1,9 @@
+commit ced1d661987c1415f29136895076cc29423510fe
+Author: Felicitas Pojtinger <felicitas@pojtinger.com>
+Date:   Wed Aug 2 20:51:41 2023 +0200
+
+    refactor: Cite more sources for kernel concepts, remove duplicate abbreviation
+
 commit 4e6a94f65713fa8a349601bad4b55f03f7849941
 Author: Felicitas Pojtinger <felicitas@pojtinger.com>
 Date:   Mon Jul 31 22:59:39 2023 +0200

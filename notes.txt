@@ -3092,7 +3092,7 @@ https://www.kernel.org/doc/html/next/rust/quick-start.html
 2010, pp. 8, 343–344.
 
 [6] W. Mauerer, Professional linux kernel architecture. Indianapolis,
-IN: Wiley Publishing, Inc., 2008, pp. 474–487, 1026–1027.
+IN: Wiley Publishing, Inc., 2008, pp. 2–4, 7–8, 474–487, 1026–1027.
 
 [7] W. R. Stevens, Advanced programming in the UNIX environment. Delhi:
 Addison Wesley Logman (Singapore) Pte Ltd., Indian Branch, 2000, pp. 19,

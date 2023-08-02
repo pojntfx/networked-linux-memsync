@@ -191,26 +191,26 @@ memory and others, and enforces security policies. In addition to this,
 it is also responsible for progress scheduling, memory management,
 drivers and many more resposibilities depending on the implementation.
 Kernel space refers to the memory region that this system is stored and
-executes in.
+executed in[1].
 
 User space on the other hand is the portion of system memory where user
 applications execute. Applications can’t directly access hardware or
-kernel memory; instead they use APIs to access these them[1]. This API
-is provided in the form of syscalls, which serve as a bridge between
-user and kernel space. Well-known syscalls are open(), read(), write(),
+kernel memory; instead they use APIs to access them[2]. This API is
+provided in the form of syscalls, which serve as a bridge between user
+and kernel space. Well-known syscalls are open(), read(), write(),
 close() and ioctl(). While most syscalls have a specific purpose, ioctl
 serves as a more generic, universal one based on file descriptors and a
 data struct. Using it, it is possible to implement device-specific
 actions that can’t be expressed with regular system calls. Despite their
 utility, they can be an implementation hurdle for language development
-due to their use of numerical constants and other typing issues[2].
+due to their use of numerical constants and other typing issues[3].
 
 Linux Kernel
 
 The Linux kernel was released by Linus Torvalds in 1991. Developed
 primarily in the C language, it has recently seen the addition of Rust
 as an approved option for further expansion and development, esp. for
-drivers[3]. The kernel powers millions of devices across the globe,
+drivers[4]. The kernel powers millions of devices across the globe,
 including servers, desktop computers, mobile phones, and embedded
 devices. As a kernel, it serves as an intermediary between hardware and
 applications. It is engineered for compatibility with a wide array of
@@ -241,7 +241,7 @@ with the kernel via APIs (Application Programming Interfaces). Despite
 their utility, since they run in kernel space, modules do carry a
 potential risk. If not written with careful attention to detail, they
 can introduce significant instability into the kernel, negatively
-affecting the overall system performance and reliability[4].
+affecting the overall system performance and reliability[5].
 
 Modules can be managed and controlled at different stages, starting from
 boot time, and be manipulated dynamically when the system is already
@@ -252,7 +252,7 @@ for setting up the module when it’s loaded into the kernel. Conversely,
 the cleanup function is used to safely remove the module from the
 kernel, freeing up any resources it previously consumed. These lifecycle
 functions, along with other such hooks, provide a more structured
-approach to module development[5].
+approach to module development[1].
 
 UNIX Signals and Sockets
 
@@ -280,7 +280,7 @@ up resources before exiting or enabling verbose logging [7].
 It is however important to note that signals are not typically utilized
 as a primary inter-process communication (IPC) mechanism. This is due to
 their limitation in carrying additional data; while signals effectively
-alert a process of an event, they are not designed to convey forther
+alert a process of an event, they are not designed to convey further
 information related to that event, and as result they are best used in
 scenarios where simple event-based notifications are sufficient, rather
 than for more complex data exchange requirements. To work around this,
@@ -291,7 +291,7 @@ event, and are particularly popular on Linux.
 
 Stream sockets use TCP to provide reliable, two-way, connection-based
 byte streams, making them optimal for use in applications which require
-srong consistency guarantees. Datagram sockets on the other hand use
+strong consistency guarantees. Datagram sockets on the other hand use
 UDP, which allows for fast, connection-less communication with less
 guarantees. In addition to these two different types of sockets, named
 and unnamed sockets exist. Named sockets are represented by a special
@@ -341,7 +341,10 @@ suggests that data and instructions that are accessed frequently should
 be stored as close to the CPU as possible[10]. This principle is crucial
 primarily due to the limitations of “the speed of the cable”, where both
 throughput and latency decrease as distance increases due to factors
-like signal dampening and the finite speed of light.
+like signal dampening and the finite speed of light. While latency
+increases the further away a cache is from the CPU, the capacity of
+these caches typically also increases, which can be a worthwhile
+trade-off depending on the application.
 
 At the top of the hierarchy are registers, which are closest to the CPU.
 They offer very high speed, but provide limited storage space, typically
@@ -466,7 +469,7 @@ To minimize the occurrence of page faults, memory management algorithms
 such as the afore-mentioned LRU and the more straightforward clock
 algorithm are often used. These algorithms effectively manage the order
 and priority of memory pages, helping to ensure that frequently used
-pages are readily available in primary memory[5].
+pages are readily available in primary memory[1].
 
 Handling page faults involves certain techniques to ensure smooth
 operation. One such technique is prefetching, which anticipates future
@@ -564,7 +567,7 @@ memory pressure, known as cache eviction. As mentioned before, this
 requires sophisticated algorithms, such as LRU, to ensure effective
 utilization of available cache space. Prioritizing what to keep in cache
 as the memory pressure increases directly impacts the overall system
-performance[5].
+performance[1].
 
 Networking
 
@@ -4020,23 +4023,23 @@ both simpler to maintain and more scalable than those built today.
 
 Bibliography
 
-[1] A. S. Tanenbaum and A. S. Woodhull, “Operating systems: Design and
+[1] W. Mauerer, Professional linux kernel architecture. Indianapolis,
+IN: Wiley Publishing, Inc., 2008, pp. 2–4, 7–8, 474–487, 1026–1027.
+
+[2] A. S. Tanenbaum and A. S. Woodhull, “Operating systems: Design and
 implementation,” 3rd ed., Upper Saddle River, NJ 07458: Pearson
 Education, Inc. Pearson Prentice Hall, 2006, pp. 27–29.
 
-[2] D. DeVault, “A hare code generator for finding ioctl numbers.” 2022.
+[3] D. DeVault, “A hare code generator for finding ioctl numbers.” 2022.
 Accessed: Jul. 28, 2023. [Online]. Available:
 https://drewdevault.com/2022/05/14/generating-ioctls.html
 
-[3] Kernel Development Community, “Quick start.” 2023. Accessed: Jul.
+[4] Kernel Development Community, “Quick start.” 2023. Accessed: Jul.
 19, 2023. [Online]. Available:
 https://www.kernel.org/doc/html/next/rust/quick-start.html
 
-[4] R. Love, Linux kernel development, 3rd ed. Pearson Education, Inc.,
+[5] R. Love, Linux kernel development, 3rd ed. Pearson Education, Inc.,
 2010, pp. 8, 343–344.
-
-[5] W. Mauerer, Professional linux kernel architecture. Indianapolis,
-IN: Wiley Publishing, Inc., 2008, pp. 474–487, 1026–1027.
 
 [6] W. R. Stevens, Advanced programming in the UNIX environment. Delhi:
 Addison Wesley Logman (Singapore) Pte Ltd., Indian Branch, 2000, pp. 19,
