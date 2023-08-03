@@ -1,3 +1,9 @@
+commit b6cfc106559edca4a1159b7e2201b6e47f1394ea
+Author: Felicitas Pojtinger <felicitas@pojtinger.com>
+Date:   Thu Aug 3 05:40:53 2023 +0200
+
+    chore: Bump release date
+
 commit 8c32aefaa3e79e65d315c664747846e5ce88aebb
 Author: Felicitas Pojtinger <felicitas@pojtinger.com>
 Date:   Thu Aug 3 05:25:33 2023 +0200
