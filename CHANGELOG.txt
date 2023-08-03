@@ -1,3 +1,9 @@
+commit 4af6c1e86f214901e187557cb65525c4456af3e4
+Author: Felicitas Pojtinger <felicitas@pojtinger.com>
+Date:   Thu Aug 3 02:50:14 2023 +0200
+
+    refactor: Normalize style for everything up to planning
+
 commit 4e5c45456541f7568893b635f3bfa98c227a88d1
 Author: Felicitas Pojtinger <felicitas@pojtinger.com>
 Date:   Thu Aug 3 01:12:38 2023 +0200
