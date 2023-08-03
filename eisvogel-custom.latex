@@ -1102,6 +1102,7 @@ $endif$
  \acro{LTO}{Linear Tape-Open}
  \acro{EXT4}{Fourth Extended Filesystem}
  \acro{Btrfs}{B-Tree File System}
+ \acro{ELF}{Executable and Linkable Format}
  \acro{C}{C Programming Language}
  \acro{Rust}{Rust Programming Language}
  \acro{Go}{Go Programming Language}
