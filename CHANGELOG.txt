@@ -1,3 +1,9 @@
+commit 8c32aefaa3e79e65d315c664747846e5ce88aebb
+Author: Felicitas Pojtinger <felicitas@pojtinger.com>
+Date:   Thu Aug 3 05:25:33 2023 +0200
+
+    refactor: Add formatting and final spell checks to the remaining sections
+
 commit 4af6c1e86f214901e187557cb65525c4456af3e4
 Author: Felicitas Pojtinger <felicitas@pojtinger.com>
 Date:   Thu Aug 3 02:50:14 2023 +0200
