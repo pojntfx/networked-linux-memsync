@@ -1,6 +1,6 @@
 ---
 author: [Felicitas Pojtinger (Stuttgart Media University)]
-date: "2023-08-04"
+date: "2023-08-03"
 subject: "Efficient Synchronization of Linux Memory Regions over a Network: A Comparative Study and Implementation (Notes)"
 keywords:
   - linux memory management

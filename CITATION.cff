@@ -5,5 +5,5 @@ authors:
     given-names: "Felicitas"
 title: "Efficient Synchronization of Linux Memory Regions over a Network: A Comparative Study and Implementation"
 version: 1.0.0
-date-released: "2023-08-04"
+date-released: "2023-08-03"
 url: "https://github.com/pojntfx/networked-linux-memsync"

@@ -1,7 +1,7 @@
 ---
 author: [Felicitas Pojtinger]
 institute: Hochschule der Medien Stuttgart
-date: "2023-08-04"
+date: "2023-08-03"
 subject: Efficient Synchronization of Linux Memory Regions over a Network
 subtitle: A Comparative Study and Implementation
 keywords:
@@ -26,7 +26,7 @@ abstract: |
 
   ![](./static/signature.png){ width=125px }
 
-  \noindent{Stuttgart, 04.08.2023}
+  \noindent{Stuttgart, 03.08.2023}
 
   \newpage{}
 
