@@ -233,9 +233,9 @@ Once the altered blocks are identified, the source sends the offset of each bloc
 
 \newpage{}
 
-### File Systems In User space (FUSE)
+### File Systems in User Space (FUSE)
 
-File Systems in User space (FUSE) is an API that enables the creation of custom file systems in the user space, as opposed to developing them as kernel modules. This reduces the need for the low-level kernel development skills that are usually associated with creating new file systems.
+File Systems in User Space (FUSE) is an API that enables the creation of custom file systems in the user space, as opposed to developing them as kernel modules. This reduces the need for the low-level kernel development skills that are usually associated with creating new file systems.
 
 The FUSE APIs are available on various platforms; though mostly deployed on Linux, they can also be found on macOS and FreeBSD. In FUSE, a user space program registers itself with the FUSE kernel module and provides callbacks for the file system operations. A simple read-only FUSE can for example implement the following callbacks:
 
