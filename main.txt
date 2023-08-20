@@ -21,7 +21,7 @@ Felicitas Pojtinger
         -   2.10.1 RTT, LAN and WAN
         -   2.10.2 TCP, UDP, TLS and QUIC
     -   2.11 Delta Synchronization
-    -   2.12 File Systems In User space (FUSE)
+    -   2.12 File Systems in User Space (FUSE)
     -   2.13 Network Block Device (NBD)
     -   2.14 Virtual Machine Live Migration
         -   2.14.1 Pre-Copy
@@ -684,9 +684,9 @@ in the file. This process results in the reconstruction of the file with
 the modifications done at the source, after which the next
 synchronization cycle can start[25].
 
-File Systems In User space (FUSE)
+File Systems in User Space (FUSE)
 
-File Systems in User space (FUSE) is an API that enables the creation of
+File Systems in User Space (FUSE) is an API that enables the creation of
 custom file systems in the user space, as opposed to developing them as
 kernel modules. This reduces the need for the low-level kernel
 development skills that are usually associated with creating new file

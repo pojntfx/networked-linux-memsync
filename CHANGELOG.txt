@@ -1,3 +1,9 @@
+commit e6041ffffdbda7208110dde8e85fd293e94a709f
+Author: Felicitas Pojtinger <felicitas@pojtinger.com>
+Date:   Sun Aug 20 18:56:51 2023 +0200
+
+    fix: Use correct title case for FUSE
+
 commit b6cfc106559edca4a1159b7e2201b6e47f1394ea
 Author: Felicitas Pojtinger <felicitas@pojtinger.com>
 Date:   Thu Aug 3 05:40:53 2023 +0200
