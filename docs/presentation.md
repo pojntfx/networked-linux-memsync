@@ -1366,10 +1366,259 @@ code-block-font-size: \scriptsize
           - NBD remains the standard for creating block devices in user space
 - Implemented Use Cases
   - Using mounts for remote swap with `ram-dl`
+    - **Using Mounts for Remote Swap with ram-dl**
+      - Experimental tech demo to showcase the mount API usage.
+      - Utilizes fRPC mount backend to:
+        - Expand local system memory.
+        - Enable use cases such as:
+          - Mounting remote system's RAM locally.
+          - Inspecting remote system’s memory content.
+      - Built on the direct mount API.
+        - Integrates with tools:
+          - mkswap
+          - swapon
+          - swapoff
+          - Facilitates Kernel to page out to the mount’s block device.
+            - Code Example:
+              - Create a swap partition on the block device: `exec.Command("mkswap", devPath).CombinedOutput()`
+              - Enable paging to block device: `exec.Command("swapon", devPath).CombinedOutput()`
+              - Stop paging to the block device upon mount stop: `defer exec.Command("swapoff", devPath).CombinedOutput()`
+      - ram-dl has two main commands:
+        - ram-ul:
+          - Exposes RAM.
+          - Utilizes memory, file, or directory-based backend via an fRPC endpoint.
+        - ram-dl connects to the endpoint:
+          - Initiates a direct mount.
+          - Prepares block device for swapping.
+      - System primarily a tech demo:
+        - Not recommended for critical deployments due to latency and throughput limitations.
+        - Showcases the simplicity of r3map API:
+          - Project has fewer than 300 source lines, mostly argument handling and boilerplate.
   - Mapping tape into memory with tapisk
+    - **Overview**
+      - tapisk exposes tape drive as block device.
+      - Similarities with STFS that exposed tape drive as a file system.
+      - Shows how even disparate backends can store and synchronize memory.
+      - Tape drive challenges:
+        - Designed for linear access.
+        - Doesn't support random reads.
+        - High read/write latencies.
+        - r3map’s API allows tape to appear as random-access block device.
+    - **Implementation**
+      - Managed mount API provides background writes/reads.
+      - Faster storage backend like a disk can be a caching layer.
+      - Tapes support only synchronous read/write operations.
+      - Managed mount makes read/write operations asynchronous.
+        - Synchronization system handles writebacks or reads from cache.
+      - Tapes require unique handling compared to block devices.
+        - Use an index to simulate block device offsets with bbolt database.
+        - Uses ArbitraryReadWriter system for non-aligned reads/writes.
+        - Reading a chunk:
+          - Seek to the physical tape record.
+          - Read the chunk from the tape into memory.
+        - Writing a chunk:
+          - Seek to end of tape.
+          - Store the record for the block in the index.
+          - Allows overwriting despite tapes being append-only.
+          - Requires defragmentation for prior chunk iterations.
+    - **Evaluation**
+      - tapisk shows r3map’s technology flexibility.
+      - Allows tape to become a standard ReadWriterAt stage.
+      - Reuses the universal RPC backend.
+        - Gives remote access over libraries like Dudirekta, gRPC, or fRPC.
+      - Mapping tape into memory has several uses:
+        - Direct memory access without reading the entire content.
+        - LTO-9 tapes store up to 18 TB.
+        - Improved developer experience over traditional tools like tar.
+      - tapisk can replace Linear Tape File System (LTFS).
+        - LTFS allows tape mounting.
+        - Formatting tapisk-provided block device with EXT4 or Btrfs also allows tape to be mounted as file system.
+        - Compared to LTFS's kernel-level complexity, tapisk achieves similar results with much less code.
 - Future Use Cases
   - Improving cloud storage clients
+    - **Existing Solutions**
+      - _Mountable Remote File Systems (r3map)_
+        - Offers advantages over current solutions.
+      - _Two Main Approaches to Implementing Cloud Storage Clients_
+        - _File-based Memory Region Synchronization (e.g. Dropbox, Nextcloud)_
+          - Listens to file changes on a folder and synchronizes files when changes are detected.
+          - Drawbacks:
+            - All data to be available must be stored locally.
+            - Can only choose specific data to synchronize locally.
+            - No dynamic file download upon access.
+          - Advantages:
+            - Efficient read and write operations.
+            - Uses system's file system for synchronization.
+            - Offline availability for synced files.
+        - _FUSE-based (e.g. s3fs[29])_
+          - Fetches files on demand.
+          - Drawbacks:
+            - Heavy performance penalty.
+            - Direct network read/write operations.
+            - Highly sensitive to networks with high RTT.
+            - No offline usage.
+            - Difficult to implement features like inotify, symlinks.
+      - Result: Two imperfect solutions for cloud storage client implementation.
+    - **Hybrid Approach (r3map)**
+      - _Benefits_
+        - No need to download files in advance.
+        - Can write back changes asynchronously.
+        - Supports nearly all existing file systems.
+        - Preemptive file download for offline access.
+      - _Managed Mount API_
+        - Format block device using valid file systems (e.g. EXT4).
+        - Mount on the host.
+        - Configure background pull systems for offline access.
+        - Files not yet downloaded can be pulled on-demand.
+        - Faster reads compared to FUSE if chunk is locally available.
+        - Writes are made locally and then synchronized.
+      - _Migration API_
+        - Efficient migration between two hosts.
+      - _Conclusion_
+        - Combines advantages of both main approaches.
+        - Bridges gap between them.
+        - Shows r3map's utility beyond memory regions, including disk synchronization.
   - Universal database, media and asset streaming
+    - **Streaming Access to Remote Databases**
+      - r3map allows accessing remote databases locally.
+      - Particularly useful for file-based databases like SQLite without a wire protocol.
+      - Mount API fetches necessary offsets from remote backends during access.
+      - Reduces transferred data by streaming only what is required.
+      - Caching system:
+        - First read has potential performance impact.
+        - Writes are to the local backend first, then asynchronously to remote backend.
+      - Managed mount API offers standard block device.
+        - No SQLite changes needed.
+        - Database can be stored on a mounted file system.
+    - **Making Arbitrary File Formats Streamable**
+      - r3map allows access to files in non-streamable formats.
+      - Example: MP4, which stores metadata at the file end.
+        - Parameters for metadata require video encoding first.
+        - Existing files often don't support streaming.
+      - r3map's pull heuristic:
+        - Can pre-fetch metadata.
+        - Remaining chunks fetched using the background system or as accessed.
+      - Approach doesn't require media player changes.
+        - Resources can be mounted as a file system for transparent use.
+    - **Streaming App and Game Assets**
+      - Traditional issues:
+        - Games need full downloads before play.
+        - High-budget titles have long download times.
+        - Not all assets are essential for initial gameplay.
+        - Current solutions sensitive to network latency.
+      - r3map's managed mount API:
+        - Reduces overhead.
+        - Doesn't require changes to games or engines.
+      - Benefits:
+        - Reads from pre-pulled chunks nearly as fast as native disk reads.
+        - Pull heuristic function preemptively pulls initially-loaded game assets.
+        - Monitoring callbacks can pause games until certain chunks are available.
+        - Reduces latency spikes and allows faster startup times.
+      - Wider applications:
+        - Concept also useful for launching applications.
+        - Existing interface can be reused to add streaming support to systems.
   - Universal app state mounts and migrations
+    - **Modelling State**
+      - Synchronization of app state is complex, custom protocols often needed
+      - Real-time databases like Firebase have limitations in data storage and synchronization
+      - Manual synchronization process involves:
+        - Marshalling state
+        - Sending over a network
+        - Receiving on destination
+        - Unmarshalling state
+      - Complex synchronization protocol often results in third-party databases for migrations
+      - Using byte array representation, with r3map, can simplify synchronization and migration without custom protocols
+    - **Mounting State**
+      - Using r3map’s mmaped byte slice enables diverse use cases, e.g., backend for a TODO app
+      - Mounting byte slice from remote server via managed mount API
+      - Pluggable authentication, e.g., using ScylllaDB with user prefixes for both authentication and authorization
+      - Preemptive background pull system:
+        - Stream byte slice from server while accessing app
+        - Pull majority of required data using pull heuristic function
+        - Asynchronous writebacks sync changes back to remote
+        - System can survive network outages if local backend is file-based
+    - **Migrating State**
+      - Migration of app state becomes possible
+      - Use case: Continuing a TODO task on desktop from a phone
+        - Direct migration without third-party databases via r3map
+        - Using migration API for this purpose
+        - Optimize migration:
+          - Pre-copy phase for close proximity devices
+          - Benefit from low latencies in LAN migrations
+        - Integrate migration API with system events for pre-shutdown migration
+    - **Migrating Virtual Machines**
+      - Limitations:
+        - Locking not handled by r3map, higher-level protocol needed
+        - In-memory data structure consistency must be maintained across hosts
+        - Language and CPU architecture differences, e.g., Go
+        - Solutions like Apache Arrow offer language and architecture independence but with Firebase-like restrictions
+      - Migrating arbitrary state with cross-architecture compatibility:
+        - Example: TODO app compiled to Wasm
+          - Synchronize the Wasm VM’s linear memory
+          - Store entire app’s state remotely
+          - Concurrent VM startup and device initialization for shorter latencies
+      - Not just for Wasm VMs:
+        - Possible to add to any hypervisor or virtual machine
+        - Suspend/resume and migrate applications like today over WAN with minimal changes to the apps.
 - Conclusion
+  - Multiple ways to access, synchronize, and migrate memory regions:
+    - Different configurations have varying strengths and weaknesses.
+    - Suitability varies based on benchmarks and use cases.
+  - Access methods:
+    - **userfaultfd**:
+      - Idiomatic to Linux and Go.
+      - Low implementation overhead.
+      - Lower throughput in WAN.
+    - **Delta synchronization** for mmaped files:
+      - Simple synchronization for specific scenarios.
+      - Significant I/O and compute overhead (polling and hashing).
+    - **FUSE**:
+      - Extensive API for user-space file systems.
+      - Significant implementation overhead.
+    - **Block device-based direct mounts**:
+      - Suitable for LAN with low latency.
+      - Compelling due to minimal I/O overhead.
+    - **Managed mounts**:
+      - Preferred for WAN environments.
+      - Efficient background push and pull.
+      - Slightly higher I/O than direct mounts.
+    - **Mount and migration APIs**:
+      - Universal method for working with remote memory.
+  - RPC framework and transport:
+    - **fRPC**:
+      - High performance.
+      - Better average throughput.
+    - **gRPC**:
+      - High performance.
+      - Superior developer tooling due to legacy.
+  - Backend choice:
+    - **File backend**:
+      - Suitable for memory migration and synchronization.
+      - Performant and doesn’t consume much host memory.
+    - **Redis**:
+      - Strong throughput for both mount scenarios.
+      - Optimized for concurrency.
+    - **Cassandra & ScyllaDB**:
+      - Suitable for managed mounts.
+      - Provides strong concurrency guarantees.
+  - r3map library:
+    - Efficient access, synchronization, and migration of remote memory over networks.
+    - Demonstrated by:
+      - **ram-dl**: Minimal overhead, shares and mounts remote system memory.
+      - **tapisk**: Maps resources, including linear-access tape drives.
+    - Opens new use cases:
+      - Combines benefits of NBD with cloud storage.
+      - Streams remote databases without architectural changes.
+      - Makes file formats streamable.
+      - Optimizes app and game asset download processes.
+  - Limitations and future research:
+    - **Rust**:
+      - Increase throughput.
+      - Resolve deadlock issues.
+      - Reduce resource use.
+    - Exploring alternatives like **ublk** for user-space block devices.
+  - Overall potential:
+    - Universal access to remote memory.
+    - Configurations for both LAN and WAN.
+    - Enables new application architectures and lifecycles.
 - Thanks
