@@ -1,3 +1,9 @@
+commit 644c30c74fba22cd77a746836e2260c1268ec79b
+Author: Felicitas Pojtinger <felicitas@pojtinger.com>
+Date:   Tue Aug 29 22:06:30 2023 +0200
+
+    docs: Add start of presentation notes
+
 commit 63f8906f45f39f921d90f9d25ec6b18276ff0b82
 Author: Felicitas Pojtinger <felicitas@pojtinger.com>
 Date:   Wed Aug 23 19:04:27 2023 +0200
