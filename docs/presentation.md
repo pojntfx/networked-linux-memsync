@@ -31,34 +31,1339 @@ code-block-font-size: \scriptsize
   - ToC
   - About me
   - Abstract/introduction
+    - **Technological Landscape**
+      - Methods for accessing remote resources:
+        - Databases
+        - Custom APIs
+      - Resource synchronization:
+        - Addressed on a case-by-case basis
+          - Third-party databases
+          - File synchronization services
+          - Bespoke synchronization protocols
+        - Existing solutions
+          - Custom-built per application
+          - Internal resource abstraction typically being a memory region or file.
+      - Resource migration:
+        - Relies on APIs for long-term persistence
+          - Storing in remote database
+    - **Universal Management Concept**
+      - **Current systems for remote memory**:
+        - Serve niche purposes
+          - Example: Virtual machine live migration
+        - Lack a universal, generic API
+          - Designed for compatibility with specific application architectures
+        - Limitations
+          - Diminish developer experience
+          - Act as barriers for adoption
+      - **Proposal**:
+        - Instead of application-specific protocols, manage processes by directly operating on the memory region.
+    - **Thesis Exploration**
+      - Examines alternative strategies for universal remote memory management.
+      - **Review of Current Technologies**:
+        - State of related technology
+      - **Methodology Implementation**:
+        - APIs like userfaultfd and NBD
+        - Discusses challenges and potential optimizations
+        - Outlines a universal API and related wire protocols.
+      - **Performance Assessment**:
+        - Various configurations:
+          - Background push and pull mechanisms
+          - Two-phase protocols
+          - Worker counts
+        - Determination of optimal use cases
+          - Suitability for WAN and LAN deployments
+      - **Introduction of NBD-based Solution**:
+        - Comprehensive, production-ready reference implementation
+        - Covers most real-world application use cases through the r3map (remote mmap) library
+      - **Future Considerations**:
+        - Research opportunities
+        - Possible improvements.
 - Methods
   - Pull-based synchronization with `userfaultfd`/Userfaults in Go with `userfaultfd`
     - Technology section: Memory organization & hierarchy
+      - **Principle of Locality**
+        - Refers to processor's tendency to repeatedly access the same memory locations shortly.
+        - Basis for predictable system behavior.
+        - **Temporal Locality**
+          - Frequent access of data in short time.
+          - Anticipates future access, maintaining data in faster memory.
+        - **Spatial Locality**
+          - Access of data elements in nearby memory locations.
+          - System anticipates and prepares for faster access to nearby locations.
+          - Temporal locality is a specific instance of spatial locality.
+      - **Memory Hierarchy**
+        - Organized structure based on factors: size, speed, cost, proximity to CPU.
+        - Based on the principle of locality.
+        - Data and instructions accessed frequently stored closer to the CPU.
+        - **Registers**
+          - Closest to CPU.
+          - High speed, limited storage.
+          - Used by CPU for operations.
+        - **Cache Memory**
+          - Divided into L1, L2, L3 levels.
+          - L1 is fastest, L3 has more storage.
+          - Acts as buffer for frequently accessed data.
+        - **Main Memory (RAM)**
+          - Larger storage, slower than cache.
+          - Stores running programs and open files.
+        - **Secondary Storage**
+          - Includes SSDs, HDDs.
+          - Slower than RAM but larger storage.
+          - Persistent storage: OS, application binary files.
+        - **Tertiary Storage**
+          - Optical disks, tape.
+          - Slow, cost-effective.
+          - For archiving, transporting data.
+        - Latency differences among hierarchy layers can be significant.
+        - Hierarchy evolves with technology, like NVMe technologies rivaling RAM speeds.
     - Technology section: Page faults
+      - Definition:
+        - Situations where a process tries accessing a page not in primary memory.
+        - Triggers the OS to swap the page from secondary storage to primary memory.
+        - Significant in memory management; affects OS resource efficiency.
+      - Types:
+        - **Minor**
+          - Desired page is in memory but not linked to the necessary process.
+        - **Major**
+          - Page must be loaded from secondary storage.
+          - Consumes more time and resources.
+      - Reducing Page Faults:
+        - Use memory management algorithms:
+          - LRU (Least Recently Used).
+          - Clock algorithm.
+        - Purpose:
+          - Manage memory page order and priority.
+          - Ensure frequently used pages are in primary memory.
+      - Handling Techniques:
+        - **Prefetching**:
+          - Anticipate future page requests.
+          - Proactively load anticipated pages.
+        - **Page Compression**:
+          - Compress inactive pages.
+          - Store them in memory preemptively.
+          - Conserves memory space, reduces major page faults.
+    - Planning
+      - userfaultfd: technology enabling post-copy migration
+        - Memory region created on destination host
+        - When migrated app reads from region, triggers page fault
+          - Page fault resolved by fetching offset from remote
+      - Common page fault handling
+        - Usually handled by kernel
+          - Suitable for loading local resources into memory
+        - Traditionally handled using signal
+          - Registering a SIGSEGV signal handler
+          - Responding to fault within program
+          - Inefficient and complicated
+      - Using userfaultfd for efficiency
+        - Direct registration of page fault handler
+        - No need for intermediate signals
+      - Steps for userfaultfd
+        - Register memory region for fault handling
+        - Start handler in user space
+          - Fetch missing offsets on-demand during a fault
+          - Handler connects via userfaultfd API with file descriptor
+        - Share file descriptor between processes using UNIX socket.
+    - Implementation
+      - Listening to page faults:
+        - Indicates when a process wants to access specific memory offsets not yet available.
+        - Event can be used to:
+          - Fetch memory chunk from remote.
+          - Map it to the faulted offset.
+          - Fetch data only when required.
+        - Instead of signal handlers:
+          - Use userfaultfd system (introduced in Linux 4.3).
+          - Handles faults in user space in an idiomatic way.
+      - **userfaultfd Backends**:
+        - Useful for post-copy migration.
+        - Backend is a simple pull-only reader interface:
+          - ReadAt(p []byte, off int64)(n int, err error).
+        - Any io.ReaderAt can provide chunks to a userfaultfd-registered memory region.
+        - Access to reader:
+          - Guaranteed to be aligned to system's page size (typically 4 KB).
+        - Having this interface:
+          - Requires only read-only access.
+          - Migration backend can be implemented in multiple ways.
+        - Examples of backends:
+          - Can return a pattern to memory region.
+          - Remote file (e.g., stored in S3) can be used.
+            - Uses HTTP range requests.
+            - Fetches only necessary chunks for the application accessing the region.
   - Push-based synchronization with `mmap` and hashing/file-based synchronization, discussion
     - Technology section: `mmap``
+      - Purpose:
+        - Map files or devices into memory
+        - Tasks enabled:
+          - Shared memory
+          - File I/O
+          - Fine-grained memory allocation
+      - Common uses:
+        - Databases
+      - Features:
+        - Direct memory mapping:
+          - Between a file and memory region
+          - Benefits:
+            - Reads from mapped memory equal reading the file and vice versa
+            - Reduces expensive context switches
+        - Zero-copy operations:
+          - Data accessed as if in memory
+          - Eliminates disk-to-memory copying
+          - Benefits:
+            - Time-saving
+            - Reduced processing requirements
+          - Drawbacks:
+            - Bypasses file system cache
+            - Risks:
+              - Stale data with simultaneous reads and writes
+              - Processes might work with outdated data
     - Technology section: Delta synchronization
+      - Allows efficient file synchronization between hosts
+        - Transfers only changed parts of the file
+        - Reduces network and I/O overhead
+      - Notable tool using this method
+        - **rsync**
+          - Open-source data synchronization utility
+      - **Application of Algorithm**
+        - Starts with file block division
+          - File divided into fixed-size blocks on the destination side
+          - For each block:
+            - Quick, weak checksum calculated
+            - Checksums transferred to source system
+        - Source calculates similar checksums
+          - Compares to those from the destination
+            - Identifies matching blocks
+            - Determines changed blocks since last sync
+        - Source sends information to destination:
+          - Offset of each altered block
+          - Data of the changed block
+        - Destination processes the data:
+          - Writes received block to the specified offset in the file
+          - Results in file reconstruction with modifications from source
+        - Process prepares for next synchronization cycle.
+    - Planning
+      - mmap allows:
+        - Mapping a memory region to a file.
+        - Similar utility to userfaultfd in storing state/application for migration.
+        - Region-to-file linkage:
+          - Writes to region reflect on corresponding file.
+          - Useful for pre-copy migration system:
+            - Detect writes.
+            - Copy changes to destination host.
+        - Write behavior:
+          - Writes to mmaped region are cached for faster operations.
+          - Immediate writing to file doesn't happen.
+        - msync syscall:
+          - Flushing changes from cache to backing file.
+          - Similar to sync syscall.
+      - Detection of changes:
+        - Inotify:
+          - Not suitable for mmaped files.
+          - Traditional write events not emitted.
+        - Alternative:
+          - Polling system:
+            - Detects changes.
+            - Drawbacks:
+              - Latency.
+              - Computational load.
+            - Complete workaround isn't possible.
+    - Implementation
+      - Caching Restrictions
+        - Uses **mmap** to map memory region to a file.
+          - By default:
+            - Doesn't write back changes to memory.
+            - Makes the backing file available as a memory region.
+            - Keeps changes in memory, regardless of file's read-only or read-writable status.
+          - Solution:
+            - Linux's **MAP_SHARED** flag.
+              - Instructs kernel to write back changes to memory region to the backing file.
+        - Linux caching for backing file:
+          - Reads cached similarly to using **read**.
+            - Only first page fault results in reading from disk.
+            - Subsequent changes to backing file aren't shown in mmaped region.
+            - Similar to how **userfaultfd** works.
+          - Writes also cached.
+            - Files need to be synced to flush to disk.
+            - mmaped regions need **msync** to flush changes.
+              - Critical for memory use.
+                - Reading without flushing can sync stale data.
+                - Different from traditional file sync.
+                  - Linux file cache gives changes if file is read from disk even without a prior **sync**.
+        - File I/O specifics:
+          - Possible to bypass kernel cache.
+            - Use **O_DIRECT** flag with **open** for direct disk read/write.
+            - **mmap** ignores this flag.
+      - **Detecting File Changes**
+        - Obvious choice:
+          - **inotify** for registering event handlers for write/sync
+          - Issue: Linux doesn’t emit events on mmaped files
+        - Alternative:
+          - Poll for attribute changes (e.g. "Last Modified")
+          - Continuously hash the file to detect changes
+            - Cons:
+              - Increases latency, especially in migration
+              - I/O- and CPU-intensive
+                - To compute hash, entire file must be read
+            - Context: Only option in file-based synchronization
+        - **Speeding up Hashing Process**
+          - Instead of entire file, hash individual file chunks
+            - Implements delta synchronization
+            - Method:
+              - Open file multiple times
+              - Hash individual offsets with each opened file
+              - Aggregate changed chunks
+            - Picking Algorithms:
+              - Consider:
+                - Throughput for hash calculation
+                - Prevalence of hash collisions
+                  - Issue: Different inputs producing same hashes
+            - Advantages:
+              - If algorithm is CPU-bound (not I/O):
+                - Multiple open files can boost concurrent processing
+                - Reduces time in hashing iteration during polling
+                - Dividing file into smaller chunks with their hashes:
+                  - Reduces network traffic for synchronization
+                  - Smaller file change leads to smaller chunk transfer
+        - **Delta Synchronization Protocol**
+          - Similar to rsync, but simplified
+          - Supports synchronizing multiple files simultaneously
+            - Uses file names as IDs
+          - Supports central forwarding hub
+            - No need for peer-to-peer connectivity between all hosts
+            - Reduces network traffic
+              - Central hub forwards one stream to all peers instead of multiple sends
+          - Defines three actors:
+            - Multiplexer
+            - File advertiser
+            - File receiver.
+        - **Multiplexer Hub**
+          - Accepts mTLS connections from peers
+            - Upon connection:
+              - Parses client certificate for common name
+                - Uses common name as synchronization ID
+              - Spawns Goroutine
+                - Allows for more peer connections
+                - Reads peer type
+                  - **src-control**
+                    - Reads file name from connection
+                    - Registers connection as provider of file
+                    - Broadcasts availability of the file
+                  - **dst-control**
+                    - Listens to file broadcasts from src-control peers
+                    - Relays:
+                      - Newly advertised files
+                      - Previously registered file names
+                        - Enables dst-control peers to start receiving them.
+    - Discussion
+      - **Limitations**
+        - Similar to userfaultfd but with different constraints.
+        - Can only catch writes, making it unsuitable for post-copy migration scenarios.
+        - System is write-only.
+        - Inefficient when adding hosts:
+          - All data must be continuously synchronized to potential migration targets.
+      - **Potential Solutions**
+        - Central forwarding hub:
+          - Reduces the amount of data streams required from the current data host.
+          - Introduces drawbacks:
+            - Operational complexity.
+            - Additional latency.
+      - **Considerations**
+        - Despite support for a central forwarding hub:
+          - Suitable for high throughput-constrained networks.
+          - Suboptimal for migration due to write-only nature.
   - Push-based synchronization with FUSE/FUSE implementation in Go, discussion
     - Technology section: FUSE
+      - API that enables creation of custom file systems in user space
+        - Reduces need for low-level kernel development skills
+      - Available on various platforms
+        - Primarily on Linux
+        - Also on macOS and FreeBSD
+      - User space program registers with FUSE kernel module
+        - Provides callbacks for file system operations
+          - **getattr** (get attributes of a file)
+            - E.g. file's size, permissions, access/modification dates
+          - **readdir** (list the files in a directory)
+            - Fills in the entries for that directory
+          - **open** (when a process opens a file)
+            - Checks operation permission and does setup
+          - **read** (read data from a file)
+            - Copies requested data into a buffer
+      - Callbacks added to FUSE operations struct
+        - Passed to fuse_main
+          - Registers operations with FUSE kernel module
+          - Mounts FUSE to a directory
+      - Other callbacks (like handling writes) can be added for a read-write capable FUSE
+      - Kernel module forwards file system operation requests to user space program
+        - User space program returns a response
+        - FUSE kernel module sends response back to user
+        - Allows for simpler implementation outside of the kernel
+          - Increases safety
+            - Errors limited to user space, not kernel space
+      - **Benefits**
+        - **Portability**
+          - Stronger contract between file system and FUSE module
+          - Can ship as plain ELF binary rather than binary kernel module
+        - **Safety**
+          - Prevents kernel crashes due to errors being limited to user space
+        - But has a noticeable performance overhead
+          - Due to context switching between kernel and user space
+      - **Applications**
+        - Mounting high-level external services as file systems
+          - Mount AWS S3 buckets with s3fs
+          - Mount a remote system’s disk via SSH with SSHFS
+    - Planning
+      - Basis for pre- or post-copy live migration.
+      - Alternative to file-based pre-copy:
+        - Uses mmap to map memory region to a file.
+        - Store on custom file system instead of default.
+        - Benefits:
+          - Avoids expensive polling system.
+          - No need for inotify.
+          - Custom file system can:
+            - Catch reads (for post-copy).
+              - Responds with data from remote.
+            - Catch writes (for pre-copy).
+              - Forwards writes to destination.
+            - Handle other kernel operations.
+      - Implementing custom file system in kernel:
+        - Complex task.
+          - Requires custom kernel module.
+          - Uses languages like C or some Rust.
+          - Needs deep kernel knowledge.
+        - Networking needed for synchronization.
+          - Typically handled by user space applications.
+          - Might need a user space component for synchronization.
+      - FUSE API as a solution:
+        - Enables file system creation in user space.
+        - Reduces overall complexity.
+    - Discussion
+      - Allow both pre- and post-copy migration.
+      - Downsides:
+        - Operates in user space:
+          - Relies on context switching.
+          - Adds overhead compared to kernel space implementation.
+        - Lacks some advanced features:
+          - e.g., inotify.
+        - Significant development overhead:
+          - Necessitates custom file system implementation.
+      - Optimal memory synchronization:
+        - Not an entire file system to track reads/writes.
+        - Better to track a single file.
+          - NBD is an existing API for this simpler approach.
+        - FUSE not the best for memory synchronization.
   - Mounts with NBD/NBD with go-nbd
     - Technology section: NBD
+      - Protocol for connecting to remote Linux block device
+        - Communication between user space-provided server and kernel-provided client
+        - Primarily for LAN or localhost, though usable over WAN
+      - Protocol Phases:
+        - Handshake
+        - Transmission
+      - Participants & Procedure:
+        - Multiple participants:
+          - Clients
+          - Server
+          - Export concept
+        - Client establishes connection
+          - Server sends greeting message with server flags
+          - Client sends its flags and chosen export name
+            - Servers can have multiple exports
+          - Server sends export size and metadata
+          - Client acknowledges, completing handshake
+        - Post-handshake communication:
+          - Exchange of commands and replies
+            - Commands: e.g., read, write, flush, contain data like chunks, offsets, lengths
+            - Replies: error messages, success, or data
+      - Limitations & Characteristics:
+        - Maximum message size: 32 MB
+        - Maximum block/chunk size: 4 KB for kernel's NBD client
+        - Not optimal for high latency WAN scenarios
+        - Protocol with long legacy
+          - Implementation overhead: multiple handshake versions, legacy features
+          - Best to implement latest versions and essential features for specific use cases
+      - Comparison & Use Cases:
+        - Limitations compared to FUSE:
+          - Struggles with devices unlike random-access storage, e.g., tape drives
+          - Lacks high-level abstractions: files, directories
+          - No support for shared access to a file by multiple clients
+        - Can be advantageous in specific scenarios:
+          - Memory synchronization
+          - Block-level operation without need for high-level synchronization features
+    - Planning
+      - Mmap-based approach for pre- and post-copy migration
+      - Mmap a block device instead of a file
+        - Block device provisioned through APIs
+          - Notably through NBD
+      - NBD device provided via kernel's NBD client
+        - Connects to a remote NBD server
+          - Hosts the resource as a memory region
+        - Any reads/writes from/to mmaped memory
+          - Handled by NBD device
+            - Forwards to the client
+              - Resolved using remote server
+          - Not a synchronization
+            - Memory isn't copied to destination host
+            - Rather, it's a mount of remote memory using NBD protocol
+      - Benefits of mmaping block device over a file on custom file system
+        - Reduced complexity
+          - For memory synchronization, full file system features aren't all needed
+            - Implementation of NBD server and client, with protocols
+              - Less complex and reduces overall system overhead.
+    - Implementation
+      - **Overview**
+        - Lack of lean NBD libraries for Go led to custom Go NBD library.
+        - Libraries usually only provide server, not client. Both are needed for NBD-/mount-based migration.
+        - Avoids overhead of C interoperability with custom library.
+      - **Server**
+        - Implemented in user space; no kernel components.
+        - Backend interface requires four methods: ReadAt, WriteAt, Size, and Sync.
+        - Backend design supports writes and operations for a complete block device.
+          - Example: file backend with minimal overhead.
+        - go-nbd's Handle function allows serving such a backend.
+        - Independence from a specific transport layer.
+          - Can switch out TCP with other protocols.
+          - Can use P2P communication layers.
+        - Implements the fixed newstyle handshake compliant with protocol.
+          - Server sends negotiation header.
+          - Option negotiation phase uses a loop.
+          - Transmission phase reads headers and handles accordingly.
+      - **Client**
+        - Uses both kernel's NBD client and a user space component.
+        - Handshake negotiated in user space by Go.
+        - Only supports “fixed newstyle” negotiation.
+        - Kernel NBD client is configured with values from server.
+        - Client library can list server exports.
+      - **Client Lifecycle**
+        - DO_IT ioctl remains active until disconnected.
+          - Two methods to detect device readiness: Polling sysfs or using udev.
+        - udev can detect device availability.
+          - Polling may be faster due to udev overheads.
+        - Teardown lifecycle is an asynchronous operation.
+          - Uses three ioctls for disconnection and cleanup.
+      - **Optimizing Access to the Block Device**
+        - Kernel typically caches block device access.
+        - O_DIRECT allows direct writes to the NBD client/server.
+          - Useful for same-host client and server.
+          - Requires aligned reads/writes due to system's page size.
+      - **Combining the NBD Client and Server to a Mount**
+        - Client and server can be started on the same host.
+          - Uses connected UNIX socket pair.
+        - Path-based mount available.
+        - File mount allows simple file access.
+        - Direct slice mount works like file mount but uses mmap.
+          - Manages complexities of mmap regions.
+          - Provides a standard Go slice interface.
+        - Backend can be formatted with a file system.
+          - Useful for multiple memory regions for an application.
+          - Can be done using tools like mkfs.ext4.
   - Push-Pull Synchronization with Mounts/managed mounts with r3map
     - Technology section: RTT, LAN and WAN
+      - **Round-trip time (RTT)**
+        - Time data takes to travel from source to destination and back.
+        - Provides insight into application latency.
+        - Varies due to:
+          - Network type.
+          - System load.
+          - Physical distance.
+      - **Local area networks (LAN)**
+        - Geographically small networks.
+        - Characteristics:
+          - Low RTT.
+          - Low latency due to short distance.
+            - Typically no more than across an office or data center.
+          - Small geographical size and isolation.
+          - Often has perimeter security.
+            - Viewed as a trusted network.
+            - Doesn’t necessarily require:
+              - Authentication.
+              - Encryption between internal systems.
+                - Potentially lower overhead.
+      - **Wide area networks (WAN)**
+        - Typically span large geographical areas.
+          - Example: the internet operates on a planetary scale.
+        - Characteristics:
+          - Higher RTT.
+          - Higher latency.
+            - Due to:
+              - Physical distance.
+              - Number of data hops.
+          - Vulnerabilities:
+            - Wire-tapping.
+            - Packet inspection.
+        - Security measures needed:
+          - Encryption.
+          - Authentication.
+    - Planning
+      - **Overview**
+        - Leverages mmap and NBD for memory region read/write.
+        - Differences from prior mount-NBD approaches.
+        - Common NBD setup:
+          - Server and client on different systems over a network.
+          - NBD designed for low-latency, high-throughput LANs.
+        - Issues with NBD in WAN:
+          - Latency sensitivity.
+          - Solution: add indirection layer.
+            - Client and server both local.
+            - Implemented in r3map library.
+        - Combining NBD server and client:
+          - Allows better WAN protocol connection.
+          - Enables asynchronous background push/pull.
+        - Mount API:
+          - Direct Mount API as simplest form.
+            - Swaps NBD for RPC framework.
+            - Two actors: client and server.
+            - Stateless protocol with simple remote reader/writer interface.
+      - **Chunking**
+        - Importance: better chunking support.
+        - Linux's NBD protocol chunk size limitation: 4 KB.
+          - Need for larger chunk size for higher RTT.
+        - Layer of indirection allows flexible chunking.
+        - Backend requirements:
+          - Specific chunk sizes.
+          - Aligned reads.
+          - Example: tape drives with specific block sizes.
+        - Chunking options:
+          - On mount API's side.
+          - On backend's side.
+            - Preferred to reduce latency in high RTT scenarios.
+        - Backend considerations:
+          - Limit maximum message size.
+          - Prevent DoS attacks with large memory allocations.
+      - **Background Pull and Push**
+        - Pre-copy migration:
+          - Asynchronous preemptive pulls.
+          - Pull priority heuristic for memory access order.
+          - Example: Fetch headers before raw data for faster access.
+        - Post-copy migration:
+          - Asynchronous background push.
+          - Tracks written chunks.
+          - De-duplicates remote writes.
+          - Improves write performance by reducing blockage.
+        - Managed Mount API:
+          - Combines pre- and post-copy paradigms.
+          - Primary use: reading remote resources and eventual syncing.
+          - Different from resource migration between hosts.
+          - For migration: use Migration API for better solutions.
+    - Implementation
+      - **Stages**
+        - Pipeline of readers/writers for chunking system abstraction.
+        - Mount API based on multiple ReadWriterAt stages.
+        - Possible to forward calls directly to NBD backends.
+        - Can chain ReadAt and WriteAt methods.
+      - **Chunking**
+        - ArbitraryReadWriterAt for chunking.
+        - Breaks down large data stream into smaller chunks.
+        - Calculates chunk index and offset.
+        - Reads entire chunk into buffer and copies requested portion.
+        - Writes calculated chunk offset, bypassing system if aligned.
+        - Reads, modifies, and writes entire buffer for partial chunks.
+      - **ChunkedReadWriterAt**
+        - Ensures limits for backend's max chunk size and alignment.
+        - Checks for aligned offsets.
+        - Prevents potential DoS attacks.
+      - **Background Pull**
+        - Puller component pulls chunks asynchronously.
+        - Sorts chunks with pull heuristic.
+        - Fixed number of worker threads pull chunks.
+        - SyncedReadWriterAt reads from remote and writes to local.
+        - Chunks fetched asynchronously or scheduled immediately.
+        - Combines pre-copy and post-copy migration systems.
+      - **Background Push**
+        - Allows writes back to remote source.
+        - Schedules recurring writebacks to remote.
+        - Writes from local to remote ReadWriterAt.
+        - Integrated into SyncedReadWriterAt.
+      - **Pipeline**
+        - Managed mounts have internal pipeline.
+        - Includes pullers, pushers, syncer, backends, and chunking.
+        - Independent stages make system testable.
+        - Can unit-test components and benchmark edge cases.
+      - **Concurrent Device Initialization**
+        - Pull from remote stage before NBD device open.
+        - Reduces initial read latency.
+      - **Device Lifecycles**
+        - Similar interfaces as direct mount API.
+        - Lifecycle of synchronization important.
+        - Hook system for action registration.
+      - **WAN Optimization**
+        - Hybrid pre- and post-copy system.
+        - Optimizations for WAN scenarios.
   - Pull-Based Synchronization with Migrations/Live migration
     - Technology section: Pre- and post-copy VM migration, workload analysis
+      - Definition:
+        - Moving a VM, its state, and connected devices from one host to another.
+        - Goal: Minimize disrupted service and downtime.
+      - Migration Algorithms Types:
+        - **Pre-Copy**:
+          - Characteristics:
+            - "Run-while-copy" nature.
+            - Applicable in generic migration contexts.
+          - Procedure:
+            - Transfer initial VM memory state to destination host.
+            - Track and transfer modified (dirty) data chunks.
+            - Suspend VM at source when few dirty chunks remain.
+            - Synchronize remaining data.
+            - Resume VM at the destination host.
+          - Advantages:
+            - Reliable even during network disruption.
+            - VM is fully available either at source or destination.
+          - Limitations:
+            - Might fail to meet maximum downtime if too much data is changed.
+            - Max downtime is limited by network round-trip time (RTT).
+        - **Post-Copy**:
+          - Characteristics:
+            - Suspends VM operation on source and resumes with minimal data on destination.
+          - Procedure:
+            - If VM accesses missing data, a page fault occurs.
+            - System fetches the missing chunk from source.
+          - Advantages:
+            - Avoids re-transmission of "dirty" data.
+            - Reduces network traffic.
+          - Limitations:
+            - Sensitive to network latency and RTT.
+            - VM not fully available on source or destination during migration.
+        - **Workload Analysis**:
+          - Study of strategies to determine optimal migration timing.
+          - Can be adapted for generic migration implementations.
+          - Methodology:
+            - Identify VM cyclical workload patterns.
+            - Delay migration when beneficial.
+            - Construct model of optimal cycles for migration.
+            - Use Bayesian classifier to distinguish between favorable and unfavorable cycles.
+          - Results:
+            - Up to 74% enhancement in downtime.
+            - 43% reduction in data transfer volume.
+    - Planning
+      - **Overview**
+        - Migration API tracks memory changes using NBD like managed mount API.
+        - Managed mount API optimized for accessing a remote resource, not for migration.
+        - Important metric: maximum acceptable downtime.
+          - Refers to application suspension during synchronization.
+          - Higher values = more noticeable downtime.
+        - Pull-based migration API process in two phases due to:
+          - Managed mount API's single-reader, single-writer constraint.
+          - Migration scenario challenges.
+            - Suspension required before transfer starts.
+            - Destination node starting violates the mount API constraint.
+          - Managed mount API backend doesn't expose a block, but serves as a mountable remote.
+          - Migration API: source and destination are peers, exposing block devices.
+      - **Migration Protocol and Critical Phases**
+        - Defines two new actors: Seeder (resource host) and Leecher (migrating client).
+        - Protocol procedure:
+          - Run application with its state on seeder's block device.
+          - Seeder tracks writes when a leecher connects.
+          - Leecher starts pulling chunks from seeder.
+          - Leecher requests seeder to finalize after receiving enough chunks.
+          - Seeder suspends app, syncs it, and provides a list of changed chunks.
+          - Leecher resumes app on its device, queues dirty chunks for background pull.
+        - Benefits of two-phase migration:
+          - Device starting overhead doesn't affect downtime.
+          - Additional app initialization happens before suspension.
+          - Combines pre-copy (pulling chunks ahead) and post-copy (resolving dirty chunks post-migration) algorithms.
+            - Reduces maximum tolerable downtime.
+            - Prevents re-transmission of dirty chunks.
+          - Downtime reduced to:
+            - Time to sync seeder's app state.
+            - RTT (Round Trip Time).
+            - Time to fetch chunks changed during tracking and finalization.
+          - Migration API utilizes managed mount API's preemptive pull system, but not the background push system.
+        - Finalization phase challenges:
+          - When to start?
+          - Critical and challenging recovery.
+          - Synchronization recovery possible by restarting 'Finalize'.
+          - App suspension required before 'Finalize', might not be repeatable.
+    - Implementation
+      - **Overview**
+        - Pull-Based Synchronization with Migrations indicates the mount API isn't ideal for migration.
+        - Migration divided into two phases to address maximum guaranteed downtime.
+        - Thanks to ReadWriterAts' flexible pipeline system, much of the mount API's code can be reused, even with different API and wire protocols.
+      - **Seeder**
+        - Introduces a new read-only RPC API.
+          - Known ReadAt extended with new RPCs like Sync (returns dirty chunks) and Track (starts new tracking phase).
+        - **SeederRemote structure**
+          - ReadAt, Size, Track, Sync, Close functions defined.
+        - Unlike the remote backend:
+          - Seeder offers a mount using familiar path, file, or slice APIs.
+          - Allows underlying resource access by application on the source host during migration.
+          - Fixes mount API's architectural constraint when used for migration.
+        - **Tracking support**
+          - Implemented similarly to syncer.
+          - Introduces a new stage: TrackingReadWriter.
+          - Activated by Track RPC, it intercepts all WriteAt calls.
+          - Adds intercepted calls to a local map before moving to next stage.
+          - When destination host calls Sync RPC, dirty offsets are returned and map is cleared.
+        - Protocol designed so only the client calls an RPC, making it uni-directional.
+          - This design lets both transport layer and RPC system be interchangeable.
+          - Returns a basic abstract service utility struct from Open, adaptable for any RPC framework.
+      - **Leecher**
+        - Uses the abstract service struct provided by seeder.
+          - As leecher starts, it calls Track() in the background and begins the NBD device.
+          - Aims for a reduction in initial read latency similar to the mount API.
+        - Introduces a new pipeline stage: LockableReadWriterAt.
+          - Blocks all read/write operations until Finalize is called.
+          - Ensures no stale data interferes with kernel's file cache.
+        - **Leecher's process**
+          - Starts the device and establishes a syncer like the mount API.
+          - Uses a callback to monitor pull progress.
+          - Calls Finalize once a satisfactory availability is reported.
+            - Handles critical migration phase.
+            - Remote application consuming the resource is suspended.
+            - Leecher updates the dirty chunks as remote and schedules them for immediate background pull.
+        - **Additional measures**
+          - Lockable ReadWriterAt used to prevent accessing the mount prematurely.
+          - Only Finalize returns the mount, reducing the risk of deadlocks.
+        - Upon reaching 100% availability, leecher:
+          - Calls Close on the seeder.
+          - Disconnects the leecher.
+          - Both are shut down.
+          - Leecher can reuse the mount for future migrations.
 - Optimizations
   - Pluggable Encryption, Authentication and Transport
+    - **r3map vs. Existing Solutions**
+      - Designed for WAN applications.
+      - Other systems are for high-throughput, low-latency LAN.
+      - LAN assumptions about authentication, authorization, and scalability not valid for WAN.
+    - **Encryption Differences**
+      - LAN often assumes trusted environment; WAN can't.
+      - r3map must be functional in both LAN and WAN.
+      - r3map is transport agnostic.
+        - Allows easy addition of encryption based on network type.
+        - Trusted LAN might use SCSI RDMA protocol (SRP).
+        - WAN might opt for protocols like TLS over TCP or QUIC.
+    - **Transport Layer & RPC-Framework Independence**
+      - Transport layer can be swapped out.
+      - r3map supports various RPC frameworks.
+        - Example: Dudirekta for dynamic network topologies.
+        - Can function on P2P protocols like WebRTC data channels.
+        - Useful for scenarios like mobile networks with rotating IPs or intermittent connectivity.
+    - **Authentication and Authorization**
+      - No assumptions made by r3map.
+      - LAN might simply trust the local subnet.
+      - Public deployments could use mTLS certificates or protocols like OIDC.
+      - For high RTT networks:
+        - QUIC offers 0-RTT handshake.
+        - Pairs with mTLS for reduced initial read latency and secure authentication.
   - Concurrent Backends
+    - **Concurrent Backends**
+    - Importance in high-RTT scenarios
+      - Fetch chunks concurrently to avoid latency build-up.
+      - Single read to memory region offset = at least one RTT latency.
+      - Concurrent pulls allow simultaneous pulls for multiple offsets’ chunks.
+    - **Requirements**
+      - Remote backend capability
+        - Read multiple regions without global lock.
+        - Example: File backend has a global lock.
+          - Acquire lock for entire file before accessing an offset.
+          - Shown in func `FileBackend`:
+            - `ReadAt(p []byte , off int64)` function.
+            - `b.lock.RLock()`
+            - `defer b.lock.RUnlock()`
+            - `n, err = b.file.ReadAt(p, off)`
+      - **Potential Bottleneck**
+        - Global locks in high-RTT scenarios.
+    - **Solutions**
+      - **Directory Backend**
+        - Doesn't use a single backing file.
+        - Chunked backend using a directory of files.
+          - Each file represents a chunk.
+          - Allows individual file (chunk) locks.
+          - Speeds up concurrent access.
+        - **Concurrent Writes**
+          - Safely write to different chunks simultaneously.
+          - Each chunk has a separate backing file.
+        - **Backend Management**
+          - Internal map of locks.
+          - Queue to track order of file openings for chunks.
+          - New file creation for first chunk access.
+            - Truncate to one chunk length if initial operation is `ReadAt`.
+        - **File Limit Management**
+          - Use LRU algorithm.
+          - Close an open file if open file limit is exceeded.
   - Remote Stores as Backends
-  - Concurrrent RPC frameworks (dudirekta) and connection pooling (gRPC)
+    - **Overview**
+      - RPC backends for dynamic access to remote backends
+      - Useful for custom resource, authorization, or caching
+      - Remote backend without custom RPC for remote mount
+    - **Key-Value Stores with Redis**
+      - Redis: in-memory key-value store with network access
+      - Mapping chunk offsets to keys
+        - Bytes as a valid key type
+        - Non-existent keys treated as empty chunks
+      - Redis handling locking server-side efficiently
+      - Well-suited for high-throughput deployments
+      - Authentication & authorization using Redis protocol
+      - Hosting multiple memory regions with databases or key prefixes
+    - **Object Stores with S3**
+      - S3 for public internet memory regions
+        - e.g., media assets, large file systems
+      - S3: de facto standard for accessing files over HTTP
+      - S3 backend is chunked
+        - Each S3 object represents one chunk
+        - 404 errors treated as empty chunks, like Redis
+      - Multi-tenancy via multiple S3 buckets or prefix
+    - **Document Databases with ScylllaDB**
+      - NoSQL databases, e.g., Cassandra
+      - ScyllaDB improves on Cassandra's latency
+      - Mapping a database to a memory region
+        - Avoids using a database-specific client
+      - ReadAt & WriteAt implemented through ScyllaDB's DSL
+        - Each row is a chunk with its offset
+        - Non-existent rows treated as empty chunks
+      - Multiple regions supported by different tables or key prefixes
+      - Migrations for table creation similar to SQL
+  - Concurrent RPC frameworks (dudirekta) and connection pooling (gRPC), fRPC
+    - **Concurrent Bidirectional RPCs with Dudirekta**
+      - Plays a crucial role in performance.
+      - Choice of RPC framework and transport protocol affects performance.
+        - Mount and migration APIs are transport-independent.
+          - Almost any RPC framework can be utilized.
+      - Dudirekta:
+        - Developed as part of r3map.
+        - Designed for the hybrid pre-and post-copy scenario.
+        - Features:
+          - Support for concurrent RPCs.
+            - Enables efficient background pulls.
+            - Multiple chunks can be pulled simultaneously.
+          - Allows defining functions on both client and server.
+            - Supports initiating pre-copy migrations.
+            - Transfers chunks from source to destination without destination being dialable.
+          - Provides bidirectional support.
+            - Can pass callbacks and closures as RPC arguments.
+              - Models remote generators with yields.
+              - Reports migration progress on-the-fly.
+            - Uses a single transactional RPC with a return value.
+          - Transport-agnostic nature.
+            - Supports transport protocols like QUIC for WAN deployments.
+              - Reduces initial latency with 0-RTT handshake.
+              - Makes RPC calling less costly.
+          - Bypasses traditional TCP client-server semantics.
+            - Enables P2P migrations over protocols like WebRTC.
+    - **Connection Pooling with gRPC**
+      - Dudirekta as a reference:
+        - Showcases how RPC backends operate.
+        - Faces scalability challenges.
+          - Utilizes a JSONL-based wire format.
+            - Simple and analyzable but slow to serialize.
+        - Bidirectional RPCs bring costs.
+          - Hampers effective connection pooling.
+            - Multiple client connections can't be referenced as one.
+      - Possible solutions:
+        - Implement future pooling mechanism based on client ID.
+        - Bidirectional RPCs can be avoided.
+          - Implement pull-based pre-copy solution.
+            - Destination host monitors pull progress.
+            - Unary RPC support becomes the sole RPC framework requirement.
+    - **fRPC**
+      - Areas of improvement for gRPC:
+      - Protocol buffers
+        - Faster than JSON but has issues with:
+          - Encoding large chunks of data
+          - Becoming a bottleneck with large chunk sizes
+          - Example: Figure 7 illustrates remote calls/second for 1 MB data with fRPC and gRPC
+      - Improvements:
+        - Uses faster Polyglot[42] library for serialization
+        - Uses a custom transport layer
+      - Features:
+        - Utilizes proto3 DSL
+        - Uses the same code generation framework as gRPC
+          - Easy transition by re-generating code from DSL
+        - fRPC adapter functions similarly to gRPC adapter.
 - Discussion and Results
   - Testing Environment
-  - Access methods (userfaults vs. direct vs. managed mounts): Latency & Throughput, discussion
+    - **Test Machine Specifications**
+      - Device Model: Dell XPS 9320
+      - OS: Fedora release 38 (Thirty Eight) x86_64
+      - Kernel: 6.3.11-200.fc38.x86_64
+      - CPU: 12th Gen Intel i7-1280P (20) @ 4.700GHz
+      - Memory: 31687MiB LPDDR5, 6400 MT/s
+    - **Benchmark Consistency**
+      - Scripts and configuration for reproducibility found in accompanying repository[64]
+      - Multiple runs conducted for each benchmark to ensure consistency.
+  - Access methods (userfaults vs. direct vs. managed mounts):
+    - Results: Latency & Throughput
+      - **Access Methods**
+        - **Latency**
+          - Average first chunk latency comparison for various access methods.
+            - Disk and memory outperform others.
+            - Network-capable methods like userfaultfd, direct mounts, managed mounts have higher latencies.
+            - userfaultfd is 15x slower than disk.
+            - direct mounts and managed mounts 28x and 40x slower than disk respectively.
+            - All latencies below 200 µs.
+          - Latency distribution for network-capable methods.
+            - Managed mount shows smallest spread with significant outliers up to 1 ms.
+            - Direct mounts have higher spread but fewer outliers.
+            - userfaultfd's latency advantage evident.
+          - Latency with increased RTT.
+            - With 0ms RTT, backends connected directly.
+            - Increasing RTT impacts backend behavior differently.
+            - Managed mounts show significant performance advantages with varied RTTs.
+          - Effect of worker counts on latency for managed mounts.
+            - Zero workers show almost linear latency growth.
+            - 1+ workers initially spike in latency then decrease.
+        - **Read Throughput**
+          - Average throughput comparison for various access methods.
+            - Direct memory access fastest at 20 GB/s.
+            - Direct mounts (2.8 GB/s) and managed mounts (2.4 GB/s) follow.
+            - Disk at 2.3 GB/s and userfaultfd lowest at 450 MB/s.
+          - Throughput for network-capable methods.
+            - userfaultfd falls behind both mount types.
+          - Throughput distribution.
+            - userfaultfd has lowest spread.
+            - Managed mounts highest spread.
+            - Direct mounts' median throughput notably high.
+          - Throughput with increased RTT.
+            - Varied RTT affects methods differently.
+            - Managed mounts maintain decent throughput even at high RTTs.
+          - Effects of worker counts on throughput.
+            - Higher worker counts generally increase throughput.
+            - 16384 workers maintain over 1 GB/s throughput at 30ms latency.
+        - **Write Throughput**
+          - Comparison for direct and managed mounts with varied RTTs.
+            - Benchmark utilizes O_DIRECT causing overhead but no sync/msync step required.
+            - Managed mounts excel in write performance as RTT increases.
+            - Direct mounts drop drastically, while managed mounts stay above 230 MB/s regardless of RTT.
+            - userfaultfd not measured due to its limitations.
+    - Discussion for userfaults
+      - Simple method to map objects into memory
+        - Benefits:
+          - Simple approach
+          - Lower first chunk latency than direct and managed mounts at 0 ms RTT
+          - Predictable throughput and latency compared to NBD-based solutions
+        - Drawbacks:
+          - Architecture-related problems
+          - Can only catch page faults
+            - Handles data request only for first memory access
+            - Future requests from handled regions return from RAM
+            - Cannot handle:
+              - Remote resources updating over time
+              - Concurrent writers or shared resources
+          - Suited mainly for read-only mounts, not synchronization
+            - Unsuitable for:
+              - Accessing resources that update
+              - Situations with concurrent writers or shared resources
+          - Doesn’t support pulling chunks before access without indirection
+          - userfaultfd API socket characteristics:
+            - Synchronous operation
+              - Vulnerable to high RTT scenarios
+              - Initial read latency equal to backend RTT
+            - Latency increases linearly with RTT
+              - Due to synchronous socket and no background data pull
+            - Poor performance for high RTT deployments
+              - Low throughput makes it unsuitable
+        - Overall assessment:
+          - Interesting for Go and Linux
+          - Not optimal for:
+            - Large datasets
+            - High-RTT networks, e.g., WAN
+          - Alternative solutions generally preferable in many cases.
+    - Discussion for direct mounts
+      - High spread in first chunk latency at 0 ms RTT
+        - Refer to figure 9
+      - More predictable throughput
+        - Refer to figure 14
+      - First chunk latency grows linearly with increasing RTT
+        - Similar drawbacks to userfaultfd
+        - Due to lack of preemptive pulls
+        - Refer to figure 10
+      - Highest throughput at 0 ms RTT
+        - Higher than managed mounts
+        - Due to less expensive internal I/O operations
+          - Lack of pull system contributes to this
+        - Refer to figure 12
+      - Read throughput
+        - Doesn’t drop as quickly with increasing RTT when compared to userfaultfd
+        - Refer to figure 15
+      - Write speed
+        - Heavily influenced by RTT
+        - Writes must be written to remote as they occur
+          - No background push system present
+        - Refer to figure 17
+      - Suitable choice when
+        - Internal overhead of using managed mounts > overhead for direct mounts due to RTT
+        - Especially relevant in LAN or very low-latency environments.
+    - Discussion for managed mounts
+      - Internal overhead due to duplicate I/O for background pull and push
+        - Worse throughput for low RTT compared to direct mounts
+          - Especially at 0 ms RTT (refer figure 12)
+        - Higher first chunk latencies (refer figure 8)
+      - Overhead becomes negligible when RTT typical for WAN environment
+        - Benefits from background push and pull outweigh cons (refer figure 10 and 15)
+      - Adjusting background workers improves performance
+        - Data fetched in parallel boosts managed mounts (refer figure 11 and 16)
+      - Pull priority function optimizes pulls
+      - Preemptive pulls reduce initial chunk latency
+        - Data pulled before device availability
+        - Higher worker counts help (refer figure 19)
+        - Prefer polling over udev-method reduces device Open() time (refer figure 18)
+          - Reduces initial overhead for remote resource access
+      - Write throughput higher for managed than direct mounts
+        - Due to background push (refer figure 17)
+          - Writes first to faster local backend, then asynchronously to remote
+          - Results in faster write speeds
+      - Preferred for WAN environments
+        - High RTT balances out internal overhead of background systems I/O operations.
   - Initialization: Polling vs. udev
+    - Results
+      - udev vs. polling in initialization
+        - Kernel density estimation for distribution of direct mount initialization time
+          - Figure 18: Polling vs. udev
+          - Detection methods for NBD device readiness:
+            - Polling
+            - Subscribing to udev events
+          - Average initialization time comparison:
+            - udev higher than polling
+      - Preemptive data pulling during device initialization
+        - Figure 19: Data amount for managed mounts (0-4096 workers) by RTT
+        - Importance of worker count in pulling data
+          - Higher worker count = more data pulled
+          - Data pulled stats by worker count:
+            - 4096 workers: 40 MB at 7 ms RTT
+            - 2048 workers: 20 MB
+            - 512 workers: 5 MB
+            - Decreases with lower worker counts
+          - More background pull workers result in more data, even at 0 ms RTT.
   - Chunking methods: Local vs. remote
-  - RPC frameworks; discussion
+    - Results
+      - **Figure 20: Throughput for Server-side and Client-side Chunking, Direct and Managed Mounts by RTT**
+        - Chunking can be on client-side or server-side for both direct and managed mounts
+        - Managed mounts have higher throughput unless RTT is 0 ms
+      - **Figure 21: Throughput for Server-side and Client-side Chunking with Direct Mounts by RTT**
+        - Direct mounts with server-side chunking:
+          - 500 MB/s at 0 ms RTT
+          - 75 MB/s at 1 ms RTT
+          - 40 MB/s at 2 ms RTT
+          - Over 5 MB/s at 20 ms RTT
+        - Direct mounts with client-side chunking:
+          - 30 MB/s at 0 ms RTT
+          - Decreases steadily to 4.5 MB/s at 20 ms RTT
+      - **Figure 22: Throughput for Server-side and Client-side Chunking with Managed Mounts by RTT**
+        - Managed mounts have different throughput compared to direct mounts
+        - Throughput decreases less drastically as RTT increases
+        - Server-side chunking with managed mounts:
+          - 450 MB/s at 0 ms RTT
+          - Decreases to 300 MB/s at 20 ms RTT
+        - Client-side chunking with managed mounts:
+          - 230 MB/s at 0 ms RTT
+          - Decreases to 240 MB/s at 20 ms RTT for direct mounts.
+    - Discussion
+      - **General Preference**
+        - Server-side chunking preferred due to:
+          - Superior throughput to client-side chunking (refer figure 20)
+      - **Direct Mounts**
+        - Characteristics:
+          - Linear/synchronous access pattern
+          - Low throughput for both server- and client-side chunking with increasing RTT
+        - However:
+          - Server-side chunking still outperforms client-side with linear access (refer figure 21)
+      - **Managed Mounts**
+        - Client-side chunking:
+          - Can reduce throughput by half compared to server-side (refer figure 22)
+      - **Data Chunks vs NBD Block Size**
+        - If data chunks smaller than NBD block size:
+          - Reduces number of chunks fetched with same worker count
+        - Server-side chunking advantage:
+          - No need for extra client-side worker for additional chunks
+          - Allows background pull system to fetch more, increasing throughput.
+  - RPC frameworks
+    - Results
+      - **Performance Overview**
+        - Decrease in throughput as RTT increases
+        - Direct mounts have drastic drop with increased RTT compared to managed mounts
+        - Dudirekta consistently has lower throughput than gRPC and fRPC
+      - **Figure 23: Average throughput by RTT for Dudirekta, gRPC, and fRPC**
+        - **Direct vs Managed Mounts**
+          - 0 ms RTT: Best throughput with direct mounts
+          - Dudirekta's throughput is significantly lower
+      - **Figure 24: Average throughput by RTT for Dudirekta, gRPC, and fRPC**
+        - **Direct Mounts Specifics**
+          - 0 ms RTT:
+            - fRPC: 390 MB/s
+            - gRPC: 500 MB/s
+            - Dudirekta: 50 MB/s
+          - 2 ms RTT:
+            - Both fRPC and gRPC drop to 40 MB/s
+            - Dudirekta drops to 20 MB/s
+          - 14 ms RTT: All frameworks at 7 MB/s
+          - 40 ms RTT: All frameworks at 3 MB/s
+      - **Figure 25: Average throughput by RTT for Dudirekta, gRPC, and fRPC**
+        - **Managed Mounts Specifics**
+          - Dudirekta consistent at an average of 45 MB/s; no drop with increased RTT
+          - 0 ms RTT:
+            - gRPC: 395 MB/s
+            - fRPC: 250 MB/s
+          - 2 ms RTT onwards: fRPC has higher throughput
+            - fRPC maintains above 300 MB/s up to 25 ms RTT
+            - gRPC drops below 300 MB/s post 14 ms RTT
+          - 40 ms RTT: Difference narrows down, with fRPC at 50 MB/s post 28 ms RTT.
+    - Discussion
+    - **Dudirekta**
+      - Lower throughput than alternatives
+        - Refer to figure 23
+      - Better for managed mounts than direct mounts
+        - Supports concurrent RPCs
+        - Less sensitive to RTT than gRPC and fRPC for managed mounts
+          - However, still has lower throughput (see figure 25)
+          - Lack of connection pooling
+      - Benefits
+        - Suitable for prototyping
+          - Reduced developer overhead
+          - Bidirectional RPC support
+          - Transport layer independence
+    - **gRPC**
+      - Faster throughput than Dudirekta
+        - For both managed and direct mounts (see figure 23)
+      - Advantages
+        - Supports connection pooling
+          - More efficient chunk pulling concurrently (see figure 25)
+        - Good throughput for 0 ms RTT scenarios
+        - Industry standard
+          - Comes with good tooling
+          - Known scalability characteristics
+    - **fRPC**
+      - Improves on gRPC's throughput
+        - Due to internal optimizations
+      - Faster than Dudirekta
+        - For both direct and managed mounts (see figure 23)
+        - Due to support for connection pooling
+      - Compared to gRPC and Protocol Buffers
+        - A more lean stack
+        - Simpler and more maintainable
+      - Drawbacks
+        - Less commonly used
+          - Less enterprise testing
+          - Limited tooling
+          - More performant but less proven option.
   - Backends: Latency & throughput; discussion
+    - Results: Latency & Throughput
+      - **Latency**
+        - Average first chunk latency across various backends.
+          - Differences observed among backends.
+            - Memory, file, and directory backends: Minimal overhead.
+            - Network-capable backends: Higher latency.
+              - Redis: Slightly higher than file backend.
+              - S3 & Cassandra: Significant average read latencies, especially Cassandra.
+        - Latency distribution differences.
+          - Minimal spread: Memory, directory, S3.
+          - Redis: Less spread than file backend.
+          - Cassandra: Largest spread, high median latency.
+      - **Throughput**
+        - Average throughput across various backends.
+          - Backends vary more in throughput than latency.
+            - High consistent throughput: File and memory backends.
+              - Direct mounts: File throughput (2081 MB/s) > Memory throughput (1630 MB/s).
+              - Managed mounts: File throughput (2372 MB/s) < Memory throughput (2178 MB/s).
+            - Vast throughput differences: ScylllaDB and other network-capable backends.
+              - Managed mount for ScylllaDB: Almost 700 MB/s.
+              - Direct mount for ScylllaDB: Only 3 MB/s.
+              - Direct mounts (general): About 3.5 times slower than managed mounts.
+        - Throughput of network-capable direct mounts.
+          - Redis: 114 MB/s.
+          - ScylllaDB: 3 MB/s.
+          - S3: 8 MB/s.
+        - Throughput distribution for direct mounts.
+          - Drastic difference between Redis and others.
+          - Redis: Larger spread but also noticeably higher throughput.
+        - Managed mounts average throughput.
+          - ScylllaDB: 689 MB/s.
+          - Redis: 439 MB/s.
+          - S3: 44 MB/s.
+        - Throughput distribution for managed mounts.
+          - ScylllaDB: High spread, highest throughput.
+          - Redis: Lowest spread.
+          - S3: Consistently lower throughput with average spread.
+        - Average throughput for direct mounts by RTT.
+          - All backends drop as RTT increases.
+            - Memory and file: Above 1.4 GB/s at 0 ms RTT.
+            - Redis (network-capable): 140 MB/s.
+            - Directory backend: Lower than Redis.
+            - All others: Below 15 MB/s at 0 ms RTT and trending to below 3 MB/s at 40 ms RTT.
+        - Network-capable backends direct mount throughput by RTT.
+          - All generally trend towards low throughput performance as RTT increases.
+        - Managed mounts average throughput by RTT.
+          - Memory and file: Over 2.5 GB/s.
+          - Closest network-capable tech: 660 MB/s at 0 ms RTT.
+          - Notable drops for memory and file after 2 ms RTT.
+          - Directory and S3: Only 55 MB/s at 40 ms RTT.
+        - Network-capable backends for managed mounts by RTT.
+          - Redis & ScylllaDB start between 550-660 MB/s at 0 ms RTT, dropping after 6 ms.
+    - Discussion
+      - **Redis**
+        - Lowest initial chunk latency for network-capable backend at 0ms RTT
+          - Refer: figure 26
+        - For direct mounts:
+          - Lower throughput than managed mounts
+            - Refer: figure 28
+          - Highest throughput by a significant margin
+            - Optimized wire protocol
+            - Fast key lookups
+            - Refer: figure 29
+        - Good throughput in managed mounts due to optimizations
+          - Refer: figure 31
+        - Suitable for:
+          - Ephemeral data (e.g. caches)
+          - Quick access times
+          - Direct mount API (e.g. in LAN deployments)
+      - **ScylllaDB**
+        - Highest throughput for 0ms RTT deployments for managed mounts
+          - Great concurrent access performance
+          - Refer: figure 31
+        - Direct mounts:
+          - Worse performance than other backends
+            - High read latency overhead for chunk lookup
+            - Refer: figure 29 & 27
+        - For increased RTT in managed mounts:
+          - Slightly lower performance than Redis
+            - Refer: figure 35
+        - Use cases:
+          - Good: Accessing data concurrently by the managed mounts background pull system
+          - Bad: Chunks accessed outside due to low direct mount throughput
+          - Beneficial: Storing persistent data with configurable consistency (more dependable than Redis or S3)
+      - **S3**
+        - Lowest throughput among network-capable backends for managed mounts
+          - Refer: figure 31
+        - Consistent low performance even as RTT increases
+          - Possibly due to multiple HTTP requests for retrieving chunks
+          - Refer: figure 35
+        - Better than ScylllaDB for direct mounts
+          - Refer: figure 29
+        - Suitable for:
+          - Architectural constraints
+          - High likelihood of chunks being read outside the managed mounts background pull system
+            - Compared to Cassandra with lower throughput.
   - General limitations of the r3map library (deadlocks etc.)
+    - **Mount APIs Issues and Workarounds**
+      - Implemented in Go
+        - Performance and usability concerns
+        - Go's challenges:
+          - Garbage collected language
+          - Activity in garbage collector can halt Goroutines
+          - Issues when:
+            - Using mmap API for managed or direct mounts
+            - Garbage collector manages an object referencing the exposed slice
+            - Releasing memory while copying data from the NBD device
+            - Accessing the slice can halt the NBD server Goroutine, causing deadlock
+      - Solutions:
+        - Lock mmaped region in memory
+          - Fetches all chunks from the remote, increasing Open() latency
+        - Recommended:
+          - Start NBD server in separate process
+            - Prevents garbage collector from halting NBD server and slice access simultaneously
+        - Alternative:
+          - Use non-garbage collected language (e.g., Rust)
+            - Prevents deadlock from occurring
+    - **NBD and Performance**
+      - NBD (Network Block Device)
+        - Underlying tech and protocol for mount API
+        - Comparatively performant
+        - Not as efficient as raw memory access
+      - **ublk[65] as a Potential Solution**
+        - Can improve concurrent access speeds
+        - Architecture:
+          - Similar to NBD
+          - User space server provides block device backend
+          - Kernel ublk driver creates /dev/ublkb\* block devices
+            - Analogous to /dev/nbd\* by NBD
+        - Current status:
+          - Documentation on this emerging kernel tech is limited
+          - NBD remains the standard for creating block devices in user space
 - Implemented Use Cases
   - Using mounts for remote swap with `ram-dl`
   - Mapping tape into memory with tapisk
