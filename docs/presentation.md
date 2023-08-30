@@ -26,12 +26,20 @@ code-block-font-size: \scriptsize
 
 # Efficient Synchronization of Linux Memory Regions over a Network (Presentation Notes)
 
+```plaintext
 - Introduction
   - Title slide
   - ToC
+    - Introduction
+    - Methods
+    - Optimizations
+    - Results and Discussion
+    - Implemented Use Cases
+    - Future Use Cases
+    - Conclusion
   - About me
   - Abstract/introduction
-    - **Technological Landscape**
+    - **Technological Landscape Today**
       - Methods for accessing remote resources:
         - Databases
         - Custom APIs
@@ -57,7 +65,7 @@ code-block-font-size: \scriptsize
           - Act as barriers for adoption
       - **Proposal**:
         - Instead of application-specific protocols, manage processes by directly operating on the memory region.
-    - **Thesis Exploration**
+    - **What I did in my thesis**
       - Examines alternative strategies for universal remote memory management.
       - **Review of Current Technologies**:
         - State of related technology
@@ -175,8 +183,7 @@ code-block-font-size: \scriptsize
           - Handles faults in user space in an idiomatic way.
       - **userfaultfd Backends**:
         - Useful for post-copy migration.
-        - Backend is a simple pull-only reader interface:
-          - ReadAt(p []byte, off int64)(n int, err error).
+        - Backend is a simple pull-only reader interface
         - Any io.ReaderAt can provide chunks to a userfaultfd-registered memory region.
         - Access to reader:
           - Guaranteed to be aligned to system's page size (typically 4 KB).
@@ -303,55 +310,55 @@ code-block-font-size: \scriptsize
               - I/O- and CPU-intensive
                 - To compute hash, entire file must be read
             - Context: Only option in file-based synchronization
-        - **Speeding up Hashing Process**
-          - Instead of entire file, hash individual file chunks
-            - Implements delta synchronization
-            - Method:
-              - Open file multiple times
-              - Hash individual offsets with each opened file
-              - Aggregate changed chunks
-            - Picking Algorithms:
-              - Consider:
-                - Throughput for hash calculation
-                - Prevalence of hash collisions
-                  - Issue: Different inputs producing same hashes
-            - Advantages:
-              - If algorithm is CPU-bound (not I/O):
-                - Multiple open files can boost concurrent processing
-                - Reduces time in hashing iteration during polling
-                - Dividing file into smaller chunks with their hashes:
-                  - Reduces network traffic for synchronization
-                  - Smaller file change leads to smaller chunk transfer
-        - **Delta Synchronization Protocol**
-          - Similar to rsync, but simplified
-          - Supports synchronizing multiple files simultaneously
-            - Uses file names as IDs
-          - Supports central forwarding hub
-            - No need for peer-to-peer connectivity between all hosts
-            - Reduces network traffic
-              - Central hub forwards one stream to all peers instead of multiple sends
-          - Defines three actors:
-            - Multiplexer
-            - File advertiser
-            - File receiver.
-        - **Multiplexer Hub**
-          - Accepts mTLS connections from peers
-            - Upon connection:
-              - Parses client certificate for common name
-                - Uses common name as synchronization ID
-              - Spawns Goroutine
-                - Allows for more peer connections
-                - Reads peer type
-                  - **src-control**
-                    - Reads file name from connection
-                    - Registers connection as provider of file
-                    - Broadcasts availability of the file
-                  - **dst-control**
-                    - Listens to file broadcasts from src-control peers
-                    - Relays:
-                      - Newly advertised files
-                      - Previously registered file names
-                        - Enables dst-control peers to start receiving them.
+      - **Speeding up Hashing Process**
+        - Instead of entire file, hash individual file chunks
+          - Implements delta synchronization
+          - Method:
+            - Open file multiple times
+            - Hash individual offsets with each opened file
+            - Aggregate changed chunks
+          - Picking Algorithms:
+            - Consider:
+              - Throughput for hash calculation
+              - Prevalence of hash collisions
+                - Issue: Different inputs producing same hashes
+          - Advantages:
+            - If algorithm is CPU-bound (not I/O):
+              - Multiple open files can boost concurrent processing
+              - Reduces time in hashing iteration during polling
+              - Dividing file into smaller chunks with their hashes:
+                - Reduces network traffic for synchronization
+                - Smaller file change leads to smaller chunk transfer
+      - **Delta Synchronization Protocol**
+        - Similar to rsync, but simplified
+        - Supports synchronizing multiple files simultaneously
+          - Uses file names as IDs
+        - Supports central forwarding hub
+          - No need for peer-to-peer connectivity between all hosts
+          - Reduces network traffic
+            - Central hub forwards one stream to all peers instead of multiple sends
+        - Defines three actors:
+          - Multiplexer
+          - File advertiser
+          - File receiver.
+      - **Multiplexer Hub**
+        - Accepts mTLS connections from peers
+          - Upon connection:
+            - Parses client certificate for common name
+              - Uses common name as synchronization ID
+            - Spawns Goroutine
+              - Allows for more peer connections
+              - Reads peer type
+                - **src-control**
+                  - Reads file name from connection
+                  - Registers connection as provider of file
+                  - Broadcasts availability of the file
+                - **dst-control**
+                  - Listens to file broadcasts from src-control peers
+                  - Relays:
+                    - Newly advertised files
+                    - Previously registered file names
+                      - Enables dst-control peers to start receiving them.
     - Discussion
       - **Limitations**
         - Similar to userfaultfd but with different constraints.
@@ -683,9 +690,6 @@ code-block-font-size: \scriptsize
         - Similar interfaces as direct mount API.
         - Lifecycle of synchronization important.
         - Hook system for action registration.
-      - **WAN Optimization**
-        - Hybrid pre- and post-copy system.
-        - Optimizations for WAN scenarios.
   - Pull-Based Synchronization with Migrations/Live migration
     - Technology section: Pre- and post-copy VM migration, workload analysis
       - Definition:
@@ -966,7 +970,7 @@ code-block-font-size: \scriptsize
         - Uses the same code generation framework as gRPC
           - Easy transition by re-generating code from DSL
         - fRPC adapter functions similarly to gRPC adapter.
-- Discussion and Results
+- Results and Discussion
   - Testing Environment
     - **Test Machine Specifications**
       - Device Model: Dell XPS 9320
@@ -1328,42 +1332,6 @@ code-block-font-size: \scriptsize
           - Architectural constraints
           - High likelihood of chunks being read outside the managed mounts background pull system
             - Compared to Cassandra with lower throughput.
-  - General limitations of the r3map library (deadlocks etc.)
-    - **Mount APIs Issues and Workarounds**
-      - Implemented in Go
-        - Performance and usability concerns
-        - Go's challenges:
-          - Garbage collected language
-          - Activity in garbage collector can halt Goroutines
-          - Issues when:
-            - Using mmap API for managed or direct mounts
-            - Garbage collector manages an object referencing the exposed slice
-            - Releasing memory while copying data from the NBD device
-            - Accessing the slice can halt the NBD server Goroutine, causing deadlock
-      - Solutions:
-        - Lock mmaped region in memory
-          - Fetches all chunks from the remote, increasing Open() latency
-        - Recommended:
-          - Start NBD server in separate process
-            - Prevents garbage collector from halting NBD server and slice access simultaneously
-        - Alternative:
-          - Use non-garbage collected language (e.g., Rust)
-            - Prevents deadlock from occurring
-    - **NBD and Performance**
-      - NBD (Network Block Device)
-        - Underlying tech and protocol for mount API
-        - Comparatively performant
-        - Not as efficient as raw memory access
-      - **ublk[65] as a Potential Solution**
-        - Can improve concurrent access speeds
-        - Architecture:
-          - Similar to NBD
-          - User space server provides block device backend
-          - Kernel ublk driver creates /dev/ublkb\* block devices
-            - Analogous to /dev/nbd\* by NBD
-        - Current status:
-          - Documentation on this emerging kernel tech is limited
-          - NBD remains the standard for creating block devices in user space
 - Implemented Use Cases
   - Using mounts for remote swap with `ram-dl`
     - **Using Mounts for Remote Swap with ram-dl**
@@ -1622,3 +1590,4 @@ code-block-font-size: \scriptsize
     - Configurations for both LAN and WAN.
     - Enables new application architectures and lifecycles.
 - Thanks
+```
