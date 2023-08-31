@@ -1,3 +1,27 @@
+commit 3544159371e830b595bad0cba4749331d477a498
+Author: Felicitas Pojtinger <felicitas@pojtinger.com>
+Date:   Thu Aug 31 19:07:01 2023 +0200
+
+    refactor: Make Presentation notes pseudo-yaml
+
+commit 418a3cb7d20f632663ccdad53a5c3f06fb574d40
+Author: Felicitas Pojtinger <felicitas@pojtinger.com>
+Date:   Wed Aug 30 02:11:01 2023 +0200
+
+    docs: Drop things marked as unnecessary in presentation, add static presentation
+
+commit 6c5c1beafc3e03f2723d9b087560aca7c78d4acb
+Author: Felicitas Pojtinger <felicitas@pojtinger.com>
+Date:   Wed Aug 30 00:06:53 2023 +0200
+
+    docs: Add notes for the remaining sections
+
+commit a0cd4e664c5b1f09aea2efb90ce07e70b61a1fe5
+Author: Felicitas Pojtinger <felicitas@pojtinger.com>
+Date:   Tue Aug 29 23:58:34 2023 +0200
+
+    docs: Add rough presentation notes up to usecases
+
 commit 644c30c74fba22cd77a746836e2260c1268ec79b
 Author: Felicitas Pojtinger <felicitas@pojtinger.com>
 Date:   Tue Aug 29 22:06:30 2023 +0200
