@@ -383,6 +383,10 @@ nanosecond for registers to multiple milliseconds for an HDD:
 highest latency, registers, cache, main memory, CXL memory,
 network-attached memory, SSDs and HDDs [12]]
 
+Latencies for different memory technologies showing, from lowest to
+highest latency, registers, cache, main memory, CXL memory,
+network-attached memory, SSDs and HDDs [12]
+
 The memory hierarchy is not static but evolves with technological
 advancements, leading to some blurring of these distinct layers. For
 instance, Non-Volatile Memory Express (NVMe) storage technologies can
@@ -665,6 +669,10 @@ synchronization utility.
 operations done for server and client in a single synchronization
 cycle[25]]
 
+Design flow chart of WebRsync, showing the messages sent between and
+operations done for server and client in a single synchronization
+cycle[25]
+
 While there are many applications of such an algorithm, it typically
 starts with file block division, dividing the file on the destination
 side into fixed-size blocks. For each of these blocks, a quick albeit
@@ -745,6 +753,10 @@ limited to user instead of kernel space:
 by the C library and the FUSE library as well as the kernel components
 such as the Linux VFS and the FUSE kernel module[27]]
 
+Structural diagram of FUSE, showing the user space components handled by
+the C library and the FUSE library as well as the kernel components such
+as the Linux VFS and the FUSE kernel module[27]
+
 Another benefit of a file system implemented as a FUSE is its inherent
 portability. Unlike a file system created as a kernel module, its
 interaction with the FUSE module rather than the kernel itself creates a
@@ -771,6 +783,9 @@ is divided into two phases: the handshake and the transmission[31]:
 
 [Sequence diagram of the baseline NBD protocol (simplified), showing the
 handshake, transmission and disconnect phases]
+
+Sequence diagram of the baseline NBD protocol (simplified), showing the
+handshake, transmission and disconnect phases
 
 The NBD protocol involves multiple participants: One or several clients,
 a server, and the concept of an export. It starts with a client
@@ -1104,6 +1119,10 @@ contention and enhance performance.
 different load levels and different versions of Cassandra and
 ScyllaDB[48]]
 
+90- and 99-percentile latency measurements of UPDATE queries for
+different load levels and different versions of Cassandra and
+ScyllaDB[48]
+
 ScyllaDB is engineered to address one particular shortcoming of
 Cassandra: Latency, specifically the 99th percentile latency that
 impacts system reliability and predictability. ScyllaDB’s design
@@ -1390,6 +1409,10 @@ to be pulled in the background.
 [Sequence diagram of the migration protocol (simplified), showing the
 two protocol phases between the application that is being migrated, the
 seeder and the leecher components]
+
+Sequence diagram of the migration protocol (simplified), showing the two
+protocol phases between the application that is being migrated, the
+seeder and the leecher components
 
 By splitting the migration into these two distinct phases, the overhead
 of having to start the device does not count towards downtime, and
@@ -2948,6 +2971,9 @@ data, and can become a real bottleneck with large chunk sizes:
 [Amount of remote calls/second carrying 1 MB of data for fRPC and gRPC,
 repeated 10 times[63]]
 
+Amount of remote calls/second carrying 1 MB of data for fRPC and gRPC,
+repeated 10 times[63]
+
 fRPC[40], a drop-in replacement for gRPC, can improve upon this by
 switching out the serialization layer with the faster Polyglot[42]
 library and a custom transport layer. It also uses the proto3 DSL and
@@ -2994,6 +3020,9 @@ the overall latency is still below 200 µs for all access methods.
 [Box plot for the distribution of first chunk latency for userfaultfd,
 direct mounts and managed mounts (0ms RTT)]
 
+Box plot for the distribution of first chunk latency for userfaultfd,
+direct mounts and managed mounts (0ms RTT)
+
 When looking at the latency distribution for the network-capable access
 methods, the spread for the managed mount is the smallest, but there are
 significant outliers until more than 1 ms; direct mounts have a
@@ -3002,6 +3031,9 @@ latency advantage is visible here too.
 
 [Average first chunk latency for userfaultfd, direct mounts and managed
 mounts by RTT]
+
+Average first chunk latency for userfaultfd, direct mounts and managed
+mounts by RTT
 
 For the earlier measurements the backends were connected directly to the
 mount or userfaultfd handler respectively, resulting in an effective 0ms
@@ -3016,6 +3048,9 @@ RTT.
 [Average first chunk latency for managed workers with 0-512 workers by
 RTT]
 
+Average first chunk latency for managed workers with 0-512 workers by
+RTT
+
 A similar pattern can be seen when analyzing how different worker counts
 for managed mounts influence latency; for zero workers, the latency
 grows almost linearly, while if more than 1 worker is used, the latency
@@ -3026,6 +3061,9 @@ Read Throughput
 
 [Average throughput for memory, disk, userfaultfd, direct mounts and
 managed mounts (0ms RTT)]
+
+Average throughput for memory, disk, userfaultfd, direct mounts and
+managed mounts (0ms RTT)
 
 When looking at throughput compared to latency, the trends for memory,
 disk, userfaultfd and the two mount types are similar, but less drastic.
@@ -3038,6 +3076,9 @@ has the lowest throughput at 450 MB/s.
 [Average throughput for userfaultfd, direct mounts and managed mounts
 (0ms RTT)]
 
+Average throughput for userfaultfd, direct mounts and managed mounts
+(0ms RTT)
+
 When looking at just the throughput for network-capable access methods,
 userfaultfd falls significantly behind both mount types, meaning that
 while at 0 RTT, userfaultfd has lower latency, but also much lower
@@ -3046,6 +3087,9 @@ throughput.
 [Box plot for the throughput distribution for userfaultfd, direct mounts
 and managed mounts (0ms RTT)]
 
+Box plot for the throughput distribution for userfaultfd, direct mounts
+and managed mounts (0ms RTT)
+
 When it comes to throughput distribution, userfaultfd has the lowest
 spread while managed mounts has the highest, closely followed by direct
 mounts. Interestingly, the median throughput of direct mounts is
@@ -3053,6 +3097,9 @@ especially high.
 
 [Average throughput for userfaultfd, direct mounts and managed mounts by
 RTT]
+
+Average throughput for userfaultfd, direct mounts and managed mounts by
+RTT
 
 As it is the case with latency, the access methods behave very
 differently as the RTT increases. Both direct mount and userfaultfd
@@ -3064,6 +3111,8 @@ still over 500 MB/s. If the RTT is lower than 10ms, a throughput of
 almost 1 GB/s can still be achieved with managed mounts.
 
 [Average throughput for managed mounts with 0-16384 workers by RTT]
+
+Average throughput for managed mounts with 0-16384 workers by RTT
 
 Similar results the effects of worker counts on latency can be seen when
 measuring throughput with different configurations as RTT increases.
@@ -3126,6 +3175,9 @@ client- and server-side chunking.
 [Average read throughput for server-side and client-side chunking with
 direct mounts by RTT]
 
+Average read throughput for server-side and client-side chunking with
+direct mounts by RTT
+
 When looking at direct mounts specifically, server-side chunking is a
 very fast option for 0 ms RTT at almost 500 MB/s throughput, but drops
 to just 75 MB/s at a 1 ms RTT, 40 MB/s at 2 ms, and then continues to
@@ -3135,6 +3187,9 @@ it continues to drop steadily until reaches just 4.5 MB/s at 20 ms RTT.
 
 [Average read throughput for server-side and client-side chunking with
 managed mounts by RTT]
+
+Average read throughput for server-side and client-side chunking with
+managed mounts by RTT
 
 For managed mounts, the measured throughput is different; throughput
 also decreases as RTT increases, but much less drastically. Server-side
@@ -3230,12 +3285,18 @@ times slower than the managed mounts.
 [Average throughput for Redis, S3 and ScylllaDB backends for direct
 mounts (0ms RTT)]
 
+Average throughput for Redis, S3 and ScylllaDB backends for direct
+mounts (0ms RTT)
+
 For the throughput of network-capable direct mounts, Redis has the
 highest average throughput at 114 MB/s compared to both ScylllaDB at 3
 MB/s and S3 at 8 MB/s.
 
 [Kernel density estimation (with logarithmic Y axis) for the throughput
 distribution for Redis, S3 and ScylllaDB for direct mounts (0ms RTT)]
+
+Kernel density estimation (with logarithmic Y axis) for the throughput
+distribution for Redis, S3 and ScylllaDB for direct mounts (0ms RTT)
 
 The throughput distribution for the different backends with direct
 mounts shows a similarly drastic difference between Redis and the other
@@ -3246,11 +3307,17 @@ and ScylllaDB, the throughput is also noticeably higher.
 [Average throughput for Redis, S3 and ScylllaDB backends for managed
 mounts (0ms RTT)]
 
+Average throughput for Redis, S3 and ScylllaDB backends for managed
+mounts (0ms RTT)
+
 For managed mounts, ScylllaDB performs better than both S3 and Redis,
 managing 689 MB/s to 439 MB/s for Redis and 44 MB/s for S3.
 
 [Box plot for the throughput distribution for Redis, S3 and ScylllaDB
 for managed mounts (0ms RTT)]
+
+Box plot for the throughput distribution for Redis, S3 and ScylllaDB for
+managed mounts (0ms RTT)
 
 As for the distribution, ScylllaDB has a high spread but also the
 highest throughput, while Redis has the lowest spread. S3 is also
@@ -3272,6 +3339,9 @@ direct mounts.
 [Average throughput for Redis, S3 and ScylllaDB backends for direct
 mounts by RTT]
 
+Average throughput for Redis, S3 and ScylllaDB backends for direct
+mounts by RTT
+
 The network-capable backends in isolation again show the striking
 difference between Redis and the other backends’ direct mount
 performance, but all generally trend towards low throughput performance
@@ -3279,6 +3349,9 @@ as RTT increases.
 
 [Average throughput for memory, file, directory, Redis, S3 and ScylllaDB
 backends for managed mounts by RTT]
+
+Average throughput for memory, file, directory, Redis, S3 and ScylllaDB
+backends for managed mounts by RTT
 
 For managed mounts, the memory and file backends outperform all other
 options at over 2.5 GB/s, while the closest network-capable technology
@@ -4281,9 +4354,9 @@ Accessed: Jul. 28, 2023. [Online]. Available: https://jsonlines.org/
 30, 2023. [Online]. Available:
 https://frpc.io/performance/grpc-benchmarks
 
-[64] F. Pojtinger, GitHub Repository for Efficient Synchronization of
+[64] F. Pojtinger, “GitHub Repository for Efficient Synchronization of
 Linux Memory Regions over a Network: A Comparative Study and
-Implementation. 2023.Available:
+Implementation.” Aug. 2023.Available:
 https://github.com/pojntfx/networked-linux-memsync
 
 [65] Kernel Development Community, “Userspace block device driver (ublk
