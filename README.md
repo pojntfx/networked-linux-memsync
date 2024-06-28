@@ -29,6 +29,8 @@ The **accompanying reference implementation** of the presented approach for work
 	<a href="https://github.com/pojntfx/r3map" rel="nofollow"><img src="./docs/library-badge.png" alt="Badge for the r3map library" width="300"></a>
 </p>
 
+**Looking for an even higher-performance, production-ready library?** Check out [Loophole Labs Silo](https://github.com/loopholelabs/silo). Silo is an alternative implementation of a subset of r3map's features that focuses on performance and offers support for continuous, push-based migrations.
+
 Additionally, you can find the thesis in different formats such as HTML and EPUB [on GitHub pages](https://pojntfx.github.io/networked-linux-memsync/), [download them from GitHub releases](https://github.com/pojntfx/networked-linux-memsync/releases/latest) or [check out the source on GitHub](https://github.com/pojntfx/networked-linux-memsync). If you want to cite this work, see [CITATION.cff](./CITATION.cff).
 
 ## Contributing
