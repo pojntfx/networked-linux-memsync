@@ -17,3 +17,4 @@ jobs:
         uses: pojntfx/deliverance@latest
         with:
           github_token: "${{ secrets.GITHUB_TOKEN }}"
+          disable_pdf_slides: true

@@ -53,6 +53,6 @@ The note should now be opened. Whenever you change a source file, it will automa
 
 ## License
 
-Efficient Synchronization of Linux Memory Regions over a Network: A Comparative Study and Implementation (c) 2023 Felicitas Pojtinger and contributors
+Efficient Synchronization of Linux Memory Regions over a Network: A Comparative Study and Implementation (c) 2024 Felicitas Pojtinger and contributors
 
 SPDX-License-Identifier: Apache-2.0
