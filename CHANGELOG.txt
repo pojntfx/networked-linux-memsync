@@ -1,3 +1,17 @@
+commit 6f670c2ecf6085de7133c6ce2f93dac0f23c0e49
+Author: Felicitas Pojtinger <felicitas@pojtinger.com>
+Date:   Fri Jul 26 20:35:29 2024 -0700
+
+    build: Disable PDF slide builds
+    
+    Signed-off-by: Felicitas Pojtinger <felicitas@pojtinger.com>
+
+commit b51b997449f01b6a76642c1935c1b2f5cbd65fde
+Author: Felicitas Pojtinger <felicitas@pojtinger.com>
+Date:   Fri Jun 28 14:19:56 2024 -0700
+
+    docs: Add link to Silo
+
 commit 3544159371e830b595bad0cba4749331d477a498
 Author: Felicitas Pojtinger <felicitas@pojtinger.com>
 Date:   Thu Aug 31 19:07:01 2023 +0200
